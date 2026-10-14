@@ -31,14 +31,14 @@
 #                                             required-reason APIs its binary uses; how to make
 #                                             Xcode's privacy report
 #
-# Signing is Xcode's automatic signing on team 9B2KKVM937, as the project sets it. The archive is
+# Signing is Xcode's automatic signing on team NQGS32ZLHW, as the project sets it. The archive is
 # signed for development (Apple Development), as Product › Archive signs it; the export signs it
 # again for App Store Connect with an Apple Distribution certificate and an App Store provisioning
 # profile. -allowProvisioningUpdates lets xcodebuild make or renew those through the Apple Account
 # in Xcode › Settings › Accounts, or through the API key. The first export (2026-09-26, this
 # script's rehearsal) made a cloud-managed Apple Distribution certificate, whose private key stays
 # with Apple (nothing went into the keychain), and the profile "iOS Team Store Provisioning
-# Profile: me.saffer.sill"; later exports reuse both, and Xcode renews them. An archive made
+# Profile: com.aryansaini.sill"; later exports reuse both, and Xcode renews them. An archive made
 # without signing exports the same way, with the same entitlements: --sign-at-export.
 #
 # Uploading needs the app's record in App Store Connect (docs/release-checklist.md, TestFlight) and
@@ -106,7 +106,7 @@ usage: Scripts/release-ios.sh [--bump | --build-number N] [--upload] [--sign-at-
       Nothing goes to App Store Connect.
   --upload
       then uploads the archive to App Store Connect, where it becomes a TestFlight build. It needs
-      the app's record there (bundle ID me.saffer.sill) and a build number not uploaded before.
+      the app's record there (bundle ID com.aryansaini.sill) and a build number not uploaded before.
       Refuses when the working tree has changes.
   --bump
       first adds 1 to CURRENT_PROJECT_VERSION in iOSClient/Sill.xcodeproj and commits that alone
@@ -150,8 +150,8 @@ USAGE
 project=iOSClient/Sill.xcodeproj
 pbxproj="$project/project.pbxproj"
 scheme=Sill
-bundle_id=me.saffer.sill
-team=9B2KKVM937
+bundle_id=com.aryansaini.sill
+team=NQGS32ZLHW
 xcode_major=27
 xcode_minimum=27.1   # the iOS 27.1 SDK: the iPhone Duo's hinge and fold (docs/iphone-duo-plan.md)
 export_options=Packaging/ExportOptions-appstore.plist
