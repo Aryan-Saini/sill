@@ -248,6 +248,13 @@ final class InputInjector {
         scrollRemainder = CGPoint(x: exact.x - wheel2, y: exact.y - wheel1)
         if abs(scrollRemainder.x) >= 1 || abs(scrollRemainder.y) >= 1 { scrollRemainder = .zero }  // after a clamp
         let w1 = Int32(wheel1), w2 = Int32(wheel2)
+        // `in.scroll` counts every posted event, including one whose wheels rounded to 0, which is
+        // how a Magic Keyboard's two-finger scroll could climb the counter and move nothing (#130).
+        // `in.scroll0` is those empty events; `in.scrollY` is the vertical points that were real.
+        if !dryRun {
+            if w1 == 0 && w2 == 0 { Stats.shared.bump("in.scroll0") }
+            else { Stats.shared.add("in.scrollY", Int(w1)) }
+        }
 
         switch scrollState {
         case .idle:

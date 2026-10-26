@@ -125,6 +125,9 @@ final class InputOverlayView: UIView, UIKeyInput, UIGestureRecognizerDelegate {
                                (UIScrollTypeMask.discrete, #selector(handleWheel))] {
             let scroll = UIPanGestureRecognizer(target: self, action: action)
             scroll.allowedScrollTypesMask = mask
+            // A scroll pan's default asks for one touch while `maximumNumberOfTouches` of 0
+            // allows none. A wheel still began; a trackpad's two fingers may not (#130).
+            scroll.minimumNumberOfTouches = 0
             scroll.maximumNumberOfTouches = 0
             scroll.allowedTouchTypes = pointerOnly
             scroll.delegate = self
@@ -229,14 +232,25 @@ final class InputOverlayView: UIView, UIKeyInput, UIGestureRecognizerDelegate {
     }
 
     private func scroll(_ gesture: UIPanGestureRecognizer, _ source: ScrollSource) {
-        scroll(gesture.state, at: gesture.location(in: self), translation: gesture.translation(in: self),
-               velocity: gesture.state == .ended ? gesture.velocity(in: self) : .zero, from: source)
+        let translation = gesture.translation(in: self)
+        let velocity = gesture.state == .ended ? gesture.velocity(in: self) : CGPoint.zero
+        // A finger's pan accumulates. A trackpad's or a wheel's reading is whatever moved since it
+        // was last taken: zeroing it makes the next one that, whether UIKit had been accumulating
+        // (a wheel's notches: 3 pt, then 6) or handing each event its own delta. Diffing a delta
+        // against the previous one sends only the change between them, which is how a Magic
+        // Keyboard's two-finger scroll counted on the Mac and moved the window by nothing (#130).
+        let delta = source != .finger
+        if delta { gesture.setTranslation(.zero, in: self) }
+        scroll(gesture.state, at: gesture.location(in: self), translation: translation,
+               velocity: velocity, from: source, translationIsDelta: delta)
     }
 
     /// Every scroll on the picture, finger, trackpad or wheel: `state`, where it is (the finger, or the
-    /// pointer), its translation since it began and, at its end, its velocity (points per second).
+    /// pointer), its translation and, at its end, its velocity (points per second). A finger's
+    /// translation is the total since the pan began. A trackpad's or a wheel's, when
+    /// `translationIsDelta`, is only what moved since the last event.
     func scroll(_ state: UIGestureRecognizer.State, at location: CGPoint, translation: CGPoint,
-                velocity: CGPoint, from source: ScrollSource) {
+                velocity: CGPoint, from source: ScrollSource, translationIsDelta: Bool = false) {
         switch state {
         case .began:
             setOwnPointer(nil, .none)
@@ -255,9 +269,12 @@ final class InputOverlayView: UIView, UIKeyInput, UIGestureRecognizerDelegate {
             // once it has moved, and its first change carries that, as always.
             if source != .finger { scrolled(to: translation, at: location) }
         case .changed:
+            if translationIsDelta { lastPanTranslation = .zero }
             scrolled(to: translation, at: location)
         case .ended, .cancelled:
-            // What a trackpad's or a wheel's last event moved, if its change never came.
+            // What a trackpad's or a wheel's last event moved, if its change never came. A delta's
+            // last reading is only the movement since the previous one, so it is not diffed against it.
+            if translationIsDelta { lastPanTranslation = .zero }
             if source != .finger, state == .ended { scrolled(to: translation, at: location) }
             lastPanTranslation = .zero
             // A wheel never opened a gesture: nothing to close, and no coast.
@@ -391,14 +408,16 @@ final class InputOverlayView: UIView, UIKeyInput, UIGestureRecognizerDelegate {
         let rect = videoRect
         guard rect.width > 0, rect.height > 0 else { return }
         let at = CGPoint(x: rect.midX, y: rect.midY)
-        scroll(.began, at: at, translation: .zero, velocity: .zero, from: source)
-        for step in 1...5 {
-            scroll(.changed, at: at, translation: CGPoint(x: dx * Double(step) / 5, y: dy * Double(step) / 5),
-                   velocity: .zero, from: source)
+        // The same path the trackpad and wheel recognizers take: each step is its own delta, and
+        // the end carries none (the recognizer zeros its translation after every reading).
+        scroll(.began, at: at, translation: .zero, velocity: .zero, from: source, translationIsDelta: true)
+        for _ in 1...5 {
+            scroll(.changed, at: at, translation: CGPoint(x: dx / 5, y: dy / 5),
+                   velocity: .zero, from: source, translationIsDelta: true)
         }
         let length = hypot(dx, dy)
         let velocity = length > 0 ? CGPoint(x: dx / length * 600, y: dy / length * 600) : .zero
-        scroll(.ended, at: at, translation: CGPoint(x: dx, y: dy), velocity: velocity, from: source)
+        scroll(.ended, at: at, translation: .zero, velocity: velocity, from: source, translationIsDelta: true)
     }
 
     /// `-SillInputTest 1`'s third part (InputTest), in every layout, 4.4 s after the overlay joins a
