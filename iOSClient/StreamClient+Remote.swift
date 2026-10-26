@@ -173,7 +173,11 @@ extension StreamClient {
 
     /// Writes the list only (`recomputeMacs` itself writes what it learns of a Mac's door).
     func storeSavedMacs() {
-        if !savedMacsSeeded { UserDefaults.standard.set(SavedMacs.encode(savedMacs), forKey: SavedMacs.defaultsKey) }
+        guard !savedMacsSeeded else { return }
+        let encoded = SavedMacs.encode(savedMacs)
+        UserDefaults.standard.set(encoded, forKey: SavedMacs.defaultsKey)
+        CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
+        DeviceIdentity.writeSavedMacs(encoded)
     }
 
     /// Forget: the record only. The Mac lists this device until it is removed there, and the
@@ -224,8 +228,11 @@ extension StreamClient {
             print("home: homeTLS forgotten on every saved Mac")
         }
         #endif
-        if !savedMacs.isEmpty, DeviceIdentity.knownMissing() {
-            savedMacs = []
+        let restored = SavedMacs.restored(defaults: SavedMacs.encode(savedMacs),
+                                          keychain: savedMacsSeeded ? nil : DeviceIdentity.readSavedMacs(),
+                                          keyKnownMissing: !savedMacs.isEmpty && DeviceIdentity.knownMissing())
+        if restored != savedMacs {
+            savedMacs = restored
             persistSavedMacs()
         }
         #if DEBUG

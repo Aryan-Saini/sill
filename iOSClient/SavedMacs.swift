@@ -258,4 +258,24 @@ enum SavedMacs {
         guard let tag, !tag.isEmpty else { return nil }
         return list.first { mac in mac.recognitionKeyData.map { RecognitionTag.matches(tag, recognitionKey: $0) } ?? false }?.macID
     }
+
+    /// Restores saved Macs at launch (`defaults` from `UserDefaults`, `keychain` from the Keychain
+    /// mirror, issue #140): clears when the device key is genuinely absent (`keyKnownMissing`: a
+    /// restore from backup), and falls back to the Keychain mirror if a force-quit dropped an
+    /// unflushed `UserDefaults` write.
+    static func restored(defaults: String?, keychain: String?, keyKnownMissing: Bool) -> [SavedMac] {
+        guard !keyKnownMissing else { return [] }
+        let fromDefaults = decode(defaults)
+        return !fromDefaults.isEmpty ? fromDefaults : decode(keychain)
+    }
+
+    /// Preserves the QR pairing link's filtered addresses and remote port on a home-paired record
+    /// when no verified kind 18 has populated `addresses` yet (issue #140).
+    static func applyingLink(_ addresses: [MacAddress], port: Int, to mac: SavedMac, allowLoopback: Bool) -> SavedMac {
+        var next = mac
+        let kept = filtered(addresses, allowLoopback: allowLoopback)
+        if next.addresses.isEmpty, !kept.isEmpty { next.addresses = kept }
+        if (1...65535).contains(port) { next.remotePort = port }
+        return next
+    }
 }

@@ -55,6 +55,8 @@ enum DeviceIdentity {
     /// own tag, which found none and made the real pairings look keyless) is not proof, and
     /// clearing the saved Macs on it would lose pairings the key still serves.
     static func knownMissing() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        if cached != nil || readKey() != nil { return false }
         var tags = [tag]
         #if DEBUG
         tags.append(secureEnclaveTag)
@@ -68,6 +70,44 @@ enum DeviceIdentity {
         cached = nil
         let query: [String: Any] = [kSecClass as String: kSecClassKey, kSecAttrApplicationTag as String: currentTag]
         SecItemDelete(query as CFDictionary)
+        SecItemDelete(savedMacsQuery as CFDictionary)
+    }
+
+    private static let savedMacsService = "me.saffer.sill.saved-macs"
+
+    private static var savedMacsQuery: [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: savedMacsService,
+            kSecAttrAccount as String: savedMacsService,
+        ]
+    }
+
+    /// Reads the `ThisDeviceOnly` Keychain mirror of `SavedMacs` (issue #140).
+    static func readSavedMacs() -> String? {
+        var query = savedMacsQuery
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+              let data = item as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    /// Writes `SavedMacs` JSON to the `ThisDeviceOnly` Keychain mirror so a force-quit (`SIGKILL`)
+    /// before `cfprefsd` flushes `UserDefaults` never loses a pairing (issue #140).
+    static func writeSavedMacs(_ text: String) {
+        let data = Data(text.utf8)
+        let update: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+        if SecItemUpdate(savedMacsQuery as CFDictionary, update as CFDictionary) == errSecItemNotFound {
+            var add = savedMacsQuery
+            add[kSecValueData as String] = data
+            add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            SecItemAdd(add as CFDictionary, nil)
+        }
     }
 
     struct IdentityError: Error, CustomStringConvertible {
@@ -103,7 +143,7 @@ enum DeviceIdentity {
         var privateAttributes: [String: Any] = [
             kSecAttrIsPermanent as String: true,
             kSecAttrApplicationTag as String: currentTag,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
         ]
         var attributes: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
@@ -111,7 +151,7 @@ enum DeviceIdentity {
         ]
         #if DEBUG
         if usesSecureEnclave {
-            guard let access = SecAccessControlCreateWithFlags(nil, kSecAttrAccessibleWhenUnlockedThisDeviceOnly, .privateKeyUsage, nil) else {
+            guard let access = SecAccessControlCreateWithFlags(nil, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly, .privateKeyUsage, nil) else {
                 throw IdentityError("no Secure Enclave access control")
             }
             privateAttributes.removeValue(forKey: kSecAttrAccessible as String)
@@ -123,6 +163,17 @@ enum DeviceIdentity {
         var error: Unmanaged<CFError>?
         guard let key = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else {
             throw IdentityError("no key could be made (\(error.map { "\($0.takeRetainedValue())" } ?? "no reason given"))")
+        }
+        if readKey() == nil {
+            let add: [String: Any] = [
+                kSecClass as String: kSecClassKey,
+                kSecAttrApplicationTag as String: currentTag,
+                kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+                kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+                kSecValueRef as String: key,
+            ]
+            SecItemAdd(add as CFDictionary, nil)
         }
         return key
     }

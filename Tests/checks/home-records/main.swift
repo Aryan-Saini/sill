@@ -156,5 +156,27 @@ if let keyM = RemoteKey.generate(), let mac = HostIdentity(privateKey: keyM, rec
     check("require pairing: two P-256 keys and their identities", false)
 }
 
+// MARK: Issue #140: surviving force-quit and preserving QR link addresses on home pairing
+
+check("restored: uses UserDefaults when non-empty and key is present (#140)",
+      SavedMacs.restored(defaults: oldText, keychain: nil, keyKnownMissing: false) == macs)
+check("restored: falls back to Keychain backup when UserDefaults is nil or empty after force-quit (#140)",
+      SavedMacs.restored(defaults: nil, keychain: oldText, keyKnownMissing: false) == macs
+      && SavedMacs.restored(defaults: "[]", keychain: oldText, keyKnownMissing: false) == macs)
+check("restored: clears saved Macs when the device key is known missing (restore from backup) (#140)",
+      SavedMacs.restored(defaults: oldText, keychain: oldText, keyKnownMissing: true).isEmpty)
+var homeOnly = macs[0]
+homeOnly.addresses = []
+homeOnly.remotePort = 7455
+let linkAddrs = [MacAddress(host: "100.64.1.2", kind: MacAddress.vpn, via: "Tailscale"),
+                 MacAddress(host: "169.254.1.1", kind: MacAddress.lan, via: "en0")]
+let withLink = SavedMacs.applyingLink(linkAddrs, port: 8455, to: homeOnly, allowLoopback: false)
+check("applyingLink: populates filtered QR link addresses and port when home-paired record has none (#140)",
+      withLink.addresses == [MacAddress(host: "100.64.1.2", kind: MacAddress.vpn, via: "Tailscale")]
+      && withLink.remotePort == 8455)
+let keptKind18 = SavedMacs.applyingLink(linkAddrs, port: 8455, to: macs[0], allowLoopback: false)
+check("applyingLink: does not overwrite verified kind 18 addresses already on the record (#140)",
+      keptKind18.addresses == macs[0].addresses)
+
 print(fails == 0 ? "ALL PASS (\(passes))" : "\(fails) FAIL, \(passes) pass")
 if fails > 0 { exit(1) }

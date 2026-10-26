@@ -835,12 +835,12 @@ extension StreamClient {
         let qr: (Data) -> SymmetricKey? = { _ in PairingProof.qrKey(secret: link.secret) }
         if let ask = homeAsk, ask.phase == .shown, let key = ask.askedKey, key == link.fingerprint, let answered = ask.answered {
             homeProof(targets: [askedTarget(ask, answered)], pin: key, method: PairRequest.qr, key: qr,
-                      name: ask.name, overlay: false, link: nil, scannedSecret: secret)
+                      name: ask.name, overlay: false, link: link, scannedSecret: secret)
             return
         }
         if overlay, let t = sessionPairingTarget, t.key == link.fingerprint {
             homeProof(targets: [t.target], pin: t.key, method: PairRequest.qr, key: qr,
-                      name: macName.isEmpty ? link.name : macName, overlay: true, link: nil, scannedSecret: secret)
+                      name: macName.isEmpty ? link.name : macName, overlay: true, link: link, scannedSecret: secret)
             return
         }
         let asked = homeAsk.flatMap { a in a.askedKey.map { (key: $0, row: a.target.row) } }
@@ -896,7 +896,7 @@ extension StreamClient {
                     guard self.homeDialer === dialer, self.pairingAttempt == attempt else { return }
                     self.homeDialer = nil
                     self.proved(outcome, winner: w, identity: identity, method: method, name: name, overlay: overlay,
-                                busyRetried: busyRetried, retry: retry)
+                                link: link, busyRetried: busyRetried, retry: retry)
                 }
             }
         }
@@ -919,7 +919,7 @@ extension StreamClient {
 
     /// The Mac's answer to a proof at the home door. Main thread.
     private func proved(_ outcome: HomeExchange, winner w: HomeDialer.Winner, identity: RemoteIdentity, method: String, name: String,
-                        overlay: Bool, busyRetried: Bool, retry: (Double) -> Void) {
+                        overlay: Bool, link: PairLink? = nil, busyRetried: Bool, retry: (Double) -> Void) {
         // Over a stream (Pair This iPad…) no row can be tapped: its words say what to do there.
         let proofFailed: PairingProblem = overlay ? .proofFailedOverStream(name) : .homeProofFailed(name)
         guard case .answer(let r, let key) = outcome else {
@@ -949,7 +949,7 @@ extension StreamClient {
         let info = sameMac ? macInfoVerified.flatMap { $0.fingerprint == w.fingerprint ? $0.info : nil } : nil
         guard let id = savePairedAtHome(r, fingerprint: w.fingerprint, method: method, name: name, replacing: homeAsk?.replaces,
                                         bonjourName: sameMac ? session?.bonjourName : Self.bonjourName(w.target.fallback ?? w.target.endpoint),
-                                        info: info) else { return }
+                                        info: info, link: link) else { return }
         pairing = .paired(displayName(id))
         #if DEBUG
         print("home: paired with \(displayName(id)) (\(id)) at the home door, proof_M checked, pin saved\(overlay ? (sameMac ? "; this session's Mac" : "; not this session's Mac") : "")")
@@ -987,7 +987,8 @@ extension StreamClient {
     /// (§7.5). The port and addresses come from the session's first kind 18, or from `info`, the
     /// verified kind 18 of a session with this very Mac. Returns its Mac ID.
     private func savePairedAtHome(_ r: PairResult, fingerprint: Data, method: String, name fallbackName: String,
-                                  replacing replaces: String? = nil, bonjourName: String?, info: MacInfo? = nil) -> String? {
+                                  replacing replaces: String? = nil, bonjourName: String?, info: MacInfo? = nil,
+                                  link: PairLink? = nil) -> String? {
         guard let macID = r.macID, let recognition = r.recognitionKey else { return nil }
         let label = SafeText.label(r.name ?? fallbackName)
         var mac = SavedMac(macID: macID, fingerprint: Base64URL.encode(fingerprint), name: label.isEmpty ? "Mac" : label,
@@ -995,6 +996,10 @@ extension StreamClient {
                            infoIssuedAt: 0, bonjourName: bonjourName, lastWorked: nil, pairedAt: Date(), method: method,
                            lastConnectedAt: nil, lastRoute: nil, homeTLS: true, revoked: nil)
         if let info { mac = SavedMacs.refreshed(mac, info: info, fingerprint: fingerprint, allowLoopback: Self.keepsLoopback) ?? mac }
+        if let link, link.fingerprint == fingerprint {
+            mac = SavedMacs.applyingLink(link.addresses.map(RemoteDialPolicy.address(for:)), port: link.port, to: mac,
+                                         allowLoopback: Self.keepsLoopback)
+        }
         savedMacs = SavedMacs.adding(mac, to: savedMacs)
         if let old = replaces { savedMacs = SavedMacs.replacingNewKey(old: old, new: macID, in: savedMacs) }
         persistSavedMacs()

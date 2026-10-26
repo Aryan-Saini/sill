@@ -42,5 +42,17 @@ M = [
      "        return Data(\"0\".utf8)\n"),
     ("require pairing: an empty signature saved", H, "        guard let signature = sign(offMessage(macID: macID)), !signature.isEmpty else { return nil }",
      "        guard let signature = sign(offMessage(macID: macID)) else { return nil }"),
+    ("restored: ignores Keychain fallback when UserDefaults is empty (#140)", S,
+     "        return !fromDefaults.isEmpty ? fromDefaults : decode(keychain)",
+     "        return fromDefaults"),
+    ("restored: keeps saved Macs when key is known missing (#140)", S,
+     "        guard !keyKnownMissing else { return [] }",
+     "        if false { return [] }"),
+    ("applyingLink: overwrites verified kind 18 addresses (#140)", S,
+     "        if next.addresses.isEmpty, !kept.isEmpty { next.addresses = kept }",
+     "        if !kept.isEmpty { next.addresses = kept }"),
+    ("applyingLink: ignores link port (#140)", S,
+     "        if (1...65535).contains(port) { next.remotePort = port }",
+     ""),
 ]
 sys.exit(0 if module.mutate("home-records", M, sys.argv[1]) else 1)

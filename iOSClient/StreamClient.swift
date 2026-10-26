@@ -893,7 +893,8 @@ final class StreamClient: ObservableObject {
             savedMacs = SavedMacs.decode(arguments[i + 1])
             savedMacsSeeded = true
         } else {
-            savedMacs = SavedMacs.decode(UserDefaults.standard.string(forKey: SavedMacs.defaultsKey))
+            savedMacs = SavedMacs.restored(defaults: UserDefaults.standard.string(forKey: SavedMacs.defaultsKey),
+                                           keychain: DeviceIdentity.readSavedMacs(), keyKnownMissing: false)
         }
         // A bracketed IPv6 address starts so too (`-SillConnect '[::1]:P'`): an address argument
         // the argument domain dropped goes into the registration domain (this run's memory, never
@@ -905,7 +906,8 @@ final class StreamClient: ObservableObject {
             UserDefaults.standard.register(defaults: [key: arguments[i + 1]])
         }
         #else
-        savedMacs = SavedMacs.decode(UserDefaults.standard.string(forKey: SavedMacs.defaultsKey))
+        savedMacs = SavedMacs.restored(defaults: UserDefaults.standard.string(forKey: SavedMacs.defaultsKey),
+                                       keychain: DeviceIdentity.readSavedMacs(), keyKnownMissing: false)
         #endif
         // Back from the background: the pings stopped while the app was suspended, which is no loss;
         // and the browsers, whose connection to mDNSResponder iOS may have made defunct meanwhile, are
