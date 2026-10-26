@@ -163,6 +163,8 @@ check("restored: uses UserDefaults when non-empty and key is present (#140)",
 check("restored: falls back to Keychain backup when UserDefaults is nil or empty after force-quit (#140)",
       SavedMacs.restored(defaults: nil, keychain: oldText, keyKnownMissing: false) == macs
       && SavedMacs.restored(defaults: "[]", keychain: oldText, keyKnownMissing: false) == macs)
+check("restored: prefers Keychain when a second Mac was paired before UserDefaults flushed (#140)",
+      SavedMacs.restored(defaults: oldText, keychain: SavedMacs.encode(listTwo), keyKnownMissing: false) == listTwo)
 check("restored: clears saved Macs when the device key is known missing (restore from backup) (#140)",
       SavedMacs.restored(defaults: oldText, keychain: oldText, keyKnownMissing: true).isEmpty)
 var homeOnly = macs[0]

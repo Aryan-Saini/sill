@@ -228,12 +228,15 @@ extension StreamClient {
             print("home: homeTLS forgotten on every saved Mac")
         }
         #endif
-        let restored = SavedMacs.restored(defaults: SavedMacs.encode(savedMacs),
+        let currentDefaults = UserDefaults.standard.string(forKey: SavedMacs.defaultsKey)
+        let restored = SavedMacs.restored(defaults: currentDefaults ?? SavedMacs.encode(savedMacs),
                                           keychain: savedMacsSeeded ? nil : DeviceIdentity.readSavedMacs(),
                                           keyKnownMissing: !savedMacs.isEmpty && DeviceIdentity.knownMissing())
         if restored != savedMacs {
             savedMacs = restored
             persistSavedMacs()
+        } else if !savedMacsSeeded, !savedMacs.isEmpty, currentDefaults != SavedMacs.encode(savedMacs) {
+            storeSavedMacs()
         }
         #if DEBUG
         let d = UserDefaults.standard

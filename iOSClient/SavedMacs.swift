@@ -266,7 +266,8 @@ enum SavedMacs {
     static func restored(defaults: String?, keychain: String?, keyKnownMissing: Bool) -> [SavedMac] {
         guard !keyKnownMissing else { return [] }
         let fromDefaults = decode(defaults)
-        return !fromDefaults.isEmpty ? fromDefaults : decode(keychain)
+        let fromKeychain = decode(keychain)
+        return fromKeychain.count > fromDefaults.count ? fromKeychain : (!fromDefaults.isEmpty ? fromDefaults : fromKeychain)
     }
 
     /// Preserves the QR pairing link's filtered addresses and remote port on a home-paired record
