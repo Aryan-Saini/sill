@@ -57,8 +57,9 @@ final class InputInjector {
     /// have left in the HID state table, which it would start from ("Test input: left mouse down
     /// (none) at 756,474", a button's with where it goes): what a device's keys leave for its next
     /// click, without posting anything; and the check a key's up arms (`KeyUpCheck`). A scroll event
-    /// says its point deltas and phase ("Test input: scroll dy 12 dx 0, gesture changed (none)"), so a
-    /// test reads which way a device's scroll went (positive dy moves the content down).
+    /// says its point deltas, phase and place ("Test input: scroll dy 12 dx 0, gesture changed (none)
+    /// at 756,474"), so a test reads which way a device's scroll went (positive dy moves the content
+    /// down) and where it lands.
     var testLog = false
     /// The flags of the last keyboard event posted (a dry run's: that would have been), which the HID
     /// state table holds by KeyStrokes' inference: the check after a key's up reads the table against
@@ -155,8 +156,10 @@ final class InputInjector {
         default: what = "event \(event.type.rawValue)"
         }
         // A button's event says where it goes: a button's up with no source goes where the pointer is.
-        let button = event.type != .mouseMoved && event.type != .scrollWheel
-        let at = button ? " at \(Int(event.location.x.rounded())),\(Int(event.location.y.rounded()))" : ""
+        // So does a scroll event: the window under its location is the one it scrolls, every event of
+        // a gesture (`postScroll`).
+        let placed = event.type != .mouseMoved
+        let at = placed ? " at \(Int(event.location.x.rounded())),\(Int(event.location.y.rounded()))" : ""
         print("Test input: \(what) (\(KeyStrokes.names(lastKeyFlags)))\(at)")
     }
 
@@ -277,13 +280,6 @@ final class InputInjector {
         scrollRemainder = CGPoint(x: exact.x - wheel2, y: exact.y - wheel1)
         if abs(scrollRemainder.x) >= 1 || abs(scrollRemainder.y) >= 1 { scrollRemainder = .zero }  // after a clamp
         let w1 = Int32(wheel1), w2 = Int32(wheel2)
-        // `in.scroll` counts every posted event, including one whose wheels rounded to 0, which is
-        // how a Magic Keyboard's two-finger scroll could climb the counter and move nothing (#130).
-        // `in.scroll0` is those empty events; `in.scrollY` is the vertical points that were real.
-        if !dryRun {
-            if w1 == 0 && w2 == 0 { Stats.shared.bump("in.scroll0") }
-            else { Stats.shared.add("in.scrollY", Int(w1)) }
-        }
 
         switch scrollState {
         case .idle:

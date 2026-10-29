@@ -1008,10 +1008,7 @@ package final class StreamCoordinator {
             gestureChords.input(Self.gestureInput(event))
             // A synthetic host acts on nothing: it posts no event (InputInjector.dryRun), so it
             // activates and raises nothing either.
-            if !synthetic {
-                raiseIfInteracting(event)
-                noteScrollAim(event, in: rect)
-            }
+            if !synthetic { raiseIfInteracting(event) }
             deliver(event, in: rect, from: device)
             desktopInputMayActivate(event)
         case .gesture:
@@ -1673,8 +1670,6 @@ package final class StreamCoordinator {
     /// full screen when last listed or that Sill fitted (`windowsChanged`).
     private var missingPolls = 0
     private var lastRaiseCheck: CFAbsoluteTime = 0
-    /// The last time a scroll's landing was counted, so a gesture's events are one sample a second.
-    private var lastScrollAimAt: CFAbsoluteTime = 0
     private var lastActivationAt: CFAbsoluteTime = 0
     /// Input held for an activation, replayed in order once the app is up, each with the device that
     /// sent it (its keys are its own, KeyStrokes); a gesture's chord that arrives meanwhile waits
@@ -1719,24 +1714,6 @@ package final class StreamCoordinator {
         let left = leftWhileHeld
         leftWhileHeld = []
         for device in left { injector.releaseKeys(of: device) }
-    }
-
-    /// Once a second while scrolling: whether the posted point sits inside the streamed rectangle.
-    /// The device clamps a scroll into the picture, so `in.scrollMiss` means that clamp failed and
-    /// the point was posted outside the window.
-    private func noteScrollAim(_ event: InputEvent, in rect: CGRect) {
-        let fraction: (x: Double, y: Double)
-        switch event {
-        case .scroll(let x, let y, _, _): fraction = (x, y)
-        case .scrollGesture(.began, let x, let y): fraction = (x, y)
-        default: return
-        }
-        let now = CFAbsoluteTimeGetCurrent()
-        guard now - lastScrollAimAt >= 1 else { return }
-        lastScrollAimAt = now
-        let point = CGPoint(x: rect.minX + rect.width * fraction.x, y: rect.minY + rect.height * fraction.y)
-        let inside = point.x >= rect.minX && point.x <= rect.maxX && point.y >= rect.minY && point.y <= rect.maxY
-        if !inside { Stats.shared.bump("in.scrollMiss") }
     }
 
     private func raiseIfInteracting(_ event: InputEvent) {

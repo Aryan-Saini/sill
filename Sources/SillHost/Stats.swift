@@ -7,10 +7,10 @@ import Foundation
 /// rescheduled to a 30 s heartbeat with generous leeway, so an idle host is not woken every
 /// second. The next `bump` or a client arriving switches back to 1 s.
 ///
-/// Threading: `bump` and `add` come from the capture queue, VideoToolbox's callback thread and
-/// the network queue; `activeClients` / `windowCount` from the main actor. All shared state is
-/// under `lock`. The timer, its schedule and `fast` belong to the main queue, and every
-/// reschedule runs there, so a wake-up enqueued by `bump` always lands after the tick that armed it.
+/// Threading: `bump` comes from the capture queue, VideoToolbox's callback thread and the
+/// network queue; `activeClients` / `windowCount` from the main actor. All shared state is under
+/// `lock`. The timer, its schedule and `fast` belong to the main queue, and every reschedule runs
+/// there, so a wake-up enqueued by `bump` always lands after the tick that armed it.
 package final class Stats {
     package static let shared = Stats()
 
@@ -25,8 +25,8 @@ package final class Stats {
     private var counts: [String: Int] = [:]
     private var clients = 0
     private var windows = 0
-    /// Set by a quiet tick: the next bump, add or client must wake the 1 s timer. Keeps `bump` to
-    /// one extra bool check on the hot path.
+    /// Set by a quiet tick: the next bump (or client) must wake the 1 s timer. Keeps `bump` to one
+    /// extra bool check on the hot path.
     private var armed = false
 
     // Main queue only.
@@ -36,14 +36,9 @@ package final class Stats {
     static let activeInterval: DispatchTimeInterval = .seconds(1)
     static let idleInterval: DispatchTimeInterval = .seconds(30)
 
-    func bump(_ key: String) { add(key, 1) }
-
-    /// Add `n` to a counter. A scroll's points in a second use it, and a negative `n` is a scroll
-    /// the other way. Zero is ignored. Wakes the one-second line the same way `bump` does.
-    func add(_ key: String, _ n: Int) {
-        guard n != 0 else { return }
+    func bump(_ key: String) {
         lock.lock()
-        counts[key, default: 0] += n
+        counts[key, default: 0] += 1
         let wake = armed
         armed = false
         lock.unlock()
