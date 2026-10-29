@@ -31,7 +31,11 @@ who has it, and the newest iPhone and iPad app.
 Known, and by design: with Require pairing off (Settings › Devices), any
 device on the Mac's own networks, one nearby while Direct Wireless Connection
 is on, and any app on the Mac itself connect without pairing, still
-encrypted. With Show the pairing window to screen sharing on (Settings ›
+encrypted. An iPhone or iPad that connects that way takes whatever key
+answers when its row is tapped, so another Mac on the network that takes the
+Mac's name could answer that tap; its automatic reconnect goes back only to
+the key it connected to, and a paired device checks the Mac's key every
+time. With Show the pairing window to screen sharing on (Settings ›
 Devices, off by default), Screen Sharing and other remote desktop apps show the
 pairing window, so anyone who can see the Mac's screen remotely can read its
 code. `SillHost`, the command-line host for development, keeps a plain

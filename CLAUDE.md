@@ -8,6 +8,44 @@ Formerly winstream; the folder still carries the old name.
 
 ## Current step
 
+**An open door's reconnect pinned to the key it saw (2026-10-29, branch `sec-reconnect-pin` from main at
+150479b5, PR #255; the security scan's finding 3, Medium; Noah's go of 2026-10-29 for the batch).** The device's
+automatic reconnect to a Mac it was connected to without pairing (Require pairing off, `p=0`) found the row by its
+Bonjour name alone and took any key, so whatever advertised that name with `p=0` (another Mac renamed to it, a
+stranger after a crash) got the session with no tap: what the device typed, and its clipboard (kind 32, on by
+default). Device only, no wire change, nothing on the Mac.
+- The rule (DiscoveryPolicy, pure): `reconnectKey(lost:)` is the key an open session's first connection saw
+  (`trust(_:readyWith:)`), carried as `Reconnect.openKey` (`lostReconnect`); `reconnectTrust(_:savedPin:seen:)` is
+  `sessionTrust`'s but for an unsaved open door with a seen key, `.open(seen:)`, so `Pin.key` (`reconnectIfListed`,
+  `dial(_:macID:tap:seen:)`; a tap keeps `sessionTrust`). Another key answering (-9808, DeviceTLS's `onPinRefused`)
+  is `HomeEnd.otherKey`: `homeSessionEnded` ends the reconnect with "‹Mac› answered with another key, so this
+  ‹iPad› didn’t reconnect. Tap it to connect."; the row reads Not paired as before and a tap takes any key; a saved
+  Mac's reconnect is unchanged (its saved pin). Left as they were: a lost session that never saw a key (a tap's dial
+  that ended before its handshake) reconnects with any key, as its tap; a DEBUG build still dials a plain door under
+  the name (Release dials none). DEBUG console: "reconnect: dialing ‹Mac› (dial 1 of this listing), pinned to the
+  key its last session saw", "home: this device's pin refused the key that answered as ‹Mac› (-9808)", "home: the
+  session ended: otherKey (-9808: bad certificate format)".
+- Verified: `home-device` 225 checks (16 new) and 142 of 142 mutants (11 new), `home-model` 84 (8) and 28 of 28 (3),
+  `policy` 477 (13, with a model of the glue: 680 reconnects over every sequence of up to four rows under the name,
+  in Release and DEBUG, none to the other key, where main's rule gave it 197) and 171 of 171 (6, O1–O6); the four
+  checks that compile DiscoveryPolicy.swift keep every mutant pattern; `run-all.sh`, all 56; `swift build -c
+  release`, only the CaptureProbe warning; the three iOS builds, only the known `StreamClient` capture warning
+  (StreamClient.swift:4120). Live on a private iPad mini simulator (iOS 27.0, deleted after), two bare `SillMenuBar
+  --synthetic -requirePairing NO` hosts on 127.0.0.1 alone with identities of their own, each advertised as "Studio
+  f3" (`_silltest._tcp`, `p=0`, a tag) by `dns-sd -i lo0 -R` (a test host's own registration is "Sill test ‹pid›"),
+  the app with `-SillServiceType _silltest._tcp -SillTapRow "Studio f3" -SillNoAutoDesktop 1`: a tap connected to A
+  with any key and A's copy reached the device; A killed (-9) with its advertisement; B under the name. Main's build
+  (150479b5) reconnected to B by itself (B: "Client connected", "Client hello", "Clipboard: … shares the
+  clipboard.") and B's copy was written to the device's clipboard (`simctl pbpaste`); this build dialed it pinned,
+  refused B's key, ended with the words above (B logged nothing), the device's clipboard kept its sentinel, and a
+  tap then connected to B with any key; A back with its own key (same identity, new port) was reconnected by itself,
+  pinned, its copy arriving. Logs and photos in `~/Downloads/sill-handoff/triage/2026-10-29-security/f3-live/`.
+- **Untested, for Noah:** two Macs with Require pairing off on one network (the scan's own steps): connect the
+  iPad to Mac A without pairing, quit Sill on A, give Mac B A's computer name (System Settings › General › Sharing)
+  and open Sill on B: the iPad shows "‹A› answered with another key, so this iPad didn’t reconnect. Tap it to
+  connect.", B's Sill.log has no "Client connected" for it and a copy on B never reaches the iPad; a tap connects to
+  B. Sill reopened on A instead: the iPad reconnects by itself. VoiceOver reads the line once.
+
 **Pinch to zoom (2026-10-28/29, addhumal's PR #196 with maintainer edits; issue #65).** Noah's decisions of
 2026-10-19/20: pinch to zoom, not a slider; Photos-like, centred on the point between the fingers, the Mac's cursor
 not involved; a slight pinch out stays zoomed and only a pinch all the way out (or a lift within 2 % of it) gives the
@@ -7014,7 +7052,14 @@ and the trust list live in the login keychain (service
 `me.saffer.sill.remote`, accounts `paired-devices` and `require-pairing`,
 beside the key "Sill Remote Access"), never in UserDefaults; Settings ›
 Devices' Remove forgets one device, and deleting those items makes this Mac
-new to every device.
+new to every device. Two hosts under one Bonjour name (a Mac that took
+another's name, the security scan's finding 3): run each without
+SILL_TEST_SERVICE_TYPE (whose registration is "Sill test ‹pid›") and advertise
+it in turn with `dns-sd -i lo0 -R "Studio f3" _silltest._tcp local PORT
+r=<16 base64url characters> p=0`, on lo0 alone (on every interface the
+simulator dials this Mac's other addresses first, which a loopback host never
+answers); the bare `SillMenuBar --synthetic -requirePairing NO`, under a name
+of its own and with `-SillLogFile`, is an open door.
 The Mac's menus, headless: `swiftc -O Scripts/menufixture.swift -o
 $T/menufixture -framework AppKit`, then `$T/menufixture serve $T/fixture.log
 60` (it exits by itself, 120 s at most, and can never take the front) and a

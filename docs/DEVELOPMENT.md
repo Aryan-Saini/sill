@@ -1059,10 +1059,15 @@ paired for Remote Access connects at home with no further step.
   (double-click). **Require pairing** is on by default. Off, any device at
   home, and any app on the Mac, connects without pairing, still encrypted;
   turned on again, it disconnects the devices that are not paired ("Mac mini
-  now asks devices to pair."). Sill keeps it beside the paired devices in the
-  keychain, not in its defaults: in the data-protection keychain in the Sill
-  for Mac you download (0.4.0 and later), and in the login keychain in a
-  Sill.app you build yourself without the Developer ID provisioning profile.
+  now asks devices to pair."). A device connected without pairing reconnects
+  by itself only to the key it connected to: another key under the Mac's name
+  ends the reconnect ("Mac mini answered with another key, so this iPad didn’t
+  reconnect. Tap it to connect."; the DEBUG console's "home: the session ended:
+  otherKey"), and a tap connects with any key, as before. Sill keeps Require
+  pairing beside the paired devices in the keychain, not in its defaults: in
+  the data-protection keychain in the Sill for Mac you download (0.4.0 and
+  later), and in the login keychain in a Sill.app you build yourself without
+  the Developer ID provisioning profile.
 - **Through Screen Sharing** (a Mac without a display, or one you use from afar
   with Screen Sharing, Apple Remote Desktop or a VNC app such as Screens): Sill
   keeps its pairing window out of what these apps show, so through them Pair
