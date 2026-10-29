@@ -12,11 +12,15 @@
 //     UserDefaults' registration (in memory only), and the launch argument itself in a child run of this
 //     binary (`-Sill.thumbnailHold 0.3`, a string in the argument domain).
 //   - The words: the row's title, the VoiceOver label and value ("Hold to show window controls, 0.5
-//     seconds"), the value shown ("0.5 s", always a tenth's digit), the footnote, the console's line.
+//     seconds"), the value shown ("0.5 s", always a tenth's digit), the footnote, the console's line;
+//     the title's three lines, the narrowest it may be beside the stepper (its words in order, whole,
+//     and in the system font, CoreText's on this Mac, the split of its words into three lines whose
+//     widest line is shortest: the review, 2026-10-29).
 //   - A grid of every hundredth from -4 to 10 s against the invariants (in the range, on the grid,
 //     within half a tenth of the clamped value, monotonic, idempotent, its words its length's).
 //   swiftc -O iOSClient/ThumbnailHold.swift Tests/checks/thumbnail-hold/main.swift -o .build/checks/thumbnail-hold/check && .build/checks/thumbnail-hold/check
 import Foundation
+import CoreText
 
 typealias H = ThumbnailHold
 
@@ -139,6 +143,30 @@ check("spoken is the length's: 0.95 → 1 second, 1.04 → 1 second, 2.96 → 3 
       H.spokenValue(0.95) == "1 second" && H.spokenValue(1.04) == "1 second" && H.spokenValue(2.96) == "3 seconds" && H.spokenValue(.nan) == "0.5 seconds")
 check("the footnote", H.footnote == "How long to hold a window’s thumbnail before its close, minimize and full-screen controls appear, and before it can be dragged to another place.")
 check("the console's line: thumbnails: hold 0.3 s", H.consoleLine(0.3) == "thumbnails: hold 0.3 s" && H.consoleLine(3) == "thumbnails: hold 3.0 s")
+// The title's three lines (HostSettingsPanel's ThumbnailHoldRow keeps the title beside the stepper only
+// while it has room for them; narrower, the row stacks rather than break a word or run to a fourth line).
+check("the title's lines beside the stepper: three, its words in order, each whole",
+      H.titleLines.count == 3 && H.titleLines.joined(separator: " ") == H.title
+      && H.titleLines.allSatisfy { !$0.isEmpty && $0 == $0.trimmingCharacters(in: .whitespaces) && !$0.contains("  ") })
+/// The widest of `lines` in the system font at `size` points (CoreText's UI font on this Mac: SF Pro, as
+/// on iOS).
+func widest(_ lines: [String], _ size: CGFloat) -> CGFloat {
+    let font = CTFontCreateUIFontForLanguage(.system, size, nil)!
+    return lines.map { line -> CGFloat in
+        let text = NSAttributedString(string: line, attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font])
+        return CGFloat(CTLineGetTypographicBounds(CTLineCreateWithAttributedString(text), nil, nil, nil))
+    }.max() ?? 0
+}
+let titleWords = H.title.split(separator: " ").map(String.init)
+var splits: [[String]] = []
+for a in 1..<titleWords.count {
+    for b in (a + 1)..<titleWords.count {
+        splits.append([titleWords[..<a], titleWords[a..<b], titleWords[b...]].map { $0.joined(separator: " ") })
+    }
+}
+let narrowest = [CGFloat(17), 19, 21].allSatisfy { size in splits.allSatisfy { widest(H.titleLines, size) <= widest($0, size) + 0.01 } }
+check("they are the narrowest of the title's \(splits.count) three-line splits at 17, 19 and 21 pt (\(String(format: "%.1f", widest(H.titleLines, 17))) pt at 17)",
+      splits.count == 6 && narrowest)
 var wordsOK = true
 for t in 2...30 {
     let s = H.seconds(tenths: t)

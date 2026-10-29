@@ -46,6 +46,13 @@ MUTANTS = [
     ("W7 VoiceOver's label in title case", "static let spokenTitle = \"Hold to show window controls\"", "static let spokenTitle = \"Hold to Show Window Controls\""),
     ("W8 the footnote without the drag", ", and before it can be dragged to another place.", "."),
     ("W9 the console's line without its prefix", "\"thumbnails: hold \\(valueText(value))\"", "\"hold \\(valueText(value))\""),
+    # The title's lines beside the stepper (the review, 2026-10-29).
+    ("W10 the title's lines two (the row stacks sooner)", "static let titleLines = [\"Hold to Show\", \"Window\", \"Controls\"]",
+     "static let titleLines = [\"Hold to Show\", \"Window Controls\"]"),
+    ("W11 a wider split of three (Show Window on one line)", "static let titleLines = [\"Hold to Show\", \"Window\", \"Controls\"]",
+     "static let titleLines = [\"Hold to\", \"Show Window\", \"Controls\"]"),
+    ("W12 a word broken (Win-dow)", "static let titleLines = [\"Hold to Show\", \"Window\", \"Controls\"]",
+     "static let titleLines = [\"Hold to Show Win\", \"dow\", \"Controls\"]"),
 ]
 caught = 0
 for name, old, new in MUTANTS:

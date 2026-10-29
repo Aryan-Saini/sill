@@ -76,6 +76,11 @@ enum ThumbnailHold {
 
     /// The row's title in the Settings panel.
     static let title = "Hold to Show Window Controls"
+    /// The narrowest the title may be beside the length and the stepper: these three lines, its words in
+    /// order, the shortest widest line of any three ("Hold to Show"). Narrower than that, a word would
+    /// break ("Win-dow", "Con-trols") or the title run past three lines, so the row stacks the title over
+    /// the length and the stepper instead (HostSettingsPanel's ThumbnailHoldRow; the review, 2026-10-29).
+    static let titleLines = ["Hold to Show", "Window", "Controls"]
     /// The row's label for VoiceOver ("Hold to show window controls, 0.5 seconds").
     static let spokenTitle = "Hold to show window controls"
 

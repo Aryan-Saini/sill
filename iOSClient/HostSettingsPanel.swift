@@ -893,7 +893,12 @@ private struct GestureRow: View {
 /// and the system's stepper, − and + a tenth of a second a press from 0.2 to 3 s (the capsule on iOS 26
 /// and later), counting whole tenths so no sum of presses drifts off the grid. The title wraps beside the
 /// stepper, as a switch's does, rather than the row stacking: in a panel 340 or 360 pt wide it never fits
-/// on one line beside the value and the stepper.
+/// on one line beside the value and the stepper (two lines there, three at the larger text sizes). It stays
+/// beside them only while it has room for three lines with every word whole (`ThumbnailHold.titleLines`):
+/// in a narrower panel (a 320 pt iPhone with Display Zoom, an iPad window as narrow as Slide Over) the row
+/// stacks, the title over the length and the stepper, as `AdaptiveRow` does; beside them it ran to four
+/// lines there, and at the larger text sizes to seven, "Win-dow" and "Con-trols" broken (the review,
+/// 2026-10-29).
 ///
 /// For VoiceOver one adjustable element: "Hold to show window controls, 0.5 seconds", a swipe up or down a
 /// tenth (`ThumbnailHold.adjusted`). The system's stepper on iOS 27 is two buttons instead, each read with
@@ -902,20 +907,31 @@ private struct GestureRow: View {
 private struct ThumbnailHoldRow: View {
     let seconds: Double
     let set: (Double) -> Void
+    /// Measured afresh when the text size changes, as `AdaptiveRow` is.
+    @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
-        Stepper(value: Binding(get: { ThumbnailHold.tenths(seconds) }, set: { set(ThumbnailHold.seconds(tenths: $0)) }),
-                in: ThumbnailHold.tenthsRange) {
-            HStack(spacing: 8) {
-                Text(ThumbnailHold.title)
-                    .foregroundStyle(Palette.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 8)
-                Text(ThumbnailHold.valueText(seconds))
-                    .monospacedDigit()
-                    .foregroundStyle(Palette.muted)
-                    .fixedSize()
+        ViewThatFits(in: .horizontal) {
+            stepper {
+                HStack(spacing: 8) {
+                    WrappingTitle {
+                        // Never shown: what the title must have room for beside the stepper.
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(ThumbnailHold.titleLines, id: \.self) { Text($0) }
+                        }
+                        .hidden()
+                        title
+                    }
+                    Spacer(minLength: 8)
+                    value
+                }
             }
+            VStack(alignment: .leading, spacing: 8) {
+                title.fixedSize(horizontal: false, vertical: true)
+                stepper { value }
+            }
+            .padding(.vertical, 8)
         }
+        .id(typeSize)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ThumbnailHold.spokenTitle)
         .accessibilityValue(ThumbnailHold.spokenValue(seconds))
@@ -928,6 +944,40 @@ private struct ThumbnailHoldRow: View {
         }
         .padding(.vertical, 4)
         .rowFrame()
+    }
+
+    private var title: some View { Text(ThumbnailHold.title).foregroundStyle(Palette.text) }
+
+    private var value: some View {
+        Text(ThumbnailHold.valueText(seconds))
+            .monospacedDigit()
+            .foregroundStyle(Palette.muted)
+            .fixedSize()
+    }
+
+    /// The system's stepper over whole tenths, with its label beside it.
+    private func stepper<Label: View>(@ViewBuilder label: () -> Label) -> some View {
+        Stepper(value: Binding(get: { ThumbnailHold.tenths(seconds) }, set: { set(ThumbnailHold.seconds(tenths: $0)) }),
+                in: ThumbnailHold.tenthsRange, label: label)
+    }
+}
+
+/// A title that wraps in the width it is given, as a Text does (the second view), but whose ideal width,
+/// which `ViewThatFits` measures a row by, is the first view's (never shown): the narrowest it may be.
+private struct WrappingTitle: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard subviews.count == 2 else { return .zero }
+        guard let width = proposal.width else {
+            let floor = subviews[0].sizeThatFits(.unspecified).width
+            return CGSize(width: floor, height: subviews[1].sizeThatFits(ProposedViewSize(width: floor, height: nil)).height)
+        }
+        return subviews[1].sizeThatFits(ProposedViewSize(width: width, height: nil))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 2 else { return }
+        subviews[0].place(at: bounds.origin, proposal: .zero)
+        subviews[1].place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
     }
 }
 
