@@ -1161,17 +1161,18 @@ first. Wire, host and device; additive.
   xLarge text, 1ddadb9); under the Dvorak layout Paste presses ⌘K (V's place; the layouts' own data):
   Known, the support page, open question 16 (3dc8596); `-SillSettingsScroll clipboard` for the Paste row
   and footnote at 500x710 (734825d); and the Mac's one change, `HostClipboard`'s Board writes a device's
-  text before `received` returns (f15675b): a main actor busy as the text arrived (a stream's start,
-  150 ms) took the text and the keys back to back and V came within half a millisecond of the write's
-  end, before it in 4 of 25, now never. Re-run: `clipboard` 285 and 91 of 91 at the head, 342 and 94 of
-  94 after; `key-strokes` 359 and 86 of 86; `run-all.sh` all 56 after; the three iOS builds, `swift
-  build -c release` (from `git archive` of the head: 46.7 s, the CaptureProbe warning), the PR's live
-  runs, the race (the app at 50 ms 0 of 25, at 0 ms 15 of 25), 11 of the 12 photos byte for byte; the
-  review's photos in `review/`.
+  text before `received` returns (1d8cf03): a main actor busy as the text arrived (a host's first
+  stream start held it 70 to 150 ms) took the text and the keys back to back, and V came within half
+  a millisecond of the write's end, before it in 4 of 25, now never. Re-run: `clipboard` 285 and 91 of
+  91 at the head, 342 and 94 of 94 after; `key-strokes` 359 and 86 of 86; `run-all.sh` all 56 after;
+  the three iOS builds, `swift build -c release` (from `git archive` of the head: 46.7 s, the
+  CaptureProbe warning), the PR's live runs, the race (the app at 50 ms 0 of 25, at 0 ms 15 of 25), 11
+  of the 12 photos byte for byte; the review's photos in `review/`.
   **Untested, for Noah** (the plan's ten): a paste into TextEdit, Notes and a Terminal at their
   cursor, the switch off, a paste with no text field in front, VoiceOver's words, Universal Clipboard
-  on, through Tailscale, the Settings panel's Paste row, a Paste right after a pick or a turn, a Mac
-  with the Dvorak layout (⌘K; open question 16 is Noah's call). The PR's description predates the review.
+  on, through Tailscale, the Settings panel's Paste row, a Paste as soon as the chip shows after Sill
+  comes back and right after a pick, a Mac with the Dvorak layout (⌘K; open question 16 is Noah's
+  call). The PR's description predates the review.
 
 **A hardware keyboard and trackpad on the device (2026-10-14, branch `hardware-keyboard` from main at
 985a733, PR #80; issues #67 and #68; the plan, its eleven open questions with the defaults taken, and the

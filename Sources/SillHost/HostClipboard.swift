@@ -320,8 +320,8 @@ final class HostClipboard {
         /// main actor, which handles each device's messages in order, returns from `received` only once
         /// the pasteboard holds the text, so the ⌘V a device sends after it (paste right away, 50 ms
         /// after the receipt the network queue echoed at once) always pastes it. Written asynchronously,
-        /// as before, a main actor busy as the text arrived (a stream's start holds it about 150 ms)
-        /// took the text and the keys back to back: V's key came within half a millisecond of the
+        /// as before, a main actor busy as the text arrived (a host's first stream start held it 70 to
+        /// 150 ms) took the text and the keys back to back: V's key came within half a millisecond of the
         /// write's end and before it in 4 of 25 pastes on loopback, where with the main actor free it
         /// came 50 to 66 ms after. The cost: the write (about a millisecond) and a look the queue is in
         /// the middle of. Nothing on this queue ever waits for the main actor, so it cannot deadlock.

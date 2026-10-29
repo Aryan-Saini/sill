@@ -524,7 +524,8 @@ narrows the race but does not close it, since the host can take the text and the
 Known, until the review: a write held up longer than that (the Board's queue busy reading text another
 app only promised) still lost, and ⌘V then pasted what the Mac's clipboard held before; nothing on the
 device can tell. The review found the same outcome from the other side (finding 6): the 50 ms held only
-while the Mac's main actor was free as the text arrived, and a stream's start holds it about 150 ms.
+while the Mac's main actor was free as the text arrived, and a host's first stream start held it 70 to
+150 ms.
 Since then the Mac writes a device's text before `received` returns (`Board.write` is synchronous), so
 the keys, which the main actor takes after it, always come after the write, whatever held either up;
 the 50 ms stays for a Mac built before that, and as room for the app in front to read the pasteboard.
@@ -595,9 +596,9 @@ changed; any Sill for Mac with the clipboard, #78 on):
 8. Paste in the Settings panel's row while a window streams: the text lands in that window under the
    panel (the Mac brings that window's app forward for the keys if it is not in front, as for any
    input).
-9. From the review: tap Paste right after picking another window or turning the iPad (a stream's start
-   holds the Mac's main actor about 150 ms): the text you copied lands, never what the Mac's clipboard
-   held before.
+9. From the review: tap Paste on the chip as soon as it shows after Sill comes back (a session starting
+   then, the Mac busy with its first picture), and right after picking another window: the text you
+   copied lands, never what the Mac's clipboard held before.
 10. From the review, if a Mac with the Dvorak keyboard layout is at hand (System Settings › Keyboard ›
     Text Input): Paste there presses ⌘K, not ⌘V (Terminal clears its scrollback); with "Dvorak – QWERTY
     ⌘" it pastes. Say whether open question 16 should change before the release.
@@ -658,11 +659,13 @@ above, the app's console and the host's input and clipboard logs, each host's st
 - **Finding 4: a Mac whose keyboard layout moves V (3dc8596).** "The decision", Known: under Dvorak Paste
   presses ⌘K, under Dvorak – Right ⌘, (read from the layouts' own data, nothing posted). Documented, the
   support page tells such a Mac to turn the switch off, and open question 16 has the ways to fix it later.
-- **Finding 6: the 50 ms held only while the Mac's main actor was free (f15675b).** The receipt comes from
+- **Finding 6: the 50 ms held only while the Mac's main actor was free (1d8cf03).** The receipt comes from
   the Mac's network queue as it reads the ping; the text is taken on the main actor and was written on the
   Board's queue after it. A scratch probe timing the main queue every 5 ms (never committed) found it held
-  150.5 ms at a Desktop pick: every stream's start (picks, rotations, Aa, settings changes) holds it about
-  that long. Reproduced with a scratch host that holds the main actor 150 ms as each text arrives and
+  150.5 ms and 70.1 ms at a host's first stream start (two runs; two settings changes' restarts and a
+  pick after it, under 20 ms each), and the app's first two live runs had a paste's keys split by 137
+  and 20 ms three seconds into a session, so other work holds it too (Sill.app's own stalls not
+  measured). Reproduced with a scratch host that holds the main actor 150 ms as each text arrives and
   prints when each write ends, and a device stand-in (Python, loopback) sending KeyChord.paste's four
   keys 50 ms after each receipt: V's key within half a millisecond of the write's end and before it in 4
   of 25 (median 0.10 ms after); with the main actor free 50 to 66 ms after. The Mac now writes a device's
@@ -684,7 +687,7 @@ StreamClient+Clipboard's glue, which no check compiles, so taking it out failed 
 rule's (`tourShows`), with the Mac's word: the table is 64 cases, model 3 has the tour, the Mac's switch
 and the text it drops, and each condition has a mutant. Model 3 now checks that every ⌘V pastes the text
 its own Paste sent. The words' check holds the subtitle no longer than today's. After the review (the
-code at f15675b): `clipboard` 342 checks and 94 of 94 mutants (25 min 21 s; 3 new: the Mac's word, the
+code at 1d8cf03): `clipboard` 342 checks and 94 of 94 mutants (25 min 21 s; 3 new: the Mac's word, the
 tour, the longer subtitle); `key-strokes` 359 (its files unchanged by the review);
 `Tests/checks/run-all.sh` all 56 passed (8 min 8 s).
 
@@ -727,8 +730,8 @@ read, not against TextEdit's read); Sill.app's own main-actor stalls (the synthe
 - 2026-10-29, the review ("The review" above): six findings, each reproduced, then fixed in a commit of
   its own: the Mac's last word in the rule (2d9428a), the tour's hold in the rule (d435e8c), the chip's
   "Where the cursor is." (1ddadb9), a Mac whose layout moves V documented (3dc8596), the harness's
-  `-SillSettingsScroll clipboard` (734825d), the Mac's synchronous write of a device's text (f15675b),
-  then these docs. Verified on the code at f15675b: the checks and mutants above; the iOS app Debug and
+  `-SillSettingsScroll clipboard` (734825d), the Mac's synchronous write of a device's text (1d8cf03),
+  then these docs. Verified on the code at 1d8cf03: the checks and mutants above; the iOS app Debug and
   Release for the generic simulator and Debug for a generic device, only StreamClient.swift:4113's
   warning; `swift build -c release`; the live runs on the review's build (the switch on and off,
   nothing streaming, the tour, the Mac's switch going off mid-Paste, the race at 50 ms 0 of 25). The
