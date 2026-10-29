@@ -37,6 +37,22 @@ keep the old rule: 0.4.0, 0.5.1 and the nightly 0.5.5 (987) take every hook from
   symlink: the line, every hook "ignored", "Home door: TLS, pairing required (0 paired)."; origin/main's build
   in that bundle took every hook. Sill's real preferences byte for byte; LaunchServices' 43 records of Sill's
   ID the same before and after.
+- The review (2026-10-29, after b0d9b03b; the report's "The review"), three lenses, four findings, each reproduced
+  first, the fixes in commits of their own: R1, the fix holds for Sill.app built from it on, and a build from
+  before keeps its rule: the nightly 0.5.5 (987)'s own Developer ID build, renamed Sill.bin under the same
+  sandbox, took every hook ("Home door: TLS, pairing not required.", "Settings: require pairing off → on"), so
+  SECURITY.md, the plan's §4.3 and this entry now say which builds (f562b4c3) and what that leaves open is Noah's,
+  in the report; R2, out of the finding's scope, for Noah, in the report; R3, the reader's two fail-closed answers
+  (a read that failed, an identifier with neither a certificate nor the ad hoc flag) were unchecked, three mutants
+  turning them into a test host surviving: `signature(read:)`, pure, 12 checks and 2 mutants (7ce5874c); R4, two
+  comments with the old rule, DebugHooks' header and the plan's §13 (b16d66c7). Tried and holding: this branch's
+  build signed as Sill in a Sill.bin, every hook "ignored", "pairing required (0 paired)"; `CFProcessPath` and
+  argv[0] do not move `Bundle.main` (a symlink does, and the kernel's identifier answers it). Verified after:
+  `test-host` 145 checks and 24 of 24 mutants; `run-all.sh` all 57 (9 min 58 s); `swift build -c release`, only
+  the CaptureProbe warning; the bare binary on loopback took `-requirePairing NO` (an unpaired TLS client
+  admitted), `-SillSetAfter 'requirePairing=1'` (the next refused: "certificate unknown") and the `SILL_TEST_*`;
+  previews 146; Sill's preferences, LaunchServices' 43 records and Sill.log untouched by the sandboxed runs. No
+  iOS file and no wire changed, so the three iOS builds were not run.
 - **Untested, for Noah:** a certificate-signed build reading itself (signing needs the keychain): with Sill.app
   from this branch installed as usual, Sill.log has no "Running from …" line and Settings › Devices and Remote
   Access work as before. Don't run a copy of Sill.app outside /Applications to see the refusal: a launched copy
