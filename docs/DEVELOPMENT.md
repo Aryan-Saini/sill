@@ -180,10 +180,12 @@ too; `SillHost` saves nothing, so a change lasts until it quits, and the
 device's panel says so. Its Virtual Display switch works only when `SillHost`
 runs with `--virtual-display`. `--direct-wireless` starts it with Direct
 Wireless Connection on (see Direct Wireless Connection below); it is off by
-default here too. `--audio` starts it with Send Audio on (The Mac's sound
-below, a beta), off by default too; a device turns it on or off from its
-Settings panel, until `SillHost` quits; with `--synthetic` the sound is a
-test tone. The
+default here too, and only a device paired at `--pairing`'s door changes it
+from its panel (at the plain door the switch is dimmed and `SillHost` refuses
+it: Settings from a device, below). `--audio` starts it with Send Audio on
+(The Mac's sound below, a beta), off by default too; a device turns it on or
+off from its Settings panel, until `SillHost` quits; with `--synthetic` the
+sound is a test tone. The
 clipboard is shared as in Sill.app (The clipboard, below); `--no-clipboard`
 turns it off for the run.
 
