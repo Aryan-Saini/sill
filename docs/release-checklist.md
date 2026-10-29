@@ -964,12 +964,12 @@ tag with `--build-number "$(git rev-list --count HEAD)"`, above every nightly be
 
 The first run, for Noah:
 
-1. Before the first upload: the app's binary uses `UITextInputMode.activeInputModes` (#147's
-   Control-Space rule) and `iOSClient/PrivacyInfo.xcprivacy` doesn't declare the ActiveKeyboards
-   category. `release-ios.sh` warns about it (ITMS-91053; runs 40825231452 and 40843967209 both), and
-   App Store Connect refuses such an upload. Declare it (`NSPrivacyAccessedAPICategoryActiveKeyboards`
-   with the reason that fits: 54BD.1 describes an app that behaves differently, visibly, with the
-   active keyboards) in a pull request of its own, Noah's call.
+1. Done 2026-10-29 (PR #243, on main at 150479b5): the app's binary uses
+   `UITextInputMode.activeInputModes` (#147's Control-Space rule), which App Store Connect refuses
+   undeclared (ITMS-91053; `release-ios.sh` warned in runs 40825231452 and 40843967209), and
+   `iOSClient/PrivacyInfo.xcprivacy` now declares `NSPrivacyAccessedAPICategoryActiveKeyboards`
+   with 54BD.1. `release-ios.sh`'s check of run 40843967209's binary against main's manifest
+   declares every required-reason API it uses (ActiveKeyboards, SystemBootTime, UserDefaults).
 2. Merge "Version 0.6.0 for both apps": App Store Connect takes no new build of 0.5.1, which it has
    released.
 3. Merge "Nightly builds".

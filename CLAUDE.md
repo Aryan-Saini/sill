@@ -54,11 +54,10 @@ out in Insiders first tomorrow". Merge "Version 0.6.0 for both apps" (PR #244, b
   Distribution: NOAH WILLIAM SAFFER (9B2KKVM937)", the App Store profile, get-task-allow false; nothing
   uploaded. Tonight's real notes: 36 pull requests since v0.5.1, What to Test 3,179 bytes. nightly.yml
   itself runs only once it is on main.
-- **Untested, for Noah (docs/release-checklist.md, "Nightlies", "The first run"):** first the privacy
-  manifest: the binary uses `UITextInputMode.activeInputModes` (#147) and iOSClient/PrivacyInfo.xcprivacy
-  doesn't declare ActiveKeyboards (release-ios.sh warned in both runs; App Store Connect refuses such an
-  upload, ITMS-91053): a pull request of its own, the reason his call (54BD.1 fits Control-Space's rule).
-  Then merge #244, then this; `gh workflow run nightly.yml -f verify_only=true` and its artifacts;
+- **Untested, for Noah (docs/release-checklist.md, "Nightlies", "The first run"):** the privacy
+  manifest's ActiveKeyboards (#147's `UITextInputMode.activeInputModes`, ITMS-91053) is declared on main
+  since PR #243 (54BD.1; release-ios.sh's check of run 40843967209's binary against main's manifest: every
+  API declared). Merge #244, then this; `gh workflow run nightly.yml -f verify_only=true` and its artifacts;
   `SILL_SIGN_IN_CI` and `SILL_TESTFLIGHT_IN_CI` true; a run by hand: the pre-release, the notarized dmg on
   a second Mac (quarantined: opens, drags, opens, the iPad still paired), TestFlight's groups (the real
   names: the step lists them) and What to Test; `SILL_NIGHTLY` true; after his Insiders test,
