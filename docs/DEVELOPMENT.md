@@ -1849,9 +1849,12 @@ The release workflow (`.github/workflows/release.yml`) runs on a pushed tag
 `v<version>`: it checks and builds, and with the repository variable
 `SILL_SIGN_IN_CI` set to `true` it also signs, notarizes and publishes with
 `release.sh --publish` (docs/release-checklist.md, "Releasing from GitHub
-Actions"). Its checkout is that tag, so there `--publish` checks the local
-tag (`SILL_RELEASE_TAG`) rather than ask origin. Pushing the tag, which a
-`--publish` from your Mac needs first, starts it too. Since the nightlies the
+Actions"), in the environment `release`: only a `v*` tag may use it, Noah
+approves each run before it starts, and the signing secrets are that
+environment's, not the repository's. Its checkout is that tag, so there
+`--publish` checks the local tag (`SILL_RELEASE_TAG`) rather than ask origin.
+Pushing the tag, which a `--publish` from your Mac needs first, starts it too
+(with `SILL_SIGN_IN_CI` on, its publish job then waits for Noah's approval). Since the nightlies the
 release workflow embeds the profile too (the secret `SILL_PROVISION_PROFILE`,
 decoded to `Packaging/embedded.provisionprofile`), so with `SILL_SIGN_IN_CI` on a
 pushed tag publishes a release on the data-protection keychain, as one from
@@ -1889,15 +1892,18 @@ required-reason APIs its binary uses. `--build-number N` builds with N for the
 run only (xcodebuild's `CURRENT_PROJECT_VERSION=N`; the project is never
 changed), and `--whats-new FILE`, with `--upload` and `--api-key`, sets the
 build's What to Test once App Store Connect has processed it. The TestFlight
-workflow (`.github/workflows/testflight.yml`) runs it on GitHub, by hand only,
-with the commit count as the build number, and uploads only a commit on main's
-own line (another branch's count can be a later nightly's). docs/release-checklist.md,
+workflow (`.github/workflows/testflight.yml`) runs it on GitHub, by hand and
+from main only (its job runs in the environment `nightly`, which only main may
+use, and holds the App Store Connect key), with the commit count as the build
+number, and uploads only a commit on main's own line (another branch's count
+can be a later nightly's). docs/release-checklist.md,
 "TestFlight", has the App Store Connect side, the record field by field.
 
 Nightlies (`.github/workflows/nightly.yml`; docs/release-checklist.md,
 "Nightlies"): every night main moved (09:17 UTC, while the repository variable
-`SILL_NIGHTLY` is `true`) and by hand. `Scripts/release.sh --nightly --publish`
-builds main's head as a release, but universal (`SILL_UNIVERSAL=1`; make-app.sh
+`SILL_NIGHTLY` is `true`) and by hand, from main only: both builds run in the
+environment `nightly`, which holds the nine secrets. `Scripts/release.sh
+--nightly --publish` builds main's head as a release, but universal (`SILL_UNIVERSAL=1`; make-app.sh
 takes `SILL_RELEASE_NIGHTLY=1` for an untagged HEAD), as
 `Sill-nightly-<yyyymmdd>-<sha7>.dmg` and `.zip` on the rolling pre-release
 `nightly` (the seven newest kept, never "latest"); `release-ios.sh
