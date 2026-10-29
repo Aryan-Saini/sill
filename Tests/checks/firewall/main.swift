@@ -185,7 +185,20 @@ same(R.verdict(raw(list: [(exe, false), (exe, true)]), paths: bundled), .blocks(
      "two rules for one path: the one that blocks counts")
 same(R.verdict(raw(), paths: bundled), .allows, "on, nothing blocked")
 same(R.verdict(raw(exe: nil, app: nil, list: [(app, false)]), paths: bundled), .allows, "the list alone read")
-same(R.verdict(raw(exe: "permitted", app: nil, list: nil), paths: bundled), .allows, "the executable's answer alone read")
+// A path's own "permitted" never stands in for the list (the review, 2026-10-29): the list is what showed
+// the report's rule, and on the report's Mac a "permitted" (the bundle's) was what misled.
+same(R.verdict(raw(exe: "permitted", app: nil, list: nil), paths: bundled), .unknown("its rules didn’t read"),
+     "the executable's own \"permitted\" without the list: not allowed")
+same(R.verdict(raw(exe: "permitted", app: "permitted", list: nil, problem: "socketfilterfw --listapps ended with status 9"),
+               paths: bundled), .unknown("socketfilterfw --listapps ended with status 9"),
+     "the report's Mac with its list unread (the tool killed): unknown, and why, never allowed")
+same(R.verdict(raw(exe: "blocked", app: "permitted", list: nil, problem: "socketfilterfw --listapps didn’t answer in 2 s"),
+               paths: bundled), .blocks(executable: exe, bundle: nil), "its list unread, its own answer blocked: blocked")
+// No rule at all: the list read and empty, and no answer of its own (macOS 27 says "permitted"; the legacy
+// form "not part of the firewall"): allowed.
+same(R.verdict(raw(exe: nil, app: nil, list: []), paths: bundled), .allows, "an empty list read, no answers: allowed")
+same(R.verdict(raw(list: []).withAnswers("The application is not part of the firewall \n"), paths: bundled), .allows,
+     "legacy, no rule at all: allowed")
 same(R.verdict(raw(list: [(app, false), (exe, true)]).withAnswers("The application is not part of the firewall \n"),
                paths: bundled), .blocks(executable: exe, bundle: nil), "legacy: no answer of its own, the list decides (blocked)")
 same(R.verdict(raw(list: [(app, false)]).withAnswers("The application is not part of the firewall \n"), paths: bundled), .allows,

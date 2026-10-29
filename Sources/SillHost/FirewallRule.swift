@@ -80,7 +80,7 @@ package enum FirewallRule {
     package enum Verdict: Equatable, Sendable {
         /// The firewall is off.
         case off
-        /// It is on, and no rule blocks the executable or its bundle.
+        /// It is on, its rules were read (`--listapps`), and none blocks the executable or its bundle.
         case allows
         /// It is on, and a rule blocks these paths (at least one is set): devices on the network
         /// cannot connect, whatever the other path's rule says.
@@ -232,9 +232,12 @@ package enum FirewallRule {
     /// What the firewall does to devices connecting to this process. Off: nothing. On: a path is
     /// blocked when its own answer says so or a rule `--listapps` printed for exactly that path
     /// blocks, either one enough (on the report's Mac the bundle's answer said "permitted" beside its
-    /// executable's rule that blocked); allowed once the executable's answer or the list was read
-    /// and nothing blocks; else unknown. Block all incoming connections, from either answer, blocks
-    /// whatever the rules say.
+    /// executable's rule that blocked); allowed only once the list was read and nothing blocks; else
+    /// unknown, with why. A path's own "permitted" never stands in for the list (the review,
+    /// 2026-10-29): the list is what showed the report's rule, a "permitted" is what misled there,
+    /// and a list that didn't read (the tool killed or slow, or refusing an option it no longer
+    /// knows, which ends with status 255) is said in the log instead of taken for allowed. Block all
+    /// incoming connections, from either answer, blocks whatever the rules say.
     package static func verdict(_ a: Answers, paths: Paths) -> Verdict {
         switch a.state {
         case .off: return .off
@@ -246,7 +249,7 @@ package enum FirewallRule {
         let executable = blocked(paths.executable, a.executable, a.listed)
         let bundle = paths.bundle.flatMap { blocked($0, a.bundle, a.listed) }
         if executable != nil || bundle != nil { return .blocks(executable: executable, bundle: bundle) }
-        if a.executable == .unknown, a.listed == nil { return .unknown(a.problem ?? "its rules didn’t read") }
+        if a.listed == nil { return .unknown(a.problem ?? "its rules didn’t read") }
         return .allows
     }
 

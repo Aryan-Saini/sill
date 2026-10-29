@@ -57,7 +57,7 @@ MUTANTS = {
                                             "        case .blockAll: break\n        case .unknown"),
     "V3 block all from --getblockall ignored": ("        if a.blockAll == true { return .blocksAll }\n", ""),
     "V4 both must block": ("if executable != nil || bundle != nil {", "if executable != nil && bundle != nil {"),
-    "V5 unread said allowed": ("        if a.executable == .unknown, a.listed == nil { return .unknown(a.problem ?? \"its rules didn’t read\") }\n", ""),
+    "V5 unread said allowed": ("        if a.listed == nil { return .unknown(a.problem ?? \"its rules didn’t read\") }\n", ""),
     "V6 an unknown state judged as on": ('case .unknown: return .unknown(a.problem ?? "its state didn’t read")', "case .unknown: break"),
     "V7 the path's own answer ignored": ("        if answer == .blocked { return path }\n", ""),
     "V8 any blocked rule counts": ("$0.path == path && $0.blocks == true", "$0.blocks == true"),
@@ -69,6 +69,8 @@ MUTANTS = {
                                        "            case .blocks: return true\n            case .blocksAll, .off, .allows, .unknown: return false"),
     "V13 a device over loopback counts": ("verdict?.blocksDevices == true && !fromLoopback", "verdict?.blocksDevices == true"),
     "V14 any device asks again": ("verdict?.blocksDevices == true && !fromLoopback", "!fromLoopback"),
+    "V15 a path's own permitted stands in for the list": ("        if a.listed == nil { return .unknown", "        if a.listed == nil, a.executable == .unknown { return .unknown"),
+    "V16 an empty list taken as unread": ("        if a.listed == nil { return .unknown", "        if a.listed?.isEmpty != false { return .unknown"),
     # words
     "W1 no sudo": ('(["sudo", tool] + paths', '([tool] + paths'),
     "W2 the bundle's first": ("let paths = [executable, bundle].compactMap { $0 }", "let paths = [bundle, executable].compactMap { $0 }"),
