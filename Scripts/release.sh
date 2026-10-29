@@ -241,11 +241,11 @@ head_is_release_tag() {
 }
 
 # Whether this run is the release workflow's (.github/workflows/release.yml): on a GitHub runner,
-# with SILL_RELEASE_TAG set to the tag that started it. Its checkout is origin's tag itself
-# (refs/tags/$SILL_RELEASE_TAG, with every tag fetched), so origin's tag names HEAD exactly when the
-# local one does, which tag_problems and head_is_release_tag check; git ls-remote would need the
-# credentials that checkout does not keep (persist-credentials: false) while the repository is
-# private.
+# with SILL_RELEASE_TAG set to the tag that started it. Its checkout is the commit the run was
+# started for (github.sha), with every tag fetched as origin has it, so origin's tag names HEAD
+# exactly when the local one does, which the workflow's own tag check (a tag moved after the run
+# began), tag_problems and head_is_release_tag check; git ls-remote would need the credentials that
+# checkout does not keep (persist-credentials: false) while the repository is private.
 in_release_workflow() {
     [ "${GITHUB_ACTIONS:-}" = true ] && [ -n "${SILL_RELEASE_TAG:-}" ]
 }

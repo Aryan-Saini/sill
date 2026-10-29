@@ -414,7 +414,8 @@ comes later, when the cask qualifies (below).
       the release workflow ("Releasing from GitHub Actions" below), creates the GitHub Release
       `v<version>` in Saffsanity/sill with the assets `Sill.dmg`, `Sill.dmg.sha256`, `Sill.zip` and
       `Sill.zip.sha256`; before it builds, `--publish` checks that origin has the tag and that it
-      names HEAD (the workflow's checkout is that tag). The site's Download button links
+      names HEAD (the workflow's checkout is the commit its run was started for, with every tag,
+      and it stops when the tag no longer names it). The site's Download button links
       `releases/latest/download/<name>`, which GitHub redirects to the newest release, so
       download.html is never edited per release (its one exception, the move to Sill.dmg, is done:
       below). Anonymous downloads and the update check need a public repository, which
@@ -1083,7 +1084,13 @@ above.
   variables, below). The job waits for Noah's approval before it starts: GitHub notifies him, and
   the run's page › Review deployments › release › Approve and deploy lets it go (Reject fails the
   run). Approve only the tag you pushed, on the commit you tagged: the run's page names who pushed
-  it, the tag and its commit (`git rev-list -n 1 v<version>` here gives the one you tagged). Any
+  it, the tag and its commit (`git rev-list -n 1 v<version>` here gives the one you tagged). The
+  job builds that commit, the run's own (`github.sha`), not whatever the tag names when it starts,
+  and stops before anything is built or signed if the tag has moved or gone since the run began:
+  a tag moved after your look would otherwise build and sign another commit, and your `git
+  rev-list` would not see it (`git fetch --tags` never moves a tag you already have). A move is a
+  push too, and usually starts a run of its own under the name of whoever moved the tag: reject
+  that one unless it was you. Any
   `v*` tag pushed by anyone with write access waits there the same way, the workflow's own checks
   are that tag's, and the approval is all that stands between it and a release that every
   Sill.app's update check offers (What the environments don't do, below). By hand, start it from
@@ -1231,7 +1238,10 @@ the update check offers included. So the approval keeps a tag from publishing a 
 a commit on main. A ruleset on main that requires a pull request stops a direct push but not a
 merged pull request, unless an approval is required too, and GitHub never lets a pull request's
 author approve it: with Noah alone it holds only against someone else's write access. A ruleset
-keeping `v*` tags to Noah keeps other people's tags from reaching his approval at all. An
+keeping `v*` tags to Noah keeps other people's tags from reaching his approval at all, and one
+that restricts updates and deletions of `v*` tags keeps any tag where it was pushed: a tag moved
+after its run began stops that run, but one moved while the job builds still gets the release,
+its files the approved commit's build and its tag and source archives the other commit's. An
 administrator can still bypass an environment's rules (GitHub's default), which is Noah.
 
 | Name | Kind | What it holds |

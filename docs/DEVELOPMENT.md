@@ -1851,7 +1851,9 @@ The release workflow (`.github/workflows/release.yml`) runs on a pushed tag
 `release.sh --publish` (docs/release-checklist.md, "Releasing from GitHub
 Actions"), in the environment `release`: only a `v*` tag may use it, Noah
 approves each run before it starts, and the signing secrets are that
-environment's, not the repository's. Its checkout is that tag, so there
+environment's, not the repository's. Its checkout is the commit the run was
+started for, with every tag as origin has it, and it stops when the tag no
+longer names that commit (a tag moved after the run began), so there
 `--publish` checks the local tag (`SILL_RELEASE_TAG`) rather than ask origin.
 Pushing the tag, which a `--publish` from your Mac needs first, starts it too
 (with `SILL_SIGN_IN_CI` on, its publish job then waits for Noah's approval).
