@@ -875,10 +875,16 @@ What a nightly is:
   named `Sill-nightly-<yyyymmdd>-<sha7>.dmg` and `.zip`, each with its `.sha256`, on the pre-release
   [`nightly`](https://github.com/Saffsanity/sill/releases/tag/nightly). One pre-release for all
   the nights: its tag `nightly` moves to each night's commit, its notes say what a nightly is, list the
-  newest files with their SHA-256, the pull requests merged since the last release tag and the
-  earlier nightlies, and end with the commit's sha in a comment. It keeps the seven newest nightlies'
-  files (`SILL_NIGHTLY_KEEP`) and deletes older ones. Never "latest", never a plain release, no tag
-  per night. A release with the tag `nightly` that isn't a pre-release is never touched.
+  newest files with their SHA-256, give Sill for iPhone and iPad's public beta link (release.sh's
+  `nightly_testflight_link`: every night's notes replace the last, so a new link is changed there
+  too, as in the README and the download page), list the pull requests merged since the last release
+  tag and the earlier nightlies, and end with the commit's sha in a comment. It keeps the seven
+  newest nightlies' files (`SILL_NIGHTLY_KEEP`) and deletes older ones. Never "latest", never a plain
+  release, no tag per night. A release with the tag `nightly` that isn't a pre-release is never
+  touched. The first nightly was published by hand on 2026-10-29 (0.5.5 (987), universal, the tag at
+  150479b5, notes without the sha comment): the workflow's first night takes that pre-release over,
+  keeps its four files among the seven, moves the tag and replaces its notes (checked with the stand-in
+  gh in the review of 2026-10-29).
 - Sill for iPhone and iPad: the same commit; `Scripts/asc.swift groups` lists the app's TestFlight
   groups through the App Store Connect key (reads only, in a verify-only run too), then
   `release-ios.sh --sign-at-export --upload --build-number <commit count>` through the key (cloud
@@ -994,7 +1000,8 @@ The first run, for Noah:
    shows the key works with App Store Connect's API and which groups the nightlies will go to.
 5. `gh variable set SILL_SIGN_IN_CI --body true` and `gh variable set SILL_TESTFLIGHT_IN_CI --body
    true`. Not `SILL_NIGHTLY_PUBLIC_BETA`.
-6. `gh workflow run nightly.yml`. Check the pre-release (four files, the notes, "Pre-release"), the
+6. `gh workflow run nightly.yml`. Check the pre-release (the night's four files beside the first
+   nightly's, the notes with the public beta link, "Pre-release"), the
    Mac job's log ("Identity keychain: data-protection", twice "Notarized Developer ID"), the disk image
    on a second Mac (downloaded, so quarantined: it opens, the drag, Sill opens, the iPad still
    paired), the iOS job's last step ("Assigned build … to: Insiders", "Public beta: not given") and

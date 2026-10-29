@@ -620,6 +620,11 @@ publish_release() {
 # (.github/workflows/nightly.yml) runs release.sh --nightly --publish, and sources this file for
 # nightly_last_sha, its skip rule.
 
+# Sill for iPhone and iPad's public beta on TestFlight (docs/release-checklist.md, TestFlight §7): the
+# pre-release's notes carry its link, as the README and the download page do, since every night's
+# notes replace the last; a new link is changed here too.
+nightly_testflight_link=https://testflight.apple.com/join/6v7nqyn3
+
 # The night's date, YYYYMMDD in UTC: SILL_NIGHTLY_DATE when it is set (the nightly workflow gives its
 # jobs the same one), else today.
 nightly_date() {
@@ -719,7 +724,7 @@ nightly_body() {
 | [$stem.dmg]($url/$stem.dmg) | \`$dmg_sha\` |
 | [$stem.zip]($url/$stem.zip) | \`$zip_sha\` |
 
-The same night's Sill for iPhone and iPad goes to TestFlight.
+The same night's Sill for iPhone and iPad goes to TestFlight. Sill for iPhone and iPad's public beta: $nightly_testflight_link
 
 $(cat "$notes")
 BODY
