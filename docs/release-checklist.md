@@ -370,6 +370,13 @@ comes later, when the cask qualifies (below).
       apart (Sill for Mac 0.3.0, 0.3.1 and 0.4.0 beside Sill for iPhone and iPad 0.5; there was
       never a Sill for Mac 0.4.1). A release that changes only one app is Noah's call: both at
       the new number, or the other left at its last (nothing in the code compares the two).
+      main carries the next release's number, both apps together, from soon after the last
+      release on: 0.6.0 since 2026-10-29 (PR "Version 0.6.0 for both apps"), ahead of 0.5.1 on
+      the App Store and on GitHub. App Store Connect takes no new build of a version it has
+      released (its train is closed), so every build of main for TestFlight needs the next
+      number; and Sill.app's update check compares only release tags with the version it runs,
+      so a build of main saying 0.6.0 is offered nothing until a release newer than 0.6.0 exists.
+      The release's tag then names a commit of main that already says its number.
 - [ ] A Mac release and a device build that need each other (a change to the home door or the wire
       that older builds on the other side can't follow): the release notes say which versions go
       together, the device build is uploaded first (App Store Connect takes 5 to 30 minutes to
