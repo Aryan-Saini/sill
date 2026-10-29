@@ -659,8 +659,8 @@ package final class StreamCoordinator {
     /// whenever the listener comes up, when Sill.app's status menu opens (a block that came after
     /// launch; the menu is built before the answer, so its item shows from the next opening), when
     /// its Settings › General opens or Sill becomes active over it, and when a device gets in from
-    /// the network while the verdict says none can; never on a timer. One check at a time: one asked for meanwhile runs once more after it, so its
-    /// answer is never older than the request.
+    /// the network while the verdict says none can; never on a timer. One check at a time: one asked
+    /// for meanwhile runs once more after it, so its answer is never older than the request.
     package func checkFirewall() {
         guard !firewallChecking else { firewallAgain = true; return }
         firewallChecking = true
