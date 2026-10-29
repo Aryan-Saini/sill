@@ -197,6 +197,13 @@ M = [
     ("reconnectTrust: a plain door never dialed by any reconnect, a plain session's too", F,
      "        if dial == .plain, seen != nil { return nil }", "        if dial == .plain { return nil }"),
     ("reconnectKey: never a key", F, "        if case .open(let seen?) = trust { return seen }\n        return nil", "        return nil"),
+    # The review of #255 (2026-10-29): a tap that never saw a key leaves the reconnect the earlier key under its name.
+    ("reconnectKey: a tap that saw no key drops the earlier key (any key again, as before the review)", F,
+     "        if case .open(nil) = trust { return earlier }\n", ""),
+    ("reconnectKey: the earlier key over the key the session saw", F,
+     "        if case .open(nil) = trust { return earlier }", "        if case .open = trust, let earlier { return earlier }"),
+    ("reconnectKey: the earlier key for a saved Mac's lost session too", F,
+     "        if case .open(nil) = trust { return earlier }", "        if case .open(nil) = trust { return earlier }\n        if case .saved = trust { return earlier }"),
     ("reconnectKey: a saved Mac's pin carried as the seen key", F, "        if case .open(let seen?) = trust { return seen }\n        return nil",
      "        if case .open(let seen?) = trust { return seen }\n        if case .saved(let pin) = trust { return pin }\n        return nil"),
     ("homeEnd: another key at the pinned reconnect read as the ordinary end (dialed again and again)", F,

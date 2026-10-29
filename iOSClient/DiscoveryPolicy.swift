@@ -1238,12 +1238,13 @@ enum DiscoveryPolicy {
     /// unsaved Mac by its name alone, and anyone on the network can advertise any name and any `p`.
     /// Another key answering ends the reconnect (`homeEnd`'s `.otherKey`), and a tap connects with
     /// any key, as a tap on an open door always has. A lost session that never saw a key (a tap's
-    /// dial that ended before its handshake) is reconnected as that tap was, with any key. A saved
-    /// Mac, pinned to its saved key, is unchanged. Nor is a plain door (no `p`) under the name dialed
-    /// once the lost session saw a key (`homeDial`'s `.plain`, a DEBUG build's: Release dials none):
-    /// with no key to check, whatever advertised the name without `p` got the session, as a tap of a
-    /// DEBUG build's would (the review of #255, 2026-10-29). The reconnect looks past it, as Release
-    /// does, and a tap still dials it.
+    /// dial that ended before its handshake) is reconnected pinned to the key this device's last
+    /// session under that name saw (`reconnectKey`'s `earlier`), and with none, as that tap was,
+    /// with any key. A saved Mac, pinned to its saved key, is unchanged. Nor is a plain door (no
+    /// `p`) under the name dialed once the lost session saw a key (`homeDial`'s `.plain`, a DEBUG
+    /// build's: Release dials none): with no key to check, whatever advertised the name without `p`
+    /// got the session, as a tap of a DEBUG build's would (the review of #255, 2026-10-29). The
+    /// reconnect looks past it, as Release does, and a tap still dials it.
     static func reconnectTrust(_ dial: HomeDial, savedPin: Data?, seen: Data?) -> HomeTrust? {
         if dial == .anyKey, let seen { return .open(seen: seen) }
         if dial == .plain, seen != nil { return nil }
@@ -1251,10 +1252,16 @@ enum DiscoveryPolicy {
     }
 
     /// The key a lost session at home saw, which its automatic reconnect pins (`reconnectTrust`): an
-    /// open session's, once its first connection was ready (`trust(_:readyWith:)`). Nil for any
-    /// other: a saved Mac's (its reconnect pinned to its saved key), a plain door's, a remote
-    /// session's (no home trust), and an open one that never saw a key.
-    static func reconnectKey(lost trust: HomeTrust?) -> Data? {
+    /// open session's, once its first connection was ready (`trust(_:readyWith:)`). An open one that
+    /// never saw a key (a tap's dial that ended before its handshake) takes `earlier`, the key this
+    /// device's last session under that Bonjour name saw (StreamClient's `openKeys`): a tap clears the
+    /// reconnect and dials any key, so one tap that did not connect, as the reconnect's own words
+    /// invite while the Mac is away ("…Sill keeps trying, or tap it to try now."), left a reconnect
+    /// that took any key under that name (the review of #255, 2026-10-29). Nil for any other: a saved
+    /// Mac's (its reconnect pinned to its saved key), a plain door's, a remote session's (no home
+    /// trust), and an open one that never saw a key under a name no session of this device saw one.
+    static func reconnectKey(lost trust: HomeTrust?, earlier: Data? = nil) -> Data? {
+        if case .open(nil) = trust { return earlier }
         if case .open(let seen?) = trust { return seen }
         return nil
     }

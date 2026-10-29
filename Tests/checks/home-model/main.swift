@@ -414,6 +414,20 @@ if let keyS = RemoteKey.generate(), let idS = RemoteIdentity(privateKey: keyS), 
           [true, false].allSatisfy { P.reconnectTrust(plainDial($0, false), savedPin: nil, seen: P.reconnectKey(lost: studio)) == nil
                                      && P.reconnectEnd(plainDial($0, false), saved: false) == nil }
           && P.sessionTrust(plainDial(true, true), savedPin: nil) == .plain)
+    // The review of #255 (2026-10-29): "Studio isn't answering. It may be asleep. Sill keeps trying, or tap it to try
+    // now." The person taps it: the reconnect is cleared and the tap's dial takes any key. It waits (this device's
+    // own network down or changing) and is let go before its handshake, with no goodbye, so a reconnect follows it
+    // (GoodbyePolicy's own outcome) from that dial's trust, which saw no key: it pins the key this device's last
+    // session under the name saw. (A dial that only gets no answer stays preparing and ends at the tap's deadline,
+    // with no reconnect at all.)
+    let retap = P.sessionTrust(studioTap, savedPin: nil)!
+    let afterTap = GoodbyePolicy.outcome(nil, mac: "Studio", device: "iPad", saved: false)
+    let repinned = P.reconnectTrust(reconnectDial, savedPin: nil, seen: P.reconnectKey(lost: retap, earlier: P.reconnectKey(lost: studio)))
+    check("14 a tap during the reconnect whose dial saw no key: a reconnect follows it, still pinned to Studio's key; the other Mac's key ends it",
+          P.pin(retap) == .anyKey && afterTap.reconnect && repinned.map(P.pin) == .key(fS)
+          && repinned.map { P.homeEnd(trust: $0, goodbye: nil, tls: P.pinRefused) } == .otherKey)
+    check("14 …where before the review that reconnect took any key, the other Mac's included",
+          P.reconnectTrust(reconnectDial, savedPin: nil, seen: P.reconnectKey(lost: retap)).map(P.pin) == .anyKey)
 } else {
     check("14 two P-256 keys", false)
 }

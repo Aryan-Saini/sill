@@ -581,6 +581,30 @@ check("walk (DEBUG): the reconnect after a plain session still dials a plain doo
       P.reconnectTrust(plainRow(true, false), savedPin: nil, seen: P.reconnectKey(lost: .plain)) == .plain
       && P.sessionTrust(plainRow(true, true), savedPin: nil) == .plain)
 check("walk: that plain door looked past, the reconnect goes on (it does not wait for a tap)", P.reconnectEnd(plainRow(true, false), saved: false) == nil)
+// The review of #255 (2026-10-29): a tap clears the reconnect and dials any key, so one tap whose dial ended
+// before its handshake (as "…Sill keeps trying, or tap it to try now." invites while the Mac is away) left a
+// reconnect that took any key under the lost Mac's name. It takes the key the last session under that name saw.
+check("reconnectKey: a session that never saw a key takes the earlier one under its name (the review of #255)",
+      P.reconnectKey(lost: .open(seen: nil), earlier: kA) == kA)
+check("reconnectKey: what the session saw wins over the earlier key (a tap that connected to another key: that one now)",
+      P.reconnectKey(lost: .open(seen: kB), earlier: kA) == kB && P.reconnectKey(lost: P.trust(.open(seen: nil), readyWith: kB), earlier: kA) == kB)
+check("reconnectKey: no earlier key for a saved Mac's, a plain door's or a remote session's loss, and none without one (a first tap)",
+      P.reconnectKey(lost: .saved(pin: kA), earlier: kB) == nil && P.reconnectKey(lost: .plain, earlier: kB) == nil
+      && P.reconnectKey(lost: nil, earlier: kB) == nil && P.reconnectKey(lost: .open(seen: nil), earlier: nil) == nil)
+let openRow = { (tap: Bool) in P.homeDial(door: .open, saved: false, revoked: false, homeTLS: false, debug: false, tap: tap) }
+let retap = P.sessionTrust(openRow(true), savedPin: nil)!                    // the reconnect cleared, any key
+let earlierA = P.reconnectKey(lost: openSession)                            // StreamClient's openKeys[name], A's
+let afterRetap = P.reconnectTrust(openRow(false), savedPin: nil, seen: P.reconnectKey(lost: retap, earlier: earlierA))
+check("walk: a tap during the reconnect takes any key, as a tap always has", P.pin(retap) == .anyKey)
+check("walk: that tap's dial ended before its handshake: the reconnect after it is pinned to A still, B refused (otherKey), A taken",
+      afterRetap.map(P.pin) == .key(kA) && afterRetap.map { P.homeEnd(trust: $0, goodbye: nil, tls: P.pinRefused) } == .otherKey
+      && afterRetap.map { P.trust($0, readyWith: kA) } == .open(seen: kA))
+check("walk: before the review the same tap left a reconnect that took any key",
+      P.reconnectTrust(openRow(false), savedPin: nil, seen: P.reconnectKey(lost: retap)).map(P.pin) == .anyKey)
+check("walk: a tap that connected to B (by design: any key) makes B's key the one its reconnects pin",
+      P.reconnectKey(lost: P.trust(retap, readyWith: kB), earlier: earlierA) == kB)
+check("walk: …and a plain door under the name is not dialed after that tap either (DEBUG)",
+      P.reconnectTrust(plainRow(true, false), savedPin: nil, seen: P.reconnectKey(lost: retap, earlier: earlierA)) == nil)
 
 // MARK: Kind 18 and a goodbye "removed" speak for the Mac whose key the session has (the security
 // review, 2026-09-27)

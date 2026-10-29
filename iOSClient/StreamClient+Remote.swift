@@ -666,15 +666,24 @@ extension StreamClient {
     /// The automatic reconnect after a session with this Mac ended on its own (§7.4). `afterQuit`:
     /// the session ended with goodbye `quit`, so the Mac's row that is going is left alone for
     /// DiscoveryPolicy.quitWait (`reconnectIfListed`); never for a notice. An open door's session
-    /// leaves the key it saw, which the reconnect's dials pin (DiscoveryPolicy.reconnectKey).
+    /// leaves the key it saw, which the reconnect's dials pin (DiscoveryPolicy.reconnectKey); one that
+    /// saw none (a tap's dial that ended before its handshake) the key the last session under its
+    /// name saw (`openKeys`, the review of #255).
     private func lostReconnect(session s: Session?, saved: SavedMac?, name: String, remoteAllowed: Bool,
                                afterQuit: Bool = false) -> Reconnect {
         let bonjour = s?.bonjourName ?? saved?.bonjourName
+        let earlier = bonjour.flatMap { openKeys[$0] }
+        let openKey = DiscoveryPolicy.reconnectKey(lost: s?.home, earlier: earlier)
+        #if DEBUG
+        if openKey != nil, DiscoveryPolicy.reconnectKey(lost: s?.home) == nil {
+            print("reconnect: the dial of \(name) saw no key; the reconnect pins the key the last session under its name saw")
+        }
+        #endif
         return Reconnect(macID: saved?.macID, bonjourName: bonjour, name: name,
                          lostAt: ProcessInfo.processInfo.systemUptime, pathAtLoss: pathSignature,
                          remoteAllowed: remoteAllowed,
                          rememberedDirect: bonjour.map { directWirelessMacs.contains($0) } ?? false,
-                         afterQuit: afterQuit, openKey: DiscoveryPolicy.reconnectKey(lost: s?.home))
+                         afterQuit: afterQuit, openKey: openKey)
     }
 
     /// The automatic reconnect's look, at every browser change, path change and due time

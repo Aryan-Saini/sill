@@ -53,5 +53,7 @@ M = [
     ("homeEnd: another key at the pinned reconnect read as the ordinary end", F, "            if seen != nil, tls == pinRefused { return .otherKey }\n", ""),
     ("reconnectTrust: a plain door dialed plain after the session saw a key (the review of #255)", F,
      "        if dial == .plain, seen != nil { return nil }\n", ""),
+    ("reconnectKey: a tap that saw no key drops the earlier key (the review of #255)", F,
+     "        if case .open(nil) = trust { return earlier }\n", ""),
 ]
 sys.exit(0 if module.mutate("home-model", M, sys.argv[1]) else 1)

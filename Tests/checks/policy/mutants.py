@@ -1,4 +1,4 @@
-"""(integrate-12: follow-best-path's 61 mutants, unchanged, and R1-R9 of the merge's remote rule, against the merged file and policy-merge/main.swift.) Each mutant of DiscoveryPolicy's session route (P: route, S: sessionRoute/describesFlow), of the wired dial (D: dialInterface, W: wiredWait), of following the best path (F: pathPlan, pathGone, PathSightings, freshWifi, wifiInterface, rank) and of its review fixes (G: the reconnect over the cable, the refused listing, upWait), and of a row's kept TXT record (T: rowRecords, records.swift: the cable pulled; a browser made again starts afresh), and of the reconnect of an unsaved open door pinned to the key its lost session saw (O: reconnectTrust, reconnectKey, homeEnd's otherKey, home.swift: the security scan's finding 3; O7–O8 the review of #255's plain door) must fail the policy check. usage: mutants.py"""
+"""(integrate-12: follow-best-path's 61 mutants, unchanged, and R1-R9 of the merge's remote rule, against the merged file and policy-merge/main.swift.) Each mutant of DiscoveryPolicy's session route (P: route, S: sessionRoute/describesFlow), of the wired dial (D: dialInterface, W: wiredWait), of following the best path (F: pathPlan, pathGone, PathSightings, freshWifi, wifiInterface, rank) and of its review fixes (G: the reconnect over the cable, the refused listing, upWait), and of a row's kept TXT record (T: rowRecords, records.swift: the cable pulled; a browser made again starts afresh), and of the reconnect of an unsaved open door pinned to the key its lost session saw (O: reconnectTrust, reconnectKey, homeEnd's otherKey, home.swift: the security scan's finding 3; O7–O8 the review of #255's plain door, O9–O11 its tap that saw no key) must fail the policy check. usage: mutants.py"""
 import os, subprocess, sys
 SP = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(SP, "..", "..", ".."))   # the repository
@@ -261,6 +261,13 @@ MUTANTS = {
         "        if dial == .plain, seen != nil { return nil }\n", ""),
     "O8 reconnectTrust: a plain door never dialed by any reconnect, a plain session's too": (
         "        if dial == .plain, seen != nil { return nil }", "        if dial == .plain { return nil }"),
+    # The review of #255 (2026-10-29): a tap whose dial saw no key leaves the reconnect the earlier key under its name.
+    "O9 reconnectKey: a tap that saw no key drops the earlier key (any key again, as before the review)": (
+        "        if case .open(nil) = trust { return earlier }\n", ""),
+    "O10 reconnectKey: the earlier key over the key the session saw": (
+        "        if case .open(nil) = trust { return earlier }", "        if case .open = trust, let earlier { return earlier }"),
+    "O11 reconnectKey: the earlier key for a saved Mac's lost session too": (
+        "        if case .open(nil) = trust { return earlier }", "        if case .open(nil) = trust { return earlier }\n        if case .saved = trust { return earlier }"),
     # A row keeps its TXT record while its result stays listed (records.swift: the cable pulled, 2026-10-27);
     # a browser made again starts afresh (the review of #232); each result of a name keeps its own.
     "T1 rowRecords: a result without a record reads as none (the rule undone, as before the fix)": (
