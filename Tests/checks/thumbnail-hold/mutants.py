@@ -11,9 +11,9 @@ MUTANTS = [
     # The constants.
     ("T1 1 s unless changed", "static let standard = 0.5", "static let standard = 1.0"),
     ("T2 1.5 s unless changed (as before)", "static let standard = 0.5", "static let standard = 1.5"),
-    ("T3 the floor a tenth (0.1 s)", "static let tenthsRange: ClosedRange<Int> = 2...30", "static let tenthsRange: ClosedRange<Int> = 1...30"),
-    ("T4 the ceiling 5 s", "static let tenthsRange: ClosedRange<Int> = 2...30", "static let tenthsRange: ClosedRange<Int> = 2...50"),
-    ("T5 the range in seconds up to 5 s", "static let range: ClosedRange<Double> = 0.2...3.0", "static let range: ClosedRange<Double> = 0.2...5.0"),
+    ("T3 the floor a tenth (0.1 s)", "static let tenthsRange: ClosedRange<Int> = 2...20", "static let tenthsRange: ClosedRange<Int> = 1...30"),
+    ("T4 the ceiling 5 s", "static let tenthsRange: ClosedRange<Int> = 2...20", "static let tenthsRange: ClosedRange<Int> = 2...50"),
+    ("T5 the range in seconds up to 5 s", "static let range: ClosedRange<Double> = 0.2...2.0", "static let range: ClosedRange<Double> = 0.2...5.0"),
     ("T6 a step of half a second", "static let step = 0.1", "static let step = 0.5"),
     ("T7 the key renamed", "static let key = \"Sill.thumbnailHold\"", "static let key = \"Sill.thumbnailHoldSeconds\""),
     # The lengths.

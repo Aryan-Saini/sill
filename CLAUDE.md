@@ -12,7 +12,7 @@ Formerly winstream; the folder still carries the old name.
 promised on the issue as "lower the time … and have it be user adjustable").** Noah, 2026-10-29: "The hold time should
 be patched and editable with a slider in settings (one of those fancy ones with the +/- buttons that increment by 0.1
 seconds, ideally the timer can go from 0.2s to 3s or something like that." Device only: no wire change, never sent.
-- `ThumbnailHold` (pure, `Tests/checks/thumbnail-hold`, 82 checks and 32 mutants, in CI's matrix): 0.2 to 3 s in
+- `ThumbnailHold` (pure, `Tests/checks/thumbnail-hold`, 82 checks and 32 mutants, in CI's matrix): 0.2 to 2 s in
   tenths, 0.5 s unless changed (it was a fixed 1.5 s; iOS's own long press, which the reporter cites), counted in whole
   tenths so no sum of steps drifts; `Sill.thumbnailHold` (a Double; `-Sill.thumbnailHold 0.3`'s string too); the words.
 - WindowStrip reads it at launch and on each change (every bar: sideways, an iPad's window bar, a phone's row 2), and
@@ -57,7 +57,7 @@ seconds, ideally the timer can go from 0.2s to 3s or something like that." Devic
   taps, a relaunch keeping 0.6 s, a Mac without kind 16; live through a recording relay, the row changed seven times
   and the device sent only pings and its stats meanwhile.
 - **Untested, for Noah:** on the iPad and iPhone, a thumbnail's lights at half a second and the drag after them;
-  Settings › This iPad's stepper from 0.2 to 3 s and a hold at each end; a swipe across the strip at 0.2 s (no lights);
+  Settings › This iPad's stepper from 0.2 to 2 s and a hold at each end; a swipe across the strip at 0.2 s (no lights);
   VoiceOver's reading and its swipes; the row at the largest text sizes (the panel stops at xxLarge: the title in three
   lines beside the stepper, over it in a narrow panel, an iPad window in Slide Over or a phone with Display Zoom); Voice
   Control, Switch Control and Full Keyboard Access on the row (one adjustable element: its − and + are no elements of
@@ -5783,7 +5783,7 @@ Milestone 3, scaling and the virtual display. Two paths exist; adopt the second.
   probe).
 
 **Bar controls (2026-09-23).** Press and hold a thumbnail (0.5 s unless changed in
-Settings › This iPad, 0.2 to 3 s; issue #113, `ThumbnailHold`): macOS's three lights
+Settings › This iPad, 0.2 to 2 s; issue #113, `ThumbnailHold`): macOS's three lights
 appear over it (close, minimize, full screen → `.windowCommand` = kind 15, JSON
 `WindowCommand`; the host presses the window's own buttons through
 Accessibility, using the staged element on the virtual display). Keep holding
@@ -6602,7 +6602,7 @@ good.
   fingers belong to; pure, `Tests/checks/stream-zoom`; `StreamZoomModel` and `ZoomedStreamView` in
   HEVCDisplayView.swift scale the picture inside the pane's clip; StrokeObserver's `onTouch` feeds it; every
   touch and scroll lands through it: PR #196, issue #65), `ThumbnailHold` (how long a window's thumbnail is
-  held before its lights show and its drag can start: 0.2 to 3 s in tenths, 0.5 s unless changed, the words
+  held before its lights show and its drag can start: 0.2 to 2 s in tenths, 0.5 s unless changed, the words
   of the Settings panel's stepper; pure, `Tests/checks/thumbnail-hold`; WindowStrip and HoldDragOverlay
   in StreamScreen.swift take it, issue #113),
   `HEVCDisplayView` (shared display view, the one pointer sprite + DEBUG HUD;

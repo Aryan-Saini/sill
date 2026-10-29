@@ -679,7 +679,7 @@ Touch and hold a window's thumbnail in the bar and its lights show beside it
 (close, minimize, full screen), as a held Home Screen icon offers its menu;
 keep holding and drag to move the thumbnail to another place in the bar. How
 long the hold is, Hold to Show Window Controls in the Settings panel's This
-iPad group (This iPhone on a phone; issue #113), goes from 0.2 to 3 s in tenths
+iPad group (This iPhone on a phone; issue #113), goes from 0.2 to 2 s in tenths
 of a second with the stepper's − and +, and is 0.5 s unless changed, as iOS's
 own long press is (it was a fixed 1.5 s). It is the device's own
 (`Sill.thumbnailHold`, a Double in seconds), never sent to the Mac, so it works

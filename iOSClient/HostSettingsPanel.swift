@@ -890,7 +890,7 @@ private struct GestureRow: View {
 }
 
 /// Hold to Show Window Controls (issue #113; ThumbnailHold): the title, the length beside it ("0.5 s")
-/// and the system's stepper, − and + a tenth of a second a press from 0.2 to 3 s (the capsule on iOS 26
+/// and the system's stepper, − and + a tenth of a second a press from 0.2 to 2 s (the capsule on iOS 26
 /// and later), counting whole tenths so no sum of presses drifts off the grid. The title wraps beside the
 /// stepper, as a switch's does, rather than the row stacking: in a panel 340 or 360 pt wide it never fits
 /// on one line beside the value and the stepper (two lines there, three at the larger text sizes). It stays

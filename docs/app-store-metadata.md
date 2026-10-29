@@ -451,7 +451,7 @@ With a keyboard attached to your iPhone or iPad, what you type goes to your Mac 
 
 Reverse Scrolling, in Settings: a finger dragged over the picture, or two fingers on the trackpad below it, scroll the other way. A trackpad or mouse connected to your iPad keeps following its Natural Scrolling setting.
 
-Hold a window’s thumbnail and its close, minimize and full-screen controls now show after half a second, not a second and a half. To hold longer or shorter, from 0.2 to 3 seconds, use Hold to Show Window Controls in Settings.
+Hold a window’s thumbnail and its close, minimize and full-screen controls now show after half a second, not a second and a half. To hold longer or shorter, from 0.2 to 2 seconds, use Hold to Show Window Controls in Settings.
 
 Fixed: after Sill sat in the background for hours, it could stop finding your Mac until you closed and reopened it. Sill now looks again when you come back, keeps trying for a few minutes while your Mac doesn’t answer (when it’s asleep, say), and connects when it does.
 
@@ -855,7 +855,7 @@ Safe:
 - With Send Audio on by default on the Mac (2026-10-27, PR #236) the What's New's sound paragraph
   says it turns it off and on; the counts above were each taken on its own branch and are read again
   at the next release (docs/release-checklist.md).
-- With the thumbnail hold (PR #248, issue #113; Noah, 2026-10-29: 0.5 s unless changed, 0.2 to 3 s in
+- With the thumbnail hold (PR #248, issue #113; Noah, 2026-10-29: 0.5 s unless changed, 0.2 to 2 s in
   Settings), a paragraph of 225 characters in the next What's New, after Reverse Scrolling's: the
   draft 2,112 characters (1,885 before); the rest unchanged.
 - The encryption key, now in `iOSClient/Info.plist`: Release builds of this
