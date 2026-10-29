@@ -5,7 +5,8 @@
 # a scale of 1e-300, reached the Mac window's fit and the virtual display's window size, whose lines'
 # Int() trapped and the host died); the bug before it in a copy of the host's arithmetic; what JSON can
 # carry; what a device sends (`held`) and the numbers the host's lines print (`whole`, `number`); then
-# 200,000 random viewports, real and hostile, against the rule's properties.
+# 200,000 random viewports, real and hostile, against the rule's properties; and a device's late-sound
+# count (ClientStats.lateSince), which the host's stats line adds up without trapping past Int.max.
 #   Tests/checks/viewport-bounds/run.sh             compile and run the check
 #   Tests/checks/viewport-bounds/run.sh --mutants   one-line mutants of Viewport.swift; each must fail it
 here="$(cd "$(dirname "$0")" && pwd)"

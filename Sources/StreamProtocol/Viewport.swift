@@ -126,6 +126,16 @@ public struct ClientStats: Codable, Hashable {
         self.frameAgeMaxMs = frameAgeMaxMs; self.rttMaxMs = rttMaxMs
         self.audioBehindMs = audioBehindMs; self.audioLate = audioLate
     }
+
+    /// A host's count of the sound's late packets since its last stats line (StreamServer), with one
+    /// report's `audioLate` added: a missing or negative count adds nothing, and the sum stops at
+    /// Int.max. The count is the device's own number, and `+` traps past Int.max: until 2026-10-29 two
+    /// reports of Int.max within the line's 1.5 s ended Sill and every device's session (found in the
+    /// review of the security scan's finding 4). Pure: Tests/checks/viewport-bounds.
+    public static func lateSince(_ count: Int, adding late: Int?) -> Int {
+        let more = max(0, late ?? 0)
+        return count > Int.max - more ? Int.max : count + more
+    }
 }
 
 /// The Mac's current cursor, so the client can draw the same shape (arrow, I-beam, resize, hand…)

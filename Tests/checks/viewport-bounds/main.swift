@@ -3,15 +3,17 @@
 // other viewport refused whole. Until 2026-10-29 a host took any number above 0: a side of 1e300
 // points, or a scale of 1e-300, reached the Mac window's fit (StreamCoordinator.fitToViewport) and the
 // virtual display's window size, whose log lines turned it into an Int, which traps, and the host died
-// with every device's session (security scan, finding 4). Also what a device sends (`held`), and the
-// numbers the host's lines print (`whole`, `number`), which never trap.
+// with every device's session (security scan, finding 4). Also what a device sends (`held`), the
+// numbers the host's lines print (`whole`, `number`), which never trap, and a device's late-sound count
+// (ClientStats.lateSince, beside Viewport in Viewport.swift), which the host's stats line adds up and
+// which trapped past Int.max too (found in the review of finding 4).
 // Compiled with Viewport.swift and the Data helpers it uses (run.sh):
 //   swiftc -O Sources/StreamProtocol/Viewport.swift Sources/StreamProtocol/StreamMessage.swift \
 //       Tests/checks/viewport-bounds/main.swift
 // The rule case by case (the devices' own panels among them), the bug before it in a copy of the
 // host's arithmetic, what JSON can carry, then 200,000 random viewports, real and hostile, against the
-// rule's properties. The virtual display's window size is VirtualDisplaySize's, in the capture-scale
-// check.
+// rule's properties, then the late count. The virtual display's window size is VirtualDisplaySize's, in
+// the capture-scale check.
 import CoreGraphics
 import Foundation
 
@@ -217,6 +219,41 @@ check(heldNilWrong == 0, "a device sends nothing only for a side that is not a p
 check(heldRefused == 0, "whatever a device sends is taken (\(heldRefused) refused)")
 check(heldNotIdentity == 0, "a viewport already taken goes as it is (\(heldNotIdentity) changed)")
 check(wholeWrong == 0, "whole prints what Int() printed wherever Int() did not trap (\(wholeWrong) not)")
+
+// MARK: - A device's late-sound count (ClientStats.lateSince)
+
+// The host adds each stats report's `audioLate` to the count its next stats line prints (StreamServer).
+// The device's own number: until 2026-10-29 a plain `+`, which traps past Int.max, so two reports of
+// Int.max within the line's 1.5 s ended Sill and every device's session (found in the review of
+// finding 4; live, a loopback host died at the third report, exit 133).
+typealias S = ClientStats
+check(S.lateSince(0, adding: 3) == 3 && S.lateSince(3, adding: 4) == 7, "late counts add up: 3, then 7")
+check(S.lateSince(5, adding: nil) == 5 && S.lateSince(5, adding: 0) == 5, "no count from an older device, or 0, adds nothing")
+check(S.lateSince(5, adding: -1) == 5 && S.lateSince(5, adding: .min) == 5, "a negative count adds nothing, Int.min neither")
+check(S.lateSince(0, adding: .max) == .max, "one report of Int.max: Int.max")
+check(S.lateSince(.max, adding: .max) == .max, "Int.max and Int.max again: Int.max, where `+` trapped")
+check(S.lateSince(.max - 1, adding: 1) == .max && S.lateSince(.max - 1, adding: 2) == .max && S.lateSince(.max, adding: 0) == .max,
+      "at the top: Int.max - 1 and 1 is Int.max, 2 stops there, and nothing more stays")
+var lateCount = 0
+for _ in 0..<3 { lateCount = S.lateSince(lateCount, adding: .max) }
+check(lateCount == .max, "three reports of Int.max in a row, as the live run sent them: Int.max, no trap")
+// Random runs of reports, real and hostile, against the sum in overflow-reporting arithmetic.
+let latePool: [Int?] = [nil, 0, 1, 3, 60, 1_000, -1, .min, .max, .max - 1, 1 << 62, (1 << 62) + 1, -(1 << 62)]
+var lateWrong = 0, lateNegative = 0, lateNotSum = 0
+for _ in 0..<50_000 {
+    var got = 0, wide = 0, saturated = false
+    for _ in 0..<Int(1 + next() % 6) {
+        let late: Int? = next() % 2 == 0 ? pick(latePool) : Int(next() % 10_000)
+        got = S.lateSince(got, adding: late)
+        let (sum, over) = wide.addingReportingOverflow(max(0, late ?? 0))
+        if over || saturated { saturated = true; wide = .max } else { wide = sum }
+    }
+    if got != wide { lateWrong += 1 }
+    if got < 0 { lateNegative += 1 }
+    if !saturated, got != wide { lateNotSum += 1 }
+}
+check(lateWrong == 0 && lateNegative == 0 && lateNotSum == 0,
+      "50,000 random runs of reports: the sum of the counts at or above 0, stopping at Int.max (\(lateWrong), \(lateNegative), \(lateNotSum))")
 
 print("\(checks) checks, \(failures) failed")
 exit(failures == 0 ? 0 : 1)

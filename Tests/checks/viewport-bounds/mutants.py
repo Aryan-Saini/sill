@@ -1,6 +1,7 @@
-"""Mutants of Viewport.swift (Sources/StreamProtocol; ViewportBounds): each changes it in one place, is
-compiled with StreamMessage.swift and the check (main.swift) and must make it fail. A mutant that does
-not compile is not counted as caught; one that traps (whole() as Int() was) fails the check, so it is.
+"""Mutants of Viewport.swift (Sources/StreamProtocol; ViewportBounds, ClientStats.lateSince): each changes
+it in one place, is compiled with StreamMessage.swift and the check (main.swift) and must make it fail. A
+mutant that does not compile is not counted as caught; one that traps (whole() as Int() was, the late
+count's plain +) fails the check, so it is.
 usage: mutants.py"""
 import os, subprocess, sys
 SP = os.path.dirname(os.path.abspath(__file__))
@@ -21,6 +22,8 @@ HELD_S = "        held.scale = v.scale.flatMap { $0.isFinite && $0 > 0 ? min(max
 WHOLE = ("        if let i = Int(exactly: x.rounded(.towardZero)) { return String(i) }\n"
          "        return \"\\(x)\"\n")
 NUMBER = "        if x == x.rounded(), let i = Int(exactly: x) { return String(i) }\n"
+LATE_MORE = "        let more = max(0, late ?? 0)\n"
+LATE_SUM = "        return count > Int.max - more ? Int.max : count + more\n"
 MUTANTS = [
     # The bounds a host takes.
     ("B1 the old rule: any side above 0 taken (the bug: 1e300 points reached the fit)", SIDES,
@@ -58,6 +61,11 @@ MUTANTS = [
     ("W3 whole prints the Double (1117.0)", WHOLE, "        return \"\\(x)\"\n"),
     ("N1 number rounded (a scale of 0.1 printed 0)", NUMBER, "        if let i = Int(exactly: x.rounded()) { return String(i) }\n"),
     ("N2 number with .0 (-1.0)", NUMBER, ""),
+    # A device's late-sound count (ClientStats.lateSince), found in the review.
+    ("L1 a plain + (the bug: two reports of Int.max trapped)", LATE_SUM, "        return count + more\n"),
+    ("L2 a negative count subtracted", LATE_MORE, "        let more = late ?? 0\n"),
+    ("L3 the sum stops one short of Int.max", LATE_SUM, "        return count > Int.max - more ? Int.max - 1 : count + more\n"),
+    ("L4 the sum wraps around", LATE_SUM, "        return count &+ more\n"),
 ]
 caught = 0
 for name, old, new in MUTANTS:
