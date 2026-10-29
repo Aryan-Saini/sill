@@ -66,6 +66,18 @@ it: the door advertised and accepting over AWDL, radio range, on a stranger's wo
   `run-all.sh`, all 56 (483 s); `swift build -c release`, only the CaptureProbe warning; the three iOS builds
   (Xcode 27.1), only the known `StreamClient` capture warning; H2 against 150479b5, identical masked and sorted but
   for one stats line as the client left.
+- A second pass (2026-10-29, after a66cd93a; the report's "The review, second pass"): no code to fix; one docs nit,
+  support.html's new sentence promised a paired device the switch through Remote Access too, which the Mac refuses
+  (`dw=0 paired=1`, "(not from a remote connection)"): now "but not while it's connected through Remote Access",
+  inside the Remote Access markers (e012ab81). It tried what the rule and all of pairing rest on, a paired device's
+  key used without its private key. Apple's APIs cannot make such a client (SecIdentityCreate refuses a certificate
+  with another key; `sec_identity_create_with_certificates` still sends the identity's own certificate first, which
+  the open door admits as unpaired and refuses Direct Wireless). A TLS 1.3 client of its own (CryptoKit;
+  sill-handoff's `triage/2026-10-29-security/f8-review2/tls13forge.swift`) sending paired a's certificate with a
+  CertificateVerify signed by another key got a `decrypt_error` alert before any Sill message, at `--pairing`'s door
+  and at the open door, and the host logged no "Client connected"; the same client signing with a's own key was
+  admitted as paired-a and turned it on. Re-run: `away-quality` 143 and 39 of 39 mutants, `ledger` 116 and 16 of 16,
+  `compatibility` 146 and 36 of 36; `swift build -c release`, only the CaptureProbe warning.
 - **Untested, for Noah:** with this branch's Sill.app (release-signed with the profile) and this iPad
   build: a paired device's switch at home, on and off, Sill.app's menu and General pane following and
   `defaults read me.saffer.sill.mac directWireless` saved; Require pairing off and a device the Mac has not
