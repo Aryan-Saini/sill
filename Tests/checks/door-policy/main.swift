@@ -812,8 +812,8 @@ check("new rule, a device not yet known in the holders' own /64: refused while t
       v6stranger.deviceIn == 0)
 // Someone at a paired device's own address (its NAT, or its address while it is away) pays too.
 let shared = simulate(Places(), holders: holdersOn(["10.0.0.9"], hold: 9.9), device: paired, known: true, seconds: 60)
-check("new rule, a holder at the paired device's own address: that address backed off within 23 s (at \(shared.backedOffAt["10.0.0.9"] ?? -1) s), the device with it (nothing tells them apart before TLS)",
-      (shared.backedOffAt["10.0.0.9"] ?? .infinity) <= 23 && shared.deviceIn < shared.deviceTries)
+check("new rule, a holder at the paired device's own address: that address backed off within 10 s (at \(shared.backedOffAt["10.0.0.9"] ?? -1) s), the device with it (nothing tells them apart before TLS)",
+      (shared.backedOffAt["10.0.0.9"] ?? .infinity) <= 10 && shared.deviceIn < shared.deviceTries)
 
 // Legitimate traffic is never backed off.
 func legit(_ ends: [(at: Double, held: Double, end: Places.End)], source: Src = v4("10.0.0.30")) -> Places {

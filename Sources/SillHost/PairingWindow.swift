@@ -174,10 +174,10 @@ struct PairingWindow {
 /// device whose window the Mac's user cancelled, or that stopped after five wrong codes, opens none
 /// for `quietFor`, by its key and by its address (an IPv6 address by its /64, `quietKey`), so a
 /// stranger asking again with a new key from the same address, or from a new address with the same
-/// key, stays quiet. A window that simply
-/// ran out, or that its device withdrew, quiets nobody (the security review, 2026-09-27): its
-/// person, tapping again, gets a fresh code, as the device's words say, and `maxWindows` still
-/// bounds how often a device can put one up. One window at a time is the ask rule's own step 3.
+/// key, stays quiet. A window that simply ran out, or that its device withdrew, quiets nobody (the
+/// security review, 2026-09-27): its person, tapping again, gets a fresh code, as the device's
+/// words say, and `maxWindows` still bounds how often a device can put one up. One window at a
+/// time is the ask rule's own step 3.
 /// Pure (no clock: `now` is passed in; the caller uses a monotonic one, so a clock change moves
 /// nothing), checked on its own with swiftc. RemoteAccess owns one on the main actor.
 struct AskLimits {
