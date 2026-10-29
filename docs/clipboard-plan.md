@@ -126,7 +126,9 @@ dependency, the device through the local package).
   every subscriber as `{"text": …}`.
 - **A device's text.** `prepareForNewContents(with: .currentHostOnly)` (so Universal Clipboard does
   not carry it to the person's other devices, the device included), one item with the text and the
-  marker, the change count kept, and the text forwarded to every other subscriber.
+  marker, the change count kept, and the text forwarded to every other subscriber. Since the review of
+  #242 written before the main actor takes the device's next message (`Board.write` synchronous), so
+  paste right away's ⌘V, which follows it, always finds it ("Paste right away", finding 6).
 - **Limits.** At most 4 subscriptions and texts a second per connection (a tap sends one); the rest,
   and text over the cap, ignored with one line a minute (`RefusalSummary`). A stop is never limited. Contents are never logged. Stats keys
   `clip.sent` (messages sent) and `clip.recv` (texts taken), only in seconds they happen.
@@ -426,8 +428,9 @@ Noah, trying pull request #241's build (a password manager's copies go too) on h
 before he had asked what the chip gave over pasting on the Mac right away. Open question 5 had taken
 "⌘V not sent for the person"; his comments are requirements, so Paste now pastes. Branch
 `clipboard-autopaste` from main at 35a9c47 (worktree `/Users/noah/Downloads/wt-autopaste`), pull
-request #242. Device only: no wire change (⌘V is kind 8's keys, which every Mac takes), and nothing
-on the Mac changes.
+request #242. No wire change (⌘V is kind 8's keys, which every Mac takes). Device only until the
+review, which changed one thing on the Mac: it writes a device's text before it takes the next message
+(finding 6, "The review", below).
 
 ### The decision
 
@@ -465,8 +468,12 @@ on the Mac changes.
   sent, with today's note, but a ⌘V seconds after the tap could land where the person has gone since.
 - Only while something streams: the Mac drops input with nowhere to land (StreamCoordinator's `.input`
   case), so the note would promise a paste that never came; then today's note.
+- Only while the Mac's last list still says it shares its clipboard (the review's finding 1): a Mac whose
+  Share clipboard with devices went off while the text was on its way reads the text and drops it, yet
+  echoes the receipt's ping all the same, and ⌘V would paste what its clipboard held before; the list
+  without `clipboard` it sends as the switch goes off comes before that receipt. Then today's note.
 - Never while the tour shows, which keeps every input from the Mac (the chip and the Settings panel are
-  hidden then anyway).
+  hidden then anyway); in the rule since the review (`tourShows`, finding 2), where the check reaches it.
 - `pasteDelay`: ⌘V 50 ms after the receipt (the race, below). The session's end cancels a ⌘V still
   waiting, and one whose session lost what streams meanwhile goes out as today's note instead.
 - The note (`receiptNote`): "Pasted on ‹Mac›." with ⌘V (spoken the same), else "Sent to ‹Mac›’s
@@ -514,8 +521,13 @@ about 0.25 ms (a poll and a read), so a ⌘V measured as more than 0.25 ms early
 So ⌘V goes 50 ms after the receipt, a few tens of milliseconds as planned: nothing a person sees beside
 a frame's way to the device. Over Wi-Fi the round trip (5 to 10 ms at home, more through Tailscale)
 narrows the race but does not close it, since the host can take the text and the keys back to back.
-Known: a write held up longer than that (the Board's queue busy reading text another app only promised)
-still loses, and ⌘V then pastes what the Mac's clipboard held before; nothing on the device can tell.
+Known, until the review: a write held up longer than that (the Board's queue busy reading text another
+app only promised) still lost, and ⌘V then pasted what the Mac's clipboard held before; nothing on the
+device can tell. The review found the same outcome from the other side (finding 6): the 50 ms held only
+while the Mac's main actor was free as the text arrived, and a stream's start holds it about 150 ms.
+Since then the Mac writes a device's text before `received` returns (`Board.write` is synchronous), so
+the keys, which the main actor takes after it, always come after the write, whatever held either up;
+the 50 ms stays for a Mac built before that, and as room for the app in front to read the pasteboard.
 
 ### Results
 
@@ -581,7 +593,124 @@ changed; any Sill for Mac with the clipboard, #78 on):
 6. Universal Clipboard on (the same Apple Account): a Paste pastes the iPad's text once, as with it off.
 7. Through Tailscale away from home: Paste pastes, a moment later than at home.
 8. Paste in the Settings panel's row while a window streams: the text lands in that window under the
-   panel (nothing on the Mac changes focus for it).
+   panel (the Mac brings that window's app forward for the keys if it is not in front, as for any
+   input).
+9. From the review: tap Paste right after picking another window or turning the iPad (a stream's start
+   holds the Mac's main actor about 150 ms): the text you copied lands, never what the Mac's clipboard
+   held before.
+10. From the review, if a Mac with the Dvorak keyboard layout is at hand (System Settings › Keyboard ›
+    Text Input): Paste there presses ⌘K, not ⌘V (Terminal clears its scrollback); with "Dvorak – QWERTY
+    ⌘" it pastes. Say whether open question 16 should change before the release.
+
+### The review (2026-10-29)
+
+An adversarial review of the pull request at 9bfd1ed, three lenses; each finding reproduced first, then
+fixed in a commit of its own on the branch (no wire change). The PR's own numbers above are left as they
+were measured; the review's are here.
+
+**Lens 1, the device's paste path.** Read: StreamClient+Clipboard (the receipt, `pastesNow`, `pasteOnMac`,
+`resetClipboard`), ClipboardChip, HostSettingsPanel's group, KeyChords, StreamClient's pong handling and
+`sendFromKeyRow`, and on the Mac HostClipboard, StreamServer's ping echo and message hand-off, and
+StreamCoordinator's input path (`deliver`, `raiseIfInteracting`). Then live, on a private iPad Pro 13-inch
+(M5) simulator (iOS 27.0, deleted after) against loopback synthetic hosts with the TEST ONLY variables
+above, the app's console and the host's input and clipboard logs, each host's stdout stamped as it came:
+- Held as written: ⌘V only after the receipt and at most one chord per receipt (its slot is emptied as it
+  is matched, so a second pong finds nothing); ⌘'s own key around V and nothing held after (every run
+  ends "key 55 flags changed (none)" and "key 55 up: the table read again in 0.25 s"); the switch read
+  at the receipt and again as ⌘V goes; the chip and the panel's row both through `sendClipboard`; no
+  receipt in time ("Didn’t reach…", no key) and a late one (today's note, no key); the words with the
+  switch on and off, and VoiceOver's.
+- The PR's three runs again (the head's Debug build): the write, then ⌘'s key 66 ms later and V's, with
+  "⌘V in 0.050 s", "⌘V sent to the Mac", "Pasted on ‹Mac›."; with `-Sill.pasteRightAway 0` the write and
+  no key, "Sent to ‹Mac›’s clipboard. Press ⌘V there."; through `sillrelay.py --blackhole-after 3`
+  neither the text nor a key, "Didn’t reach ‹Mac›. Try Paste again." and "connection silent for 6 s".
+- New cases: the session ended 0.2 s after a Paste behind a relay adding 1 s (the Mac wrote the text, no
+  key, no note); the session ended while ⌘V waited (`-SillPasteDelay 2`, Disconnect a second after the
+  receipt: "⌘V in 2.000 s", no "⌘V sent", no key); two Pastes 20 ms apart (both texts written, one
+  receipt, the second's, one ⌘V, pasting the second text: a later Paste supersedes the receipt the
+  earlier one waits for, as before this change; a third Paste alone, its own ⌘V); a Mac without the
+  clipboard (`--no-clipboard`: no subscription, the script's paste sends nothing); nothing streaming
+  (`-SillNoAutoDesktop 1`: "no ⌘V: nothing streams", no key); the tour (`-SillTourState fresh`: "no ⌘V:
+  the tour shows", no key).
+- The race again (the app, 25 Pastes 0.6 s apart, a scratch watcher polling the host's own pasteboard,
+  as above): with `-SillPasteDelay 0` V's down before the text read back in 15 of 25 (7 by more than
+  0.25 ms, at most 7.1 ms); with the 50 ms, 0 of 25 (V 50.2 to 76.0 ms after the read; on the review's
+  final build 47.4 to 70.3).
+- **Finding 1: a receipt for a text the Mac dropped (2d9428a).** HostClipboard drops a device's text while
+  the Mac's Share clipboard with devices is off, but StreamServer echoes the ping after it all the same
+  (open question 13), so a Mac whose switch went off while a Paste was on its way sent a receipt for a
+  text it never wrote, and the device pressed ⌘V on whatever the Mac's clipboard held. Reproduced with a
+  scratch SillHost (never committed) that turns the switch off on SIGUSR1 as the Mac's switch does
+  (`setTarget`), a relay adding 1 s each way and the signal sent as the app's console said "sent": no
+  write (the test pasteboard kept "OLD TEXT the Mac held before the Paste"), and the four keys, "Pasted
+  on ‹Mac›.". The list without `clipboard` the Mac sends as its switch goes off comes before that receipt
+  whenever the switch went off before the Mac read the ping, so the rule takes the Mac's last word
+  (`hostClipboard`): on the fixed build "no ⌘V: the Mac no longer shares its clipboard", no key, the old
+  text left alone (the note still says "Sent…", as before). The check's model 3 gained the Mac's switch:
+  against the PR's rule it fails (683 wrong in 5,000 runs).
+- **Finding 3: the chip's subtitle cut short on iPhones (1ddadb9).** "It goes where the cursor is." is a
+  quarter wider than "Then press ⌘V there." (164 against 130 pt in the system font at 13 pt), and the
+  chip is one line: in the harness (`-SillLayout 375x667 -SillIdiom phone -SillClipboardChip 1`) "It goes
+  where the cur…" at xLarge text, where today's words fit whole, and "It goes where the curso…" at 393 pt
+  (the iPhone 15 Pro's width). "Where the cursor is." (122 pt) fits wherever today's words do: whole at
+  375 pt at xLarge and at 393 pt at xxLarge; at 375 pt at xxLarge, the chip's largest size, both cut
+  short, and the title too, as before the change.
+- **Finding 4: a Mac whose keyboard layout moves V (3dc8596).** "The decision", Known: under Dvorak Paste
+  presses ⌘K, under Dvorak – Right ⌘, (read from the layouts' own data, nothing posted). Documented, the
+  support page tells such a Mac to turn the switch off, and open question 16 has the ways to fix it later.
+- **Finding 6: the 50 ms held only while the Mac's main actor was free (f15675b).** The receipt comes from
+  the Mac's network queue as it reads the ping; the text is taken on the main actor and was written on the
+  Board's queue after it. A scratch probe timing the main queue every 5 ms (never committed) found it held
+  150.5 ms at a Desktop pick: every stream's start (picks, rotations, Aa, settings changes) holds it about
+  that long. Reproduced with a scratch host that holds the main actor 150 ms as each text arrives and
+  prints when each write ends, and a device stand-in (Python, loopback) sending KeyChord.paste's four
+  keys 50 ms after each receipt: V's key within half a millisecond of the write's end and before it in 4
+  of 25 (median 0.10 ms after); with the main actor free 50 to 66 ms after. The Mac now writes a device's
+  text before `received` returns (`Board.write` synchronous), so the keys always come after the write:
+  with the same busy main actor 0 of 25 before it (0.05 to 10.5 ms after); free, 0 of 25 (49.5 to 68.1
+  ms). The cost is the write (about a millisecond) and a look the Board is in the middle of; the queue
+  never waits for the main actor. A Mac copy still reaches a subscriber and a device's own text still is
+  not sent back (`sillclient.py --clipboard --copy=hello@1 --expect=clipboard=…` against the branch's
+  host, a Mac copy made on its pasteboard at 3.5 s: "EXPECT ok").
+- Observed, not a defect: in two runs the host printed ⌘'s key 137 ms and 20 ms before V's, three seconds
+  into a session (the main actor busy between them): ⌘ held a moment longer, the same paste, nothing
+  held after.
+
+**Lens 2, the checks.** `Tests/checks/run-all.sh clipboard key-strokes` at the head: 285 and 359, both
+passing; mutants at the head: clipboard 91 of 91 (24 min 16 s), key-strokes 86 of 86 (26 min 33 s,
+against a `git archive` of the head). **Finding 2: the tour's hold on ⌘V was outside every check
+(d435e8c).** The fourth condition, never while the tour shows (`inputPaused`), lived in
+StreamClient+Clipboard's glue, which no check compiles, so taking it out failed nothing; it is now the
+rule's (`tourShows`), with the Mac's word: the table is 64 cases, model 3 has the tour, the Mac's switch
+and the text it drops, and each condition has a mutant. Model 3 now checks that every ⌘V pastes the text
+its own Paste sent. The words' check holds the subtitle no longer than today's. After the review (the
+code at f15675b): `clipboard` 342 checks and 94 of 94 mutants (25 min 21 s; 3 new: the Mac's word, the
+tour, the longer subtitle); `key-strokes` 359 (its files unchanged by the review);
+`Tests/checks/run-all.sh` all 56 passed (8 min 8 s).
+
+**Lens 3, the docs and the harness.** Reproduced: `swift build -c release` from a `git archive` of the
+head (46.7 s, only the CaptureProbe warning); the iOS app Debug and Release for the generic simulator and
+Debug for a generic device from it (`CODE_SIGNING_ALLOWED=NO`, arm64; only StreamClient.swift:4113's
+warning; the Release binary holds "It goes where the cursor is." and no `SillPasteDelay`, the Debug ones
+both); the live runs and the race above; the twelve photos with the INDEX's arguments: eleven byte for
+byte, chip-on-1000x710.png within one step of 255 on 164 pixels of anti-aliasing. The App Store words'
+counts (231, 222, 289, 2,176 and 1,885 characters) are right. **Finding 5: the 500x710 Settings photos
+never showed the Paste row or the footnote (734825d).** INDEX.md said they did; at 500x710 the rows end
+under the second switch, and no `-SillSettingsScroll` target reached them: `clipboard` now starts the
+rows at the Paste row, and `review/settings-*-500x710-paste.png` show it and the footnote wrapped whole.
+Docs: CLAUDE.md's Untested list for this change had seven of the eight steps (the panel's row), and step 8
+said nothing on the Mac changes focus (a key brings the streamed window's app forward when it is not in
+front); both corrected, with steps 9 and 10 from the review. The pull request's description still has the
+first subtitle, "Device only" and the first counts: this review edits no pull request description.
+
+Photos in `~/Downloads/sill-handoff/device-tests/2026-10-29/autopaste/review/` (INDEX.md): the chip with
+the new subtitle at 1000x710 and 500x710, the Paste row and footnote at 500x710, and the chip on iPhone
+widths before and after.
+
+Not verified here: a real tap on the system's Paste control (as before); anything on a device; a Dvorak
+Mac's ⌘K live (nothing may be posted to this Mac; the layouts' data only); how soon the app in front
+reads the pasteboard after the keys (the race is measured against the write's end and a watcher's first
+read, not against TextEdit's read); Sill.app's own main-actor stalls (the synthetic host's were measured).
 
 ### Progress
 
@@ -595,6 +724,16 @@ changed; any Sill for Mac with the clipboard, #78 on):
   285 and `key-strokes` 359, each of the 91 clipboard mutants' patterns found exactly once (so the
   91 of 91 above stands), and CI's Build and check passed (run 40838386473, 12 min 14 s). Pull
   request #242 open, not merged.
+- 2026-10-29, the review ("The review" above): six findings, each reproduced, then fixed in a commit of
+  its own: the Mac's last word in the rule (2d9428a), the tour's hold in the rule (d435e8c), the chip's
+  "Where the cursor is." (1ddadb9), a Mac whose layout moves V documented (3dc8596), the harness's
+  `-SillSettingsScroll clipboard` (734825d), the Mac's synchronous write of a device's text (f15675b),
+  then these docs. Verified on the code at f15675b: the checks and mutants above; the iOS app Debug and
+  Release for the generic simulator and Debug for a generic device, only StreamClient.swift:4113's
+  warning; `swift build -c release`; the live runs on the review's build (the switch on and off,
+  nothing streaming, the tour, the Mac's switch going off mid-Paste, the race at 50 ms 0 of 25). The
+  private simulator and every scratch host are gone. Left: Noah's steps 1 to 10, open question 16,
+  and the pull request's description, which predates the review.
 
 ## Untested, for Noah
 

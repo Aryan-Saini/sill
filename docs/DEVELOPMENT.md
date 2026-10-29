@@ -921,7 +921,8 @@ another app marks `org.nspasteboard.ConcealedType` or
 the Mac's own write; a pasteboard with no items yet is looked at again for up
 to a second (an app clears it, then writes, and only the clear moves the
 count). The host reads and writes the pasteboard on a queue of its own, never
-on the main actor. The device writes the Mac's text with
+on the main actor, which waits only for a device's text to be written. The
+device writes the Mac's text with
 `.localOnly` and a 10-minute expiration. The other way, Sill never reads the
 device's clipboard by itself (iOS would ask "Allow Paste?"): when it becomes
 active and the clipboard's change count is new while it holds text, a chip
@@ -938,10 +939,15 @@ Right Away on (Settings › This iPad, under Share Clipboard;
 `Sill.pasteRightAway`, on by default, never sent), the receipt also presses ⌘V
 on the Mac 50 ms later (`ClipboardPolicy.pastesOnReceipt` and `pasteDelay`;
 `KeyChord.paste`, ⌘'s own key around V, so nothing stays held there), only for
-a receipt in time and while something streams, and the device says "Pasted on
+a receipt in time, while something streams and the Mac still shares its
+clipboard, never while the tour shows, and the device says "Pasted on
 ‹Mac›."; the wait lets the Mac's write, on a queue of its own, finish first (on
 loopback a ⌘V right behind the receipt beat it in 120 of 125 pastes:
-docs/clipboard-plan.md, "Paste right away"). Off, the device says "Sent to
+docs/clipboard-plan.md, "Paste right away"), and since the review the Mac
+writes a device's text before it takes that device's next message, so a busy
+Mac cannot take the text and the keys back to back. ⌘V is V's place on a U.S.
+keyboard: under a layout that moves V for shortcuts (Dvorak: ⌘K) it presses
+another shortcut, so such a Mac wants the switch off. Off, the device says "Sent to
 ‹Mac›’s clipboard" and the person presses ⌘V. The other way stays the
 person's: no iOS app pastes into another. The chip's 20 s run only while it is
 on screen with Sill active,
