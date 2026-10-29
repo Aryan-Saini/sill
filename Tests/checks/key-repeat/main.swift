@@ -337,6 +337,50 @@ do {
     g.at(1.8) { $0.input(key(uRight, false, shift), from: a) }
     check(!g.repeats.isEmpty && g.repeats.allSatisfy { $0.flags == shift }, "⇧→ repeats carry shift: \(g.repeats.map { names($0.flags) })")
 }
+// Letters, as a device sends them while the Mac types a hardware keyboard's characters (KeyTyping, #162's
+// letters: "hold p didnt work"): P held repeats as ← does, with no flags; then E pressed while P is held
+// takes over after its own delay, and P never again.
+let uP: UInt16 = 0x13, uE: UInt16 = 0x08, kP: UInt16 = 35, kE: UInt16 = 14
+do {
+    var g = Glue(); let a = Conn(); g.join(a)
+    g.at(1.0) { $0.input(key(uP, true), from: a) }
+    g.at(2.215) { $0.input(key(uP, false), from: a) }
+    g.run(to: 4)
+    check(sameTimes(g.repeats.map(\.t), expectedTimes(down: 1.0, up: 2.215)) && g.repeats.count == 22
+          && g.repeats.allSatisfy { $0.key == kP && $0.flags == 0 },
+          "P held 1.2 s: \(g.repeats.count) repeats of key \(g.repeats.first?.key ?? 0) from 0.5 s at the Mac's rate")
+    var two = Glue(); let b = Conn(); two.join(b)
+    two.at(1.0) { $0.input(key(uP, true), from: b) }
+    two.at(1.8) { $0.input(key(uE, true), from: b) }
+    two.at(2.5) { $0.input(key(uE, false), from: b) }
+    two.at(2.9) { $0.input(key(uP, false), from: b) }
+    two.run(to: 4)
+    check(two.repeats(between: 0, 1.8).allSatisfy { $0.key == kP } && two.repeats(between: 1.8, 4).allSatisfy { $0.key == kE }
+          && sameTimes(two.repeats(between: 1.8, 4).map(\.t), expectedTimes(down: 1.8, up: 2.5)),
+          "P held, then E: P's repeats, then E's after its own delay, P's never again: \(two.repeats.map { "\($0.key)" })")
+}
+// ⇧ held, A held, ⇧ let go: capitals, then small letters, as a Mac's own keyboard types them (Shift is a key of
+// its own while the Mac types a hardware keyboard's characters).
+do {
+    var g = Glue(); let a = Conn(); g.join(a)
+    g.at(0.8) { $0.input(key(uLShift, true, shift), from: a) }
+    g.at(1.0) { $0.input(key(uA, true, shift), from: a) }
+    g.at(1.9) { $0.input(key(uLShift, false, 0), from: a) }
+    g.at(2.4) { $0.input(key(uA, false, 0), from: a) }
+    let before = g.repeats(between: 0, 1.9), after = g.repeats(between: 1.9, 3)
+    check(!before.isEmpty && before.allSatisfy { $0.key == kA && $0.flags == shift } && !after.isEmpty && after.allSatisfy { $0.flags == 0 },
+          "⇧A held, ⇧ let go: \(before.count) with shift, then \(after.count) without")
+    check(sameTimes(g.repeats.map(\.t), expectedTimes(down: 1.0, up: 2.4)), "⇧'s up neither stops nor delays A's repeat")
+}
+// A with Caps Lock on (the device's: the down carries caps lock and shift, no Shift key held): every repeat a
+// capital.
+do {
+    var g = Glue(); let a = Conn(); g.join(a)
+    g.at(1.0) { $0.input(key(uA, true, capsLock | shift), from: a) }
+    g.at(1.9) { $0.input(key(uA, false, 0), from: a) }
+    check(!g.repeats.isEmpty && g.repeats.allSatisfy { $0.key == kA && $0.flags == capsLock | shift },
+          "A with Caps Lock on held: every repeat carries caps lock and shift: \(g.repeats.map { names($0.flags) })")
+}
 // ⌘Z held: ⌘'s key, then Z with command: the repeats are ⌘Z (an undo at each), as a Mac's.
 do {
     var g = Glue(); let a = Conn(); g.join(a)

@@ -865,7 +865,8 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
             #if DEBUG
             Self.textinput("first responder; the keyboards set up: "
                            + UITextInputMode.activeInputModes.compactMap(\.primaryLanguage).joined(separator: ", ")
-                           + "; this one " + (textInputMode?.primaryLanguage ?? "unknown"))
+                           + "; this one " + (textInputMode?.primaryLanguage ?? "unknown")
+                           + "; a hardware keyboard's characters: " + typingNote(keyTyping))
             #endif
             keyboardProxy?.became(self, automatic: askedAutomatic)
         } else {
@@ -954,11 +955,13 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
 
     /// DEBUG: every hardware key this view sees, and which way it went ("hwkey: usage 41 down via
     /// keyCommand (shift): to the Mac"), so a device shows which channel delivered Esc.
-    static func hwkey(_ usage: UInt16, down: Bool, via channel: String, modifiers: UInt64? = nil, to outcome: String? = nil) {
+    static func hwkey(_ usage: UInt16, down: Bool, via channel: String, modifiers: UInt64? = nil, to outcome: String? = nil,
+                      typing: @autoclosure () -> String? = nil) {
         #if DEBUG
         var line = "hwkey: usage \(usage) \(down ? "down" : "up") via \(channel)"
         if let modifiers { line += " (" + InputOverlayView.modifierNames(modifiers) + ")" }
         if let outcome { line += ": " + outcome }
+        if let typing = typing() { line += "; " + typing }
         print(line)
         #endif
     }
@@ -974,7 +977,8 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
 
     #if DEBUG
     static func modifierNames(_ modifiers: UInt64) -> String {
-        let names = [(KeyModifiers.control, "control"), (.option, "option"), (.shift, "shift"), (.command, "command")]
+        let names = [(KeyModifiers.capsLock, "caps lock"), (.control, "control"), (.option, "option"), (.shift, "shift"),
+                     (.command, "command")]
             .filter { modifiers & $0.0.rawValue != 0 }.map(\.1)
         return names.isEmpty ? "none" : names.joined(separator: "+")
     }
@@ -984,29 +988,42 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
 
     // The split between the two keyboard paths, which must not overlap or everything is typed twice:
     //
+    //   • Raw path (`.key`): the keys go to the Mac as keys, down and up, as from a keyboard plugged
+    //     into it, so it repeats a held one at its own Delay Until Repeat and Key Repeat Rate (KeyRepeat,
+    //     on the host) and its own layout and dead keys make the characters. Always: what the text path
+    //     never delivers, the arrows, escape, the function keys, home/end/page up/down, forward delete, ⌘,
+    //     ⌃ and ⌥ themselves, *any* key while command, control or option is held, because those
+    //     combinations are shortcuts (⌘S, ⌃A, ⌥←) and never reach `insertText`, and return and tab with
+    //     shift, which the text path would hand over as a bare "\n" and "\t" (⇧Return a plain Return on
+    //     the Mac). And while the Mac types the characters (`KeyTyping.keys`: the keyboard selected on the
+    //     iPad types the Latin alphabet directly, nothing is composed and no modifier is latched), every
+    //     key that types one too: the letters, digits, punctuation, Space, Delete, Return, Tab and Shift
+    //     (ForwardedKeys.characterUsages), which iPadOS's text system then never sees, so a held one is
+    //     neither typed once nor given iPadOS's accent popover (#162).
+    //
     //   • Text path (`insertText` / `deleteBackward`, and an input method's and dictation's marked text
-    //     and corrections: `TextComposition`) owns every key that produces characters: letters, digits,
-    //     punctuation, space and backspace, with or without shift, and return and tab without it.
-    //     Those arrive already composed — shifted, dead-keyed, chosen from an input method's
-    //     candidates, dictated — which is exactly what we want to send as `.text`. While an input method
-    //     composes, every key is the text path's (`pressesBegan`).
+    //     and corrections: `TextComposition`) owns the rest: every key that produces characters while
+    //     iPadOS's text system types them (`KeyTyping.text`: a keyboard in another script, an input
+    //     method's, while the key row has a modifier latched), with or without shift, and return and tab
+    //     without it, and the few character keys no Sill for Mac has (the keypad, the ISO keyboards'
+    //     extra keys) and Caps Lock whoever types. Those arrive already composed — shifted, dead-keyed,
+    //     chosen from an input method's candidates, dictated — which is exactly what we want to send as
+    //     `.text`, once each: a key the text system takes never repeats on the Mac. While an input method
+    //     composes, every key is the text path's (`KeyTyping.composing`, `pressesBegan`).
     //
-    //   • Raw path (`.key`) owns only what the text path never delivers: the arrows, escape, the
-    //     function keys, home/end/page up/down, forward delete, ⌘, ⌃ and ⌥ themselves, *any* key
-    //     while command, control or option is held, because those combinations are shortcuts (⌘S,
-    //     ⌃A, ⌥←) and never reach `insertText`, and return and tab with shift, which the text path
-    //     would hand over as a bare "\n" and "\t" (⇧Return a plain Return on the Mac). Shift alone
-    //     is not otherwise in that list: shift makes characters. (ForwardedKeys.goesAsKey.)
-    //
-    // Which path a key takes is decided when it goes down, and its up takes the same one whatever the
-    // flags say by then (ForwardedKeys): ⌘'s own release and a key let go after ⌘ reach the Mac, and
-    // a key the text system took never sends a stray up. Presses we do not take are handed to super
+    // Which path a key takes is decided when it goes down (ForwardedKeys.goesAsKey), and its up takes the
+    // same one whatever the flags or the keyboard say by then (ForwardedKeys): ⌘'s own release and a key
+    // let go after ⌘ reach the Mac, a letter held while the keyboard switches comes up where it went down,
+    // and a key the text system took never sends a stray up. Presses we do not take are handed to super
     // so the text input system still sees them.
 
     /// The hardware keys down on the Mac, so each one's up follows its down.
     private var forwarded = ForwardedKeys()
 
-    private func forward(_ presses: Set<UIPress>, down: Bool, via channel: String) -> Set<UIPress> {
+    /// Each press to the Mac as a key (`send`) or back to the text system (returned, for super), by
+    /// ForwardedKeys: a key going down by `typing` (who types the characters now), a key coming up the way
+    /// its down went.
+    private func forward(_ presses: Set<UIPress>, down: Bool, via channel: String, typing: KeyTyping = .text) -> Set<UIPress> {
         var unhandled: Set<UIPress> = []
         for press in presses {
             guard let key = press.key else { unhandled.insert(press); continue }
@@ -1031,15 +1048,18 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
                 unhandled.insert(press)
                 continue
             }
-            let outcome = down ? forwarded.pressed(usage, modifiers: modifiers, at: press.timestamp) : forwarded.released(usage)
+            let outcome = down ? forwarded.pressed(usage, modifiers: modifiers, at: press.timestamp, typing: typing)
+                               : forwarded.released(usage)
             switch outcome {
             case .send(let event):
                 if down { forgetTyped() }
                 send(event)
-                Self.hwkey(usage, down: down, via: channel, modifiers: modifiers, to: "to the Mac")
+                Self.hwkey(usage, down: down, via: channel, modifiers: modifiers, to: "to the Mac",
+                           typing: down ? typingNote(typing) : nil)
             case .text:
                 unhandled.insert(press)
-                Self.hwkey(usage, down: down, via: channel, modifiers: modifiers, to: "the text system's")
+                Self.hwkey(usage, down: down, via: channel, modifiers: modifiers, to: "the text system's",
+                           typing: down ? typingNote(typing) : nil)
             case .swallow:
                 Self.hwkey(usage, down: down, via: channel, modifiers: modifiers, to: "the key command sent it")
             }
@@ -1054,16 +1074,40 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         // A hardware key hides this device's pointer, as typing does (`setOwnPointer`).
         if presses.contains(where: { $0.key != nil }) { setOwnPointer(nil, .none) }
-        // While an input method composes, every key is its own: the arrows move through its
-        // candidates, Return chooses, Esc does what that input method does with it. None reaches the
-        // Mac until the composition is chosen.
-        if composition.isComposing {
+        // Who types the characters, as these keys go down (KeyTyping). While an input method composes,
+        // every key is its own: the arrows move through its candidates, Return chooses, Esc does what that
+        // input method does with it. None reaches the Mac until the composition is chosen.
+        let typing = keyTyping
+        if typing == .composing {
             super.pressesBegan(presses, with: event)
             return
         }
-        let unhandled = forward(presses, down: true, via: "pressesBegan")
+        let unhandled = forward(presses, down: true, via: "pressesBegan", typing: typing)
         if !unhandled.isEmpty { super.pressesBegan(unhandled, with: event) }
     }
+
+    /// Who types a hardware keyboard's characters as a key goes down now (KeyTyping): the Mac, as keys,
+    /// while the keyboard selected on the iPad types the Latin alphabet directly and nothing is composed or
+    /// latched on the key row; else iPadOS's text system, or the input method composing.
+    private var keyTyping: KeyTyping {
+        KeyTyping.of(inputMode: textInputMode?.primaryLanguage,
+                     keyboards: UITextInputMode.activeInputModes.compactMap(\.primaryLanguage),
+                     composing: composition.isComposing, latched: !latchedModifiers.isEmpty)
+    }
+
+    #if DEBUG
+    /// DEBUG: who types and why, for the hwkey line of a key going down ("the Mac types: en-US").
+    private func typingNote(_ typing: KeyTyping) -> String {
+        let keyboard = textInputMode?.primaryLanguage ?? "no keyboard selected"
+        switch typing {
+        case .keys: return "the Mac types: " + keyboard
+        case .text: return "iPadOS types: " + (latchedModifiers.isEmpty ? keyboard : "a modifier latched on the key row")
+        case .composing: return "the input method composes"
+        }
+    }
+    #else
+    private func typingNote(_ typing: KeyTyping) -> String { "" }
+    #endif
 
     override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         let unhandled = forward(presses, down: false, via: "pressesEnded")
@@ -1231,7 +1275,8 @@ extension InputOverlayView {
     /// The keyboard just switched (⌃Space, the Globe key): its name, for a second. Not Emoji's or
     /// dictation's, which are no keyboard typed with (TextInputRules.isKeyboard).
     @objc func inputModeChanged() {
-        Self.textinput("the keyboard is now " + (textInputMode?.primaryLanguage ?? "unknown") + (isFirstResponder ? "" : " (not first responder)"))
+        Self.textinput("the keyboard is now " + (textInputMode?.primaryLanguage ?? "unknown") + (isFirstResponder ? "" : " (not first responder)")
+                       + "; a hardware keyboard's characters: " + typingNote(keyTyping))
         guard isFirstResponder, !composition.isComposing, let language = textInputMode?.primaryLanguage,
               TextInputRules.isKeyboard(language) else { return }
         place(Locale.current.localizedString(forIdentifier: language) ?? language)

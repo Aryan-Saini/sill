@@ -9,8 +9,9 @@
 // before it sends nothing (the fence), while one of what follows it goes, and Korean's rebuild of the
 // Return with the syllable after it sends that Return once. Then TextInputRules: which
 // input moves the Mac's caret, where a Return or a Tab typed ends, which input modes are keyboards, and
-// whose ⌃Space it is. Scenario by scenario, then 25,000 seeded random edit sequences against a model of
-// the Mac's text field.
+// whose ⌃Space it is; and KeyTyping: who types a hardware keyboard's characters, the Mac (as keys) or
+// iPadOS's text system, by the keyboard selected, marked text and the key row's latch. Scenario by
+// scenario, then 25,000 seeded random edit sequences against a model of the Mac's text field.
 //   swiftc -O iOSClient/TextComposition.swift Sources/StreamProtocol/Input.swift \
 //       Tests/checks/text-composition/main.swift -o check && ./check
 import Foundation
@@ -754,6 +755,51 @@ _ = R.isKeyboardSwitch(usage: R.space, modifiers: R.control, keyboards: keyboard
 check("…and are for it", keyboardsAsked == 1)
 check("Space's usage", R.space == 0x2C)
 check("the modifier bits are UIKeyModifierFlags'", R.shift == 1 << 17 && R.control == 1 << 18 && R.option == 1 << 19 && R.command == 1 << 20)
+
+// MARK: - Who types a hardware keyboard's characters (KeyTyping, #162's letters)
+
+typealias T = KeyTyping
+func typing(_ mode: String?, _ keyboards: [String] = [], composing: Bool = false, latched: Bool = false) -> T {
+    T.of(inputMode: mode, keyboards: keyboards, composing: composing, latched: latched)
+}
+// The Latin alphabet typed directly: the Mac types (its own layout, dead keys and key repeat).
+let latin = ["en-US", "en", "en-GB", "en-AU", "en_US", "fr-FR", "fr-CA", "de-DE", "de-CH", "es-ES", "es-MX", "pt-BR", "it-IT",
+             "nl-NL", "sv-SE", "nb-NO", "da-DK", "fi-FI", "pl-PL", "cs-CZ", "hu-HU", "ro-RO", "tr-TR", "az", "uz", "sr-Latn",
+             "hi-Latn", "haw", "mi", "id-ID", "ms-MY", "fil", "ca", "ga", "cy"]
+check("a keyboard in the Latin alphabet: the Mac types its characters (\(latin.filter { typing($0) != .keys }))",
+      latin.allSatisfy { typing($0) == .keys && T.typesOnMac($0) })
+// An input method's keyboard, which composes or may: iPadOS's text system, so its first key reaches it.
+let composes = ["zh-Hans", "zh-Hant", "zh-Hans-CN", "zh-Hant-TW", "zh-Hant-HK", "yue-Hant", "ja-JP", "ja", "ko-KR", "ko", "vi", "vi-VN"]
+check("an input method's keyboard (Chinese, Cantonese, Japanese, Korean, Vietnamese): iPadOS types (\(composes.filter { typing($0) != .text }))",
+      composes.allSatisfy { typing($0) == .text && !T.typesOnMac($0) })
+// Another script: iPadOS's text system, whose keyboard says which script is meant.
+let scripts = ["ru-RU", "uk-UA", "be", "bg", "sr", "sr-Cyrl", "mk", "kk", "mn", "el-GR", "he-IL", "ar", "ar-SA", "fa", "ur", "th-TH",
+               "hi", "hi-IN", "bn", "gu", "mr", "pa", "ta", "te", "ka", "hy", "am", "my", "km", "lo", "si", "bo", "chr", "ug"]
+check("a keyboard in another script (Cyrillic, Greek, Hebrew, Arabic, Thai, the Indic scripts…): iPadOS types (\(scripts.filter { typing($0) != .text }))",
+      scripts.allSatisfy { typing($0) == .text && !T.typesOnMac($0) })
+check("Emoji, dictation and a language Foundation does not know: iPadOS types",
+      ["emoji", "dictation", "", "xx-YY", "mul"].allSatisfy { typing($0) == .text && !T.typesOnMac($0) })
+// Composing comes first, then the latch.
+check("marked text: the input method composes, whatever the keyboard",
+      ["en-US", "zh-Hant", "ru-RU", "emoji"].allSatisfy { typing($0, composing: true) == .composing && typing($0, composing: true, latched: true) == .composing }
+      && typing(nil, ["en-US"], composing: true) == .composing)
+check("a modifier latched on the key row: iPadOS types, so the character makes the latched shortcut as before",
+      typing("en-US", latched: true) == .text && typing("fr-FR", latched: true) == .text && typing(nil, ["en-US"], latched: true) == .text)
+// No keyboard selected (iPadOS gives none): the keyboards set up decide, Emoji and dictation aside.
+check("none selected, only Latin keyboards set up: the Mac types",
+      typing(nil, ["en-US"]) == .keys && typing(nil, ["en-US", "fr-FR", "emoji", "dictation"]) == .keys)
+check("none selected, an input method's or another script's keyboard among them: iPadOS types",
+      typing(nil, ["en-US", "zh-Hant"]) == .text && typing(nil, ["ru-RU", "en-US"]) == .text && typing(nil, ["ja-JP"]) == .text)
+check("none selected and none set up (or only Emoji and dictation): iPadOS types",
+      typing(nil, []) == .text && typing(nil, ["emoji"]) == .text && typing(nil, ["emoji", "dictation"]) == .text)
+var setUpAsked = 0
+func setUp() -> [String] { setUpAsked += 1; return ["en-US"] }
+_ = T.of(inputMode: "en-US", keyboards: setUp(), composing: false, latched: false)
+_ = T.of(inputMode: "zh-Hant", keyboards: setUp(), composing: false, latched: false)
+_ = T.of(inputMode: nil, keyboards: setUp(), composing: true, latched: false)
+check("the keyboards set up are asked for only when none is selected", setUpAsked == 0)
+_ = T.of(inputMode: nil, keyboards: setUp(), composing: false, latched: false)
+check("…and are then", setUpAsked == 1)
 
 // MARK: - Random edit sequences
 

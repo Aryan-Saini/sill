@@ -161,6 +161,26 @@ MUTANTS = [
     ("S12 a selection one unit short at its start", "let lower = min(range.location, units.count), upper", "let lower = min(range.location + 1, units.count), upper"),
     ("S13 an empty composition drops a selection", "guard let text, !text.isEmpty else { marked = nil; markedSelection = NSRange(location: 0, length: 0); return [] }",
      "guard let text, !text.isEmpty else { marked = nil; markedSelection = NSRange(location: 0, length: 0); selection = nil; return [] }"),
+    # Who types a hardware keyboard's characters (KeyTyping, #162's letters)
+    ("K1 marked text ignored: keys reach the Mac mid-composition", "        if composing { return .composing }\n", ""),
+    ("K2 the latch ignored: a latched ⌘ and a hardware S are a plain S", "        if latched { return .text }\n", ""),
+    ("K3 the latch before marked text", "        if composing { return .composing }\n        if latched { return .text }\n",
+     "        if latched { return .text }\n        if composing { return .composing }\n"),
+    ("K4 every keyboard with a script types on the Mac (Russian, Chinese)", 'return lang.script?.identifier == "Latn" && lang.languageCode?.identifier != "vi"',
+     'return lang.script != nil && lang.languageCode?.identifier != "vi"'),
+    ("K5 Vietnamese types on the Mac (its Telex and VNI never compose)", 'return lang.script?.identifier == "Latn" && lang.languageCode?.identifier != "vi"',
+     'return lang.script?.identifier == "Latn"'),
+    ("K6 no keyboard types on the Mac (as before: held letters never repeat)", "if let inputMode { return typesOnMac(inputMode) ? .keys : .text }",
+     "if let inputMode { return typesOnMac(inputMode) ? .text : .text }"),
+    ("K7 none selected: the Mac types whatever is set up", "return !set.isEmpty && set.allSatisfy(typesOnMac) ? .keys : .text", "return .keys"),
+    ("K8 none selected: iPadOS types whatever is set up", "return !set.isEmpty && set.allSatisfy(typesOnMac) ? .keys : .text", "return .text"),
+    ("K9 none selected: one Latin keyboard among others is enough", "return !set.isEmpty && set.allSatisfy(typesOnMac) ? .keys : .text",
+     "return set.contains(where: typesOnMac) ? .keys : .text"),
+    ("K10 none selected and none set up: the Mac types", "return !set.isEmpty && set.allSatisfy(typesOnMac) ? .keys : .text",
+     "return set.allSatisfy(typesOnMac) ? .keys : .text"),
+    ("K11 Emoji and dictation counted as keyboards set up", "let set = keyboards().filter(TextInputRules.isKeyboard)", "let set = keyboards()"),
+    ("K12 the keyboards set up asked for every key", "        if let inputMode { return typesOnMac(inputMode) ? .keys : .text }\n        let set = keyboards()",
+     "        let all = keyboards()\n        if let inputMode { return typesOnMac(inputMode) ? .keys : .text }\n        let set = all"),
 ]
 caught = 0
 for name, old, new in MUTANTS:
