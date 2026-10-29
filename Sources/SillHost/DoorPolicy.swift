@@ -303,9 +303,10 @@ enum DoorPolicy {
     /// group, unless its address or its group is backed off. A known address (it proved a paired key
     /// at `.ready` within `knownFor`) also takes the `reservedPlaces`, at most `placesPerSource`
     /// from the address, has `admissionDeadline` for its handshake, and is refused only while the
-    /// address itself is backed off, never for its group. Every connection that ends unadmitted costs
-    /// its address `charge(held:refused:)`, known or not: an address that is known, or that someone
-    /// else on the network takes while its device is away, still pays for what it holds. Its group is
+    /// address itself is backed off, never for its group. Every connection that ends unadmitted, and
+    /// a pairing connection when its kind 19 comes (`End.request`), costs its address
+    /// `charge(held:refused:)`, known or not: an address that is known, or that someone else on the
+    /// network takes while its device is away, still pays for what it holds. Its group is
     /// charged the same while the address is not known. A paired key at `.ready` clears its address's
     /// failures and backoff, as before.
     struct Places {
@@ -320,10 +321,17 @@ enum DoorPolicy {
 
         /// How a connection left its place.
         enum End: Equatable {
-            /// Admitted: a session at `.ready`, a goodbye there to a paired key the door does not
-            /// serve now, or a pairing connection's kind 19. `paired`: its key is on the trust list,
-            /// which makes its address known.
+            /// Admitted: a session at `.ready`, or a goodbye there to a paired key the door does not
+            /// serve now. `paired`: its key is on the trust list, which makes its address known.
             case admitted(paired: Bool)
+            /// A pairing connection's one kind 19 came: it leaves its place to be judged
+            /// (`Door.readPairRequest`), and pays for the place as one that ended then would
+            /// (`charge(held:refused:)`, never a refusal): a device sends its kind 19 as soon as TLS
+            /// is up, so a tenth. The home door's verify block takes `sill-pair/1` with any key (an
+            /// ask needs no window), so a stranger that completes TLS and sends a kind 19 just before
+            /// its deadline (a later generation's `v`, answered `closed` with nothing shown) would
+            /// otherwise hold every place for nothing, never backed off (the review of 2026-10-29).
+            case request
             /// The door refused it: at least one failure.
             case refused
             /// It ended by itself before admission: closed, reset, a handshake that failed for the
@@ -416,7 +424,7 @@ enum DoorPolicy {
                 return []
             case .dropped:
                 return []
-            case .refused, .ended:
+            case .refused, .ended, .request:
                 return charge(e.source, DoorPolicy.charge(held: now - e.acceptedAt, refused: end == .refused), now: now)
             }
         }

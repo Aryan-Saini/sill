@@ -135,8 +135,15 @@ M = [
      "                return charge(e.source, DoorPolicy.charge(held: now - e.acceptedAt, refused: end == .refused), now: now)",
      "                return end == .refused ? charge(e.source, 1, now: now) : []"),
     ("places: Direct Wireless turned off charges the device", F,
-     ["            case .dropped:\n                return []\n", "            case .refused, .ended:"],
-     ["", "            case .refused, .ended, .dropped:"]),
+     ["            case .dropped:\n                return []\n", "            case .refused, .ended, .request:"],
+     ["", "            case .refused, .ended, .request, .dropped:"]),
+    # The review of 2026-10-29: a pairing connection's kind 19 left its place for nothing, so holders
+    # that completed TLS on the pairing ALPN and sent one before their deadline were never backed off.
+    ("places: a pairing connection's kind 19 costs nothing (as before the review)", F,
+     ["            case .dropped:\n                return []\n", "            case .refused, .ended, .request:"],
+     ["            case .dropped, .request:\n                return []\n", "            case .refused, .ended:"]),
+    ("places: a pairing connection's kind 19 costs as a refusal (one at least: a later generation's device backed off)", F,
+     "refused: end == .refused), now: now)", "refused: end != .ended), now: now)"),
     ("places: a proof forgives nothing", F, "            charges[address] = nil\n            backedOffUntil[address] = nil\n", ""),
     ("places: known for ever", F, "            provenAt[address].map { now - $0 < DoorPolicy.knownFor } ?? false", "            provenAt[address] != nil"),
     ("places: the /64 never charged", F,

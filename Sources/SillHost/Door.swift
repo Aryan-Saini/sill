@@ -11,14 +11,15 @@ import StreamProtocol
 /// of the security scan of 2026-10-18): 8 places for anyone and 2 more for addresses that recently
 /// proved a paired key, 2 per source (an IPv6 address answers for its /64 too), 4 s for the TLS
 /// handshake (10 s from a known address) and 4 s after it for a pairing connection's kind 19, 10 s
-/// in all. A connection that ends unadmitted costs its address (and, from an address not known, its
-/// /64) a tenth of a failure, one more for every 2 s it waited beyond the first 2, and at least one
-/// when the door refused it; 5 failures within 60 s refuse the address for 300 s, 12 within 300 s
-/// its /64 (but not the /64's known addresses), and a paired key clears its address's count.
-/// Sources the door does not admit are cancelled before the connection starts, so they get no byte,
-/// and judged again at `.preparing`, `.ready` and at kind 19. The verify block decides trust from
-/// the lock-protected TrustSnapshot and the negotiated ALPN (DoorPolicy.trusts). Refusals and
-/// backoffs are counted and reported at most once a minute, one line each per door.
+/// in all. A connection that ends unadmitted, and a pairing connection when its kind 19 comes,
+/// costs its address (and, from an address not known, its /64) a tenth of a failure, one more for
+/// every 2 s it waited beyond the first 2, and at least one when the door refused it; 5 failures
+/// within 60 s refuse the address for 300 s, 12 within 300 s its /64 (but not the /64's known
+/// addresses), and a paired key clears its address's count. Sources the door does not admit are
+/// cancelled before the connection starts, so they get no byte, and judged again at `.preparing`,
+/// `.ready` and at kind 19. The verify block decides trust from the lock-protected TrustSnapshot
+/// and the negotiated ALPN (DoorPolicy.trusts). Refusals and backoffs are counted and reported at
+/// most once a minute, one line each per door.
 ///
 /// Admitted sessions pass the device gate here, one place for both doors (DeviceGate; with the
 /// floor above "0" the hello, the first message inside TLS, is read before anything is registered,
@@ -373,11 +374,12 @@ final class Door {
         StreamServer.closeWithGoodbye(Goodbye(reason: reason), on: c, queue: queue)
     }
 
-    /// `sill-pair/1`: exactly one kind 19 of at most 4 KB within 4 s of `.ready`, then
-    /// DoorPolicy.pairing says how it is treated: judged on the main actor (an ask at home, or a
-    /// proof for the pairing window), or, for an ask at the remote door and for a request of a
-    /// later generation (`v` not 1) at either, answered `closed` here with no try counted. One
-    /// kind 20 back, then closed once that is sent (or after 250 ms). A
+    /// `sill-pair/1`: exactly one kind 19 of at most 4 KB within 4 s of `.ready`, which pays for the
+    /// place it held (`Places.End.request`: a tenth for a device's, which comes at once; more for one
+    /// held back toward its deadline), then DoorPolicy.pairing says how it is treated: judged on the
+    /// main actor (an ask at home, or a proof for the pairing window), or, for an ask at the remote
+    /// door and for a request of a later generation (`v` not 1) at either, answered `closed` here
+    /// with no try counted. One kind 20 back, then closed once that is sent (or after 250 ms). A
     /// device that goes away before its kind 19 is not refused, only closed. Pairing is never
     /// refused for the device's age (DeviceGate judges sessions only): a device too old for this
     /// Mac's sessions can still pair, and hears the update notice when it connects.
@@ -401,7 +403,7 @@ final class Door {
                 }
                 // The switches as they are now (the internet switch may have gone off since
                 // `.ready`). Gone from `pending`: the deadline passed while the payload came in.
-                guard self.checkOrigin(id, c), let p = self.take(id, .admitted(paired: false)) else { c.cancel(); return }
+                guard self.checkOrigin(id, c), let p = self.take(id, .request) else { c.cancel(); return }
                 let queue = self.queue
                 let reply: @Sendable (PairResult) -> Void = { result in
                     queue.async {

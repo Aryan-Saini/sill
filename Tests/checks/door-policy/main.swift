@@ -427,7 +427,11 @@ check("known: for a day, by its address only", kn.isKnown("10.0.0.9", now: 0.05 
 var ku = Places()
 _ = ku.arrive("u", v4("10.0.0.7"), now: 0)
 ku.leave("u", .admitted(paired: false), now: 0.05)
-check("known: an unpaired key admitted (a pairing connection's kind 19, Require pairing off) makes nobody known", !ku.isKnown("10.0.0.7", now: 1))
+check("known: an unpaired key admitted (Require pairing off) makes nobody known", !ku.isKnown("10.0.0.7", now: 1))
+var kq = Places()
+_ = kq.arrive("q", v4("10.0.0.8"), now: 0)
+kq.leave("q", .request, now: 0.05)
+check("known: a pairing connection's kind 19 makes nobody known", !kq.isKnown("10.0.0.8", now: 1))
 for (i, a) in ["10.0.1.1", "10.0.1.2", "10.0.1.3", "10.0.1.4"].enumerated() {
     for j in 0..<2 { _ = kn.arrive("s\(i)\(j)", v4(a), now: 2) }
 }
@@ -589,6 +593,8 @@ func cost(_ end: Places.End, held: Double, known: Bool = false) -> Double {
 check("leave: admitted, paired or not, costs nothing", cost(.admitted(paired: true), held: 9) == 0 && cost(.admitted(paired: false), held: 9) == 0)
 check("leave: let go by the Mac (Direct Wireless off) costs nothing", cost(.dropped, held: 9) == 0)
 check("leave: ended by itself costs charge(held:)", near(cost(.ended, held: 1), 0.1) && near(cost(.ended, held: 9.9), 4.05))
+check("leave: a pairing connection's kind 19 costs as one that ended then, never a refusal (the review of 2026-10-29: it cost nothing)",
+      near(cost(.request, held: 0.1), 0.1) && near(cost(.request, held: 1.9), 0.1) && near(cost(.request, held: 7.9), 3.05))
 check("leave: refused costs at least one", near(cost(.refused, held: 0.2), 1) && near(cost(.refused, held: 4), 1.1))
 check("leave: a known address costs the same", near(cost(.ended, held: 9.9, known: true), 4.05) && near(cost(.refused, held: 0.2, known: true), 1))
 check("leave: an IPv6 address's end costs it and its /64 alike", { var p = Places()
@@ -633,9 +639,11 @@ check("prune: nothing pruned at 256 or fewer", { var p = Places(); for n in 0..<
 //
 // Time in 10 ms ticks. Each holder keeps `placesPerSource` connections going: each connects (from
 // the next of its addresses in turn), waits (TCP alone, or TLS completed with any key on the pairing
-// ALPN), and closes after `hold` s unless the door's deadline refuses it first; it connects again at
-// once, after an end or a refusal. A device tries every 2 s from its own address: its handshake
-// takes 50 ms, then its paired key is admitted.
+// ALPN), and closes after `hold` s unless the door's deadline refuses it first, or, with `request`,
+// sends its one kind 19 that many seconds after `.ready` (the door's verify block takes the pairing
+// ALPN with any key at home; a later generation's `v` is answered `closed` with nothing shown); it
+// connects again at once, after an end or a refusal. A device tries every 2 s from its own address:
+// its handshake takes 50 ms, then its paired key is admitted.
 
 protocol PlaceRule {
     mutating func arrive(_ id: AnyHashable, _ s: Src, now: Double) -> Places.Arrival
@@ -667,7 +675,7 @@ struct OldPlaces: PlaceRule {
         case .admitted(let paired):
             if paired { failures[e.address] = nil; backoffUntil[e.address] = nil }
             return []
-        case .dropped, .ended:
+        case .dropped, .ended, .request:      // a kind 19 was admitted: it cost nothing
             return []
         case .refused:
             let list = (failures[e.address] ?? []).filter { now - $0 < 60 } + [now]
@@ -678,7 +686,7 @@ struct OldPlaces: PlaceRule {
     }
 }
 
-struct Holder { var addresses: [Src]; var hold: Double; var readyAfter: Double? = nil; var per = D.placesPerSource }
+struct Holder { var addresses: [Src]; var hold: Double; var readyAfter: Double? = nil; var per = D.placesPerSource; var request: Double? = nil }
 struct Device { var source: Src; var handshake: Double = 0.05; var every: Double = 2; var from: Double = 1 }
 struct Outcome {
     var backedOffAt: [String: Double] = [:]
@@ -689,7 +697,7 @@ struct Outcome {
     var holderConnectionsAfter: [Double: Int] = [:]
 }
 
-struct Conn { var id: Int; var holder: Int; var closeAt: Double; var readyAt: Double?; var ready = false }
+struct Conn { var id: Int; var holder: Int; var closeAt: Double; var readyAt: Double?; var ready = false; var requestAt: Double? = nil }
 
 /// `known`: the device proved its key before the attack began.
 func simulate<R: PlaceRule>(_ rule: R, holders: [Holder], device: Device?, known: Bool = false, seconds: Double = 120) -> Outcome {
@@ -714,6 +722,7 @@ func simulate<R: PlaceRule>(_ rule: R, holders: [Holder], device: Device?, known
                 note(r.leave(c.id, .refused, now: now)); free[c.holder] += 1; continue
             }
             if let ra = c.readyAt, !c.ready, now >= ra { r.ready(c.id, now: now); c.ready = true }
+            if c.ready, let rq = c.requestAt, now >= rq { note(r.leave(c.id, .request, now: now)); free[c.holder] += 1; continue }
             if now >= c.closeAt { note(r.leave(c.id, .ended, now: now)); free[c.holder] += 1; continue }
             kept.append(c)
         }
@@ -743,7 +752,9 @@ func simulate<R: PlaceRule>(_ rule: R, holders: [Holder], device: Device?, known
                 guard case .taken = r.arrive(id, s, now: now) else { break }
                 out.holderConnections += 1
                 free[h] -= 1
-                conns.append(Conn(id: id, holder: h, closeAt: now + holder.hold, readyAt: holder.readyAfter.map { now + $0 }))
+                let readyAt = holder.readyAfter.map { now + $0 }
+                conns.append(Conn(id: id, holder: h, closeAt: now + holder.hold, readyAt: readyAt,
+                                  requestAt: holder.request.flatMap { rq in readyAt.map { $0 + rq } }))
             }
         }
         out.maxHolderPlaces = max(out.maxHolderPlaces, conns.count)
@@ -753,8 +764,8 @@ func simulate<R: PlaceRule>(_ rule: R, holders: [Holder], device: Device?, known
 }
 
 let four = ["10.0.0.1", "10.0.0.2", "10.0.0.3", "10.0.0.4"]
-func holdersOn(_ addresses: [String], hold: Double, readyAfter: Double? = nil) -> [Holder] {
-    addresses.map { Holder(addresses: [v4($0)], hold: hold, readyAfter: readyAfter) }
+func holdersOn(_ addresses: [String], hold: Double, readyAfter: Double? = nil, request: Double? = nil) -> [Holder] {
+    addresses.map { Holder(addresses: [v4($0)], hold: hold, readyAfter: readyAfter, request: request) }
 }
 let paired = Device(source: v4("10.0.0.9"))
 
@@ -790,6 +801,26 @@ check("new rule, holders that complete TLS on the pairing ALPN (any key) and sen
       pairingHold.backedOffAt.count == 4 && (pairingHold.backedOffAt.values.max() ?? .infinity) <= 14 && pairingHold.deviceIn == pairingHold.deviceTries)
 let pairingOld = simulate(OldPlaces(), holders: holdersOn(four, hold: 9.9, readyAfter: 0.05), device: paired, known: true, seconds: 60)
 check("old rule, the same on the pairing ALPN closing at 9.9 s: held for good", pairingOld.backedOffAt.isEmpty && pairingOld.deviceIn == 0)
+// The review of 2026-10-29: holders that leave each place with a kind 19 instead of closing (TLS on
+// the pairing ALPN with any key 3 s after accept, the kind 19 3.47 s later, about the live run's
+// tlsholder.py; 6.47 s, so that no place frees on the tick a device tries in). Admitted, it cost
+// nothing, and they held every shared place for good, never backed off.
+let askOld = simulate(OldPlaces(), holders: holdersOn(four, hold: 30, readyAfter: 3, request: 3.47), device: Device(source: v4("10.0.0.20")), seconds: 120)
+check("old rule (and this one before the review), holders leaving each place with a kind 19 6.47 s in: held for good, nobody backed off, a device not yet known refused throughout",
+      askOld.maxHolderPlaces == 8 && askOld.backedOffAt.isEmpty && askOld.deviceIn == 0 && askOld.holderConnections > 4 * 2 * 17)
+let ask = simulate(Places(), holders: holdersOn(four, hold: 30, readyAfter: 3, request: 3.47), device: paired, known: true)
+let askLast = ask.backedOffAt.values.max() ?? .infinity
+check("new rule, the same: all 4 backed off at their third kind 19 (2.34 each; last at \(askLast) s); the paired device admitted at every try",
+      ask.backedOffAt.count == 4 && askLast > 12.9 && askLast <= 13 && ask.deviceIn == ask.deviceTries && ask.deviceTries == 60)
+let askNew = simulate(Places(), holders: holdersOn(four, hold: 30, readyAfter: 3, request: 3.47), device: Device(source: v4("10.0.0.20")), seconds: 60)
+check("new rule, the same: a device not yet known gets in once they are backed off (first in at \(askNew.firstIn ?? -1) s), and at every try after",
+      (askNew.firstIn ?? .infinity) <= 14 && askNew.deviceIn >= askNew.deviceTries - 6)
+let askLate = simulate(Places(), holders: holdersOn(four, hold: 30, readyAfter: 3.9, request: 3.9), device: paired, known: true, seconds: 60)
+check("new rule, a kind 19 at the last moment (ready at 3.9 s, the kind 19 3.9 s later, 3.0 each): all 4 backed off at their first two (last at \(askLate.backedOffAt.values.max() ?? -1) s)",
+      askLate.backedOffAt.count == 4 && (askLate.backedOffAt.values.max() ?? .infinity) <= 8 && askLate.deviceIn == askLate.deviceTries)
+let askCheap = simulate(Places(), holders: holdersOn(four, hold: 30, readyAfter: 0.05, request: 1.85), device: paired, known: true, seconds: 70)
+check("new rule, the cheapest kind 19 (1.9 s in, a tenth each): all 4 backed off within 50 s (last at \(askCheap.backedOffAt.values.max() ?? -1) s), as closing at 1.9 s",
+      askCheap.backedOffAt.count == 4 && (askCheap.backedOffAt.values.max() ?? .infinity) <= 50 && askCheap.deviceIn == askCheap.deviceTries)
 // IPv6: any number of addresses in one /64, each trying to keep 2 places.
 let g64 = "2601:600:1:2::/64"
 let v6holders = (1...8).map { Holder(addresses: [src("2601:600:1:2::\($0)")], hold: 9.9) }
