@@ -218,12 +218,21 @@ dependency, the device through the local package).
     Mac keeps them. A later field in the window list could say so.
 13. **The receipt** (after the review). A ping after the text, no wire change and no answer from the
     host: it says the Mac read the text, not that the pasteboard took it (a Mac whose Share clipboard
-    with devices went off in that moment, or past the rate, which a tap never reaches).
+    with devices went off in that moment, or past the rate, which a tap never reaches). Since paste
+    right away a receipt also presses ⌘V, so the review of #242 (finding 1) holds ⌘V while the Mac's last
+    list no longer says it shares its clipboard, which covers the switch going off before the Mac read
+    the ping; the note then still says "Sent…", as before.
 14. **The chip under VoiceOver** (after the review). No time limit while VoiceOver is on (it stays until
     Paste or Dismiss); hidden, it waits.
 15. **The site's words before the release** (after the review). Kept with this pull request, as the other
     features' are, between `<!-- Clipboard` markers that a republish before the release cuts
     (docs/release-checklist.md, part 1 §3); the README describes main's code, as #39's did.
+16. **Paste right away on a Mac whose keyboard layout moves V** (the review of #242, 2026-10-29; "Paste
+    right away", Known). The default: nothing on the device, which cannot tell the Mac's layout; the
+    support page says to turn Paste on ‹Mac› Right Away off there. Later, either a paste the device
+    sends only to a Sill for Mac that says it takes one, which presses its own layout's ⌘V (an input
+    an older Mac never sees), or Edit › Paste pressed through the Mac's menus (kinds 25 and 27), which
+    knows no layout but needs an Edit menu in the app in front. Noah's call.
 
 ## Test plan
 
@@ -435,6 +444,16 @@ on the Mac changes.
   moves no pointer.
 - The other way cannot be automatic: iOS lets no app paste into another app, so the Mac's text waits on
   the device's clipboard (local only, 10 minutes) for the person to paste.
+- Known (the review's finding 4): ⌘V is ⌘ with V's place on a U.S. keyboard (HID usage 0x19, the Mac's
+  virtual key 9), as every key the device sends is a place, never a letter. A Mac whose keyboard layout
+  moves V for ⌘ shortcuts gets another shortcut: under Dvorak that place types "k" with ⌘ held, so Paste
+  presses ⌘K (Terminal's Clear to Start, Notes' Add Link), and under Dvorak – Right ⌘, (the front app's
+  Settings). U.S., ABC, British, French, German, Colemak, Dvorak – Left, Dvorak – QWERTY ⌘, Russian,
+  Greek and Hebrew put ⌘V there (each layout's own data read with UCKeyTranslate on this Mac, nothing
+  posted: the scratch probe in the review). Nothing on the device can tell the Mac's layout, and this
+  change makes no wire change: on such a Mac, Paste on ‹Mac› Right Away goes off (support.html says
+  so). A later Sill for Mac could press its own layout's ⌘V for a paste the device sends only to a Mac
+  that says it takes one (open question 16).
 
 ### The rule (`ClipboardPolicy.pastesOnReceipt`, pure)
 
