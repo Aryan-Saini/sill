@@ -392,12 +392,14 @@ enum TextInputRules {
 /// keyboard and with the Mac's own through Universal Control, "hold p didnt work … When I held down e it
 /// showed the keyboard options for Spanish characters"): the Mac, which is sent them as keys, or iPadOS's
 /// text system, which types them into the stream's input view and hands over what it typed, sent as text.
-/// A key the text system takes reaches the Mac once, as text, however long it is held: iPadOS's press and
-/// hold, as macOS's, gives a held letter its accents or nothing, never a repeat, and the Mac repeats only
-/// keys (KeyRepeat, on the host). Asked as each key goes down (InputOverlayView.pressesBegan; ForwardedKeys
-/// sends the key the way it says, and the key's up follows that way), from the keyboard iPadOS has
-/// selected (UIResponder.textInputMode's primary language), whether an input method or dictation is
-/// composing, and the key row's latch.
+/// A key the text system takes reaches the Mac as typed text, never as a key held down, so the Mac, which
+/// repeats keys (KeyRepeat, on the host), never repeats it: iPadOS types a held letter once and its press
+/// and hold then shows the letter's accents, or nothing (in the iPad simulator with Tests/keyrig, one
+/// insertText for P held 2.3 s, and E's accent popover over the picture), and it repeats Delete and Space
+/// itself at its own timing, each repeat a separate press on the Mac. Asked as each key goes down
+/// (InputOverlayView.pressesBegan; ForwardedKeys sends the key the way it says, and the key's up follows
+/// that way), from the keyboard iPadOS has selected (UIResponder.textInputMode's primary language), whether
+/// an input method or dictation is composing, and the key row's latch.
 enum KeyTyping: Equatable {
     /// An input method or dictation is composing (marked text): every key is its own until what it
     /// composes is chosen (the arrows move through its candidates, Return chooses, a shortcut goes to it).
