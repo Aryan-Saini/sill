@@ -570,6 +570,11 @@ changed; any Sill for Mac with the clipboard, #78 on):
   Decided: on by default, ⌘V only on a receipt in time while something streams, 50 ms after it.
   Verified: the race and the delay above, the checks, the builds, the live runs. Left: Noah's steps
   above, on his devices.
+- 2026-10-29, after a pause for usage: the branch read again against the brief, nothing missing. At
+  89f2c21 (the last change a comment's rewrap in ClipboardPolicy.swift) the checks again, `clipboard`
+  285 and `key-strokes` 359, each of the 91 clipboard mutants' patterns found exactly once (so the
+  91 of 91 above stands), and CI's Build and check passed (run 40838386473, 12 min 14 s). Pull
+  request #242 open, not merged.
 
 ## Untested, for Noah
 

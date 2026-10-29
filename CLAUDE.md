@@ -1148,7 +1148,8 @@ first. Wire, host and device; additive.
   the write, then "key 55 flags changed (command)", "key 9 down (command)", "key 9 up (command)", "key
   55 flags changed (none)"; the switch off, the write and no key; through a relay that stops
   forwarding, neither and "Didn’t reach"; harness photos in
-  `~/Downloads/sill-handoff/device-tests/2026-10-29/autopaste/`.
+  `~/Downloads/sill-handoff/device-tests/2026-10-29/autopaste/`; CI's Build and check passed on
+  89f2c21.
   **Untested, for Noah** (the plan's eight): a paste into TextEdit, Notes and a Terminal at their
   cursor, the switch off, a paste with no text field in front, VoiceOver's words, Universal Clipboard
   on, through Tailscale.
