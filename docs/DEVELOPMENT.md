@@ -898,8 +898,12 @@ in any text field there and as on a Mac with several input sources. With
 keyboards in one language (Emoji and dictation aside), Control-Space goes to the
 Mac as before: Xcode's completions, VS Code's suggestions, the Mac's own input
 source switch. Control-Shift-Space, Control-Option-Space and
-Control-Command-Space always go to the Mac. The Globe key switches the device's
-keyboard too. Whenever the keyboard switches while the input view holds it, with
+Control-Command-Space always go to the Mac. A key held down on the Mac when
+Control-Space switches the device's keyboard comes up there at the Space
+(`ForwardedKeys.keyboardSwitch`): on a Mac another key's down stops the held one
+repeating, and this Space is one the Mac never hears, so a letter held across it
+went on repeating as Control-P. The Globe key switches the device's keyboard
+too. Whenever the keyboard switches while the input view holds it, with
 a hardware keyboard or the on-screen one, the new keyboard's name shows over the
 picture for a second (not Emoji's or dictation's, and not while something is
 being composed).

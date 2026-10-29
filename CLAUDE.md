@@ -30,7 +30,11 @@ repeating at its own 0.4 s and 20 a second), which this branch leaves alone.
   input is held for an activation (a repeat never overtakes it), and while its device has been quiet
   half a second (`StreamServer.lastHeard`, every message's header; a device pings every 0.25 s), then
   starts over after the delay: a stalled link can hold the key's up back for the 4 to 8 s before the
-  Mac drops the device. A late wake posts once, the next at least half an interval on. Off (a delay
+  Mac drops the device. Its first repeat (after the press, and after a quiet spell) waits for a word
+  from its device heard after the press and no earlier than `KeyRepeat.firstWord` (0.3 s) before it is
+  due (the review of the held letters): the link keeps the device's messages in order, so a key only
+  tapped (a letter, a Delete) whose up a stall holds back never repeats, and a key held has its ping in
+  time. A late wake posts once, the next at least half an interval on. Off (a delay
   or an interval of a minute or more) and nonsense repeat nothing; a delay under 0.1 s and an
   interval under 15 ms count as those. `in.keyRepeat` on a host that posts; a `--synthetic` host
   counts `in.dry`, and with SILL_TEST_INPUT_LOG=1 prints "Test input: key 123 repeats after 0.50 s,
@@ -6234,7 +6238,9 @@ good.
   pressed alone, the flags in force at each repeat, stopped at its up, another
   key, text, a gesture's shortcut, the device leaving, the host's end and input
   with nowhere to land, waiting while input is held for an activation and while
-  the device is quiet half a second (StreamServer.lastHeard); `generation`, said
+  the device is quiet half a second (StreamServer.lastHeard), its first repeat
+  only once the device is heard no earlier than `firstWord` (0.3 s) before it
+  (a key only tapped whose up a stall holds back never repeats); `generation`, said
   in every window list as `keyRepeat`, so a device sends a hardware keyboard's
   characters as keys; pure, `Tests/checks/key-repeat`), `KeyStrokes` (a device's key as the
   Mac's: its virtual key, and the flags each event carries from the modifier
