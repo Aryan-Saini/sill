@@ -8,6 +8,44 @@ Formerly winstream; the folder still carries the old name.
 
 ## Current step
 
+**A device the Mac stops serving lands no more input (2026-10-29, branch `sec-revoked-input` from main at
+150479b5, PR #254; security scan finding 10, Low; Noah's go of 2026-10-29 for the security batch).** Remove,
+Require pairing turned on, and Remote Access or internet access turned off said goodbye and closed the device's
+connection once the goodbye was handed to the network, or 0.25 s later; meanwhile its input kept landing, and
+input held for it while an app came forward (up to 0.6 s) was replayed, also once it had left. Host only; no
+wire change, nothing on the device.
+- `StreamServer.closeSessions` marks each session it cuts off revoked as it says goodbye (`Client.revoked`, on
+  the network queue) and tells the coordinator in the same queue turn (`onClientRevoked`): its receive loop
+  then hands on only a key's or a button's up (`RevokedInput.mayLetGo`), no pong, no stats, no pointer
+  control, and counts the rest (`in.revoked`). The coordinator keeps the revoked set until the device leaves
+  and posts of it only the up of a key or a button that device pressed and the Mac still has down
+  (`RevokedInput.stillGoes`, KeyStrokes.swift, pure; `InputInjector.releasesWhatItHolds`, with each button's
+  owner), a button's where the pointer is; nothing else it sends acts (a pick, a window's buttons, a launch,
+  settings, menus, the clipboard). The replay of held input, a switch's drop of it and gestures waiting for a
+  switch judge a revoked device, and one that left while it waited (`gone`), the same way, and drop their
+  shortcuts. Its keys still down when it leaves go up as before. TEST ONLY: with `SILL_TEST_INPUT_LOG` a
+  synthetic host prints where a revoked device's input stops landing; `sillclient.py --key=USAGE,HOLD@T`
+  holds a key. The pacing and sound harnesses compile KeyStrokes beside StreamServer.
+- Verified: `key-strokes` 383 checks (30 new: the rule; the glue modelled with removals, holds, switches,
+  gestures and departures, 3,000 random sessions, and as it was before, 2,600 of 3,000 landing input after
+  the removal) and 94 of 94 mutants (11 new); `run-all.sh`, all 56; `swift build -c release`, only
+  the CaptureProbe warning; both harnesses' hosts build (and not without KeyStrokes); CI's Build and check on
+  6a753e38. Live on loopback (a
+  `--synthetic` bare app with `SILL_TEST_INPUT_LOG`, a paired `sillclient` pressing a key every 25 ms, each
+  held 0.6 s, and moving, tapping, typing and pressing F-keys across the cut, not reading, so its connection
+  lasts the whole 0.25 s): between "Removed sec10-client (sillclient); closed 1 connection." and "Client left"
+  main's build posted 48 and 57 events (key downs, moves, clicks, typed text, key ups) up to +253 ms, and 56
+  after Require pairing's line; this build only 11, 10 and 10 key ups, each of a key down at the cut, then at
+  "Client left" the keys it still held (`in.revoked` 38, 37 and 39).
+- Not done: a menu choice made before the cut and still queued behind a slow menu read (one at a time, at most
+  its device's wait) is still made, as a departed device's is by design (Scripts/menu-check's "its choice
+  made"); frames, the clipboard and pointer reports still go to the device for those 0.25 s (output, not this
+  finding).
+- **Untested, for Noah:** with this Sill.app and the iPad's Magic Keyboard streaming TextEdit, type steadily
+  (or hold a key) and click Remove in Settings › Devices: nothing typed after the click lands, and no key
+  stays down on the Mac (Sill.log: "Removed …", then "Client left", the `[1s]` line's `in.revoked`); pair
+  again and it works. The same with Require pairing turned on while an unpaired iPad types.
+
 **Pinch to zoom (2026-10-28/29, addhumal's PR #196 with maintainer edits; issue #65).** Noah's decisions of
 2026-10-19/20: pinch to zoom, not a slider; Photos-like, centred on the point between the fingers, the Mac's cursor
 not involved; a slight pinch out stays zoomed and only a pinch all the way out (or a lift within 2 % of it) gives the
@@ -6072,7 +6110,9 @@ good.
   (`paceRemote`, docs/remote-bundle-plan.md §3); one sweep a second closing
   every client's second into its LinkJudge (`onClientLinkChanged`), the judges
   reset only at another quality (`resetLinks`, apart from `resetForNewStream`);
-  `send(each:)`, kind 16 per connection; the test-only
+  `send(each:)`, kind 16 per connection; a session `closeSessions` cuts off
+  marked revoked as it is told goodbye, its receive loop then handing on only a
+  key's or a button's up (`onClientRevoked`, RevokedInput); the test-only
   SILL_TEST_REMOTE_ORIGIN;
   the listener built with or without peer-to-peer and replaced live when Direct
   Wireless changes, and turned off, the devices on peer-to-peer Wi-Fi
@@ -6090,7 +6130,9 @@ good.
   Mac's: its virtual key, and the flags each event carries from the modifier
   keys the devices hold down, so a key's up leaves only what is held;
   `KeyUpCheck`, whether an up took its modifiers out of the HID state table;
-  `DroppedInput`, what of input with nowhere to land still goes; pure,
+  `DroppedInput`, what of input with nowhere to land still goes;
+  `RevokedInput`, what still goes of a device the Mac no longer serves, or of
+  one that left while its input was held: the up of what it holds down; pure,
   `Tests/checks/key-strokes`),
   `WindowSizer` (Accessibility resize for the Aa scale, returning what it did,
   `Fit`; `placement/move/restore` for the virtual display; `AXWindows`,
@@ -6335,7 +6377,7 @@ good.
   `--expect-tls-fail`, printing kinds 18, 20 and 22; pairing at home with
   `--pair-ask[=cable]`, `--then-code=FILE`, `--pair-hold=S`, `--pair-cancel`,
   `--pair-v=N` and `--expect-pair=R`; the Mac's pointer with
-  `--pointer` (each kind 26), `--move=X,Y@T`, `--tap=X,Y@T`, `--key=USAGE@T`
+  `--pointer` (each kind 26), `--move=X,Y@T`, `--tap=X,Y@T`, `--key=USAGE[,HOLD]@T`
   and `--input=JSON@T` (a literal kind 8), the input flags only to a
   `--synthetic` host on this Mac (lsof and ps); trackpad gestures with
   `--gesture=NAME[,FINGERS]@T` and `--raw28=JSON@T` (kind 28), likewise only to
@@ -6970,7 +7012,10 @@ input: scroll dy -12 dx 0, gesture changed (none)": positive dy moves the
 content down, so the sign shows which way a device's scroll went), and each
 check a key's up arms ("Test input: key 55
 up: the table read again in 0.25 s for command"): what a device's keys and
-buttons leave for its next click (KeyStrokes), without posting anything.
+buttons leave for its next click (KeyStrokes), without posting anything; and
+where a device the Mac stops serving stops landing input ("Test input: iPad is
+no longer served: only the up of a key or a button it holds down goes from
+here on.", RevokedInput).
 A sleeping display, headless: a test host declares no user activity and counts
 `disp.wakeDry` where a real one would declare (`sillclient.py`'s connect, a tap,
 a key; never a pick, nor a move right after a restart). TEST ONLY

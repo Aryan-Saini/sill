@@ -1063,6 +1063,11 @@ paired for Remote Access connects at home with no further step.
   keychain, not in its defaults: in the data-protection keychain in the Sill
   for Mac you download (0.4.0 and later), and in the login keychain in a
   Sill.app you build yourself without the Developer ID provisioning profile.
+  Remove, Require pairing turned on and Remote Access or internet access
+  turned off cut a device off at once: from then on nothing it sends reaches
+  the Mac but the up of a key or a button it holds down, input held for it
+  while an app came forward included; its connection closes within a quarter
+  of a second (the `[1s]` lines count what was dropped as `in.revoked`).
 - **Through Screen Sharing** (a Mac without a display, or one you use from afar
   with Screen Sharing, Apple Remote Desktop or a VNC app such as Screens): Sill
   keeps its pairing window out of what these apps show, so through them Pair
@@ -1299,7 +1304,13 @@ python3 Scripts/sillclient.py PORT 3 desktop --input='{"key":{"hidUsage":44,"dow
 ```
 
 (`$T/path` holds one line, `0 756 474`: the scripted pointer gives the test
-pattern a place for input to land.) `--gesture=NAME[,FINGERS]@T` sends a
+pattern a place for input to land.) `--key=USAGE,HOLD@T` holds the key HOLD
+seconds before its up. When the Mac stops serving a device (Remove, Require
+pairing turned on, Remote Access or internet access turned off), such a host
+says where that device's input stops landing (`Test input: iPad is no longer
+served: only the up of a key or a button it holds down goes from here on.`):
+after it, only those ups are posted for it, and the rest is counted as
+`in.revoked`. `--gesture=NAME[,FINGERS]@T` sends a
 trackpad gesture (kind 28), and, like the input flags, only to a `--synthetic`
 host on this Mac, which posts nothing. The clipboard's flags (`--clipboard`,
 `--copy`, `--copy-bytes`, `--raw32`, `--expect=clipboard=`) are under The
