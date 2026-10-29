@@ -854,13 +854,14 @@ environment kept the workflow to main) exported 0.5.1 (987), App Store-signed.
 | `SILL_TESTFLIGHT_IN_CI` | variable (the repository's) | `true` also uploads, here (a commit on main's own line only) and in the nightlies. Absent or anything else: export only. |
 
 The environment `nightly` first (Releasing from GitHub Actions › Secrets and variables, step 1); the
-three secrets are part of its step 2, and the repository keeps no copy (its step 3):
+three secrets are part of its step 2, and the repository keeps no copy (its step 3). The variable
+goes on after an export-only run has passed:
 
 ```
 gh secret set SILL_TESTFLIGHT_KEY_ID --env nightly
 gh secret set SILL_TESTFLIGHT_ISSUER_ID --env nightly
 base64 -i <backup folder>/AuthKey_YYYYYYYYYY.p8 | gh secret set SILL_TESTFLIGHT_KEY_P8 --env nightly
-gh variable set SILL_TESTFLIGHT_IN_CI --body true     # after an export-only run has passed
+gh variable set SILL_TESTFLIGHT_IN_CI --body true
 ```
 
 An Admin key can do nearly all an Admin can in App Store Connect, managing users included, so it
@@ -1184,12 +1185,15 @@ step 4), in this order:
    required reviewer, a `main` branch rule), so their filters fit what GitHub answers; the PUTs
    and POSTs above have run nowhere.
 2. The secrets in each environment, from the same sources as the repository's were (GitHub never
-   shows a secret again):
+   shows a secret again). `gh secret set` without a value asks for it, so the password lands in no
+   shell history; the two lists at the end print the names, six for `release` and nine for
+   `nightly`. These blocks hold no `#` comments: zsh, as it starts (no `interactivecomments`),
+   would hand a comment's words to `gh` as arguments.
 
    ```
    for env in release nightly; do
      base64 -i <backup folder>/DeveloperID.p12 | gh secret set SILL_DEVELOPER_ID_P12 --env "$env"
-     gh secret set SILL_DEVELOPER_ID_P12_PASSWORD --env "$env"   # asks for the value; nothing lands in the shell history
+     gh secret set SILL_DEVELOPER_ID_P12_PASSWORD --env "$env"
      gh secret set SILL_NOTARY_KEY_ID --env "$env"
      gh secret set SILL_NOTARY_ISSUER_ID --env "$env"
      base64 -i <backup folder>/AuthKey_ABC123DEFG.p8 | gh secret set SILL_NOTARY_KEY_P8 --env "$env"
@@ -1198,18 +1202,19 @@ step 4), in this order:
    gh secret set SILL_TESTFLIGHT_KEY_ID --env nightly
    gh secret set SILL_TESTFLIGHT_ISSUER_ID --env nightly
    base64 -i <backup folder>/AuthKey_YYYYYYYYYY.p8 | gh secret set SILL_TESTFLIGHT_KEY_P8 --env nightly
-   gh secret list --env release      # the six names
-   gh secret list --env nightly      # the nine names
+   gh secret list --env release
+   gh secret list --env nightly
    ```
 3. The repository's copies deleted. An environment's secret wins over a repository secret of the
-   same name inside its jobs, but the repository's would still reach every other run:
+   same name inside its jobs, but the repository's would still reach every other run. The list at
+   the end prints nothing:
 
    ```
    for name in SILL_DEVELOPER_ID_P12 SILL_DEVELOPER_ID_P12_PASSWORD SILL_NOTARY_KEY_ID SILL_NOTARY_ISSUER_ID \
        SILL_NOTARY_KEY_P8 SILL_PROVISION_PROFILE SILL_TESTFLIGHT_KEY_ID SILL_TESTFLIGHT_ISSUER_ID SILL_TESTFLIGHT_KEY_P8; do
      gh secret delete "$name"
    done
-   gh secret list                    # nothing
+   gh secret list
    ```
 4. Then the variables, repository variables as before: `SILL_SIGN_IN_CI` (below) after a
    verify-only run has passed, and the nightlies' (Nightlies › The first run).
@@ -1242,10 +1247,11 @@ environment's rules (GitHub's default), which is Noah.
 
 The workflow takes only an App Store Connect API key, not the app-specific password that part 1 §2
 also allows. The keychain, its password, the profile name `sill-notary` and the token for this
-repository's own release are made by each run and gone at its end.
+repository's own release are made by each run and gone at its end. `SILL_SIGN_IN_CI` goes on last,
+after steps 1 to 3 and a verify-only run that passed:
 
 ```
-gh variable set SILL_SIGN_IN_CI --body true         # after steps 1 to 3, and a verify-only run that passed
+gh variable set SILL_SIGN_IN_CI --body true
 ```
 
 `<backup folder>` is where part 1 keeps the exported .p12 and .p8: outside the repository (these
