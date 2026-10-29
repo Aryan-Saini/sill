@@ -259,12 +259,17 @@ enum SavedMacs {
         return list.first { mac in mac.recognitionKeyData.map { RecognitionTag.matches(tag, recognitionKey: $0) } ?? false }?.macID
     }
 
-    /// Preserves the QR pairing link's filtered addresses and remote port on a home-paired record
-    /// when no verified kind 18 has populated `addresses` yet (issue #140).
+    /// The pairing link's addresses and port on a record just paired at the home door (#140): that
+    /// record has none until the session's first kind 18, so a person who scanned a code whose link
+    /// lists addresses (a window opened from the Mac's menu, with Remote Access on) and left before
+    /// it came had a Remote row with nothing to dial, at the default port. The link is the code the
+    /// person scanned, pinned to the key that answered, as the remote path's `paired` saves it. A
+    /// record a verified kind 18 has refreshed (`infoIssuedAt`) keeps what the Mac said.
     static func applyingLink(_ addresses: [MacAddress], port: Int, to mac: SavedMac, allowLoopback: Bool) -> SavedMac {
+        guard mac.infoIssuedAt == 0 else { return mac }
         var next = mac
         let kept = filtered(addresses, allowLoopback: allowLoopback)
-        if next.addresses.isEmpty, !kept.isEmpty { next.addresses = kept }
+        if !kept.isEmpty { next.addresses = kept }
         if (1...65535).contains(port) { next.remotePort = port }
         return next
     }
