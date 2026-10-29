@@ -407,13 +407,13 @@ enum KeyTyping: Equatable {
     /// composes is chosen (the arrows move through its candidates, Return chooses, a shortcut goes to it).
     case composing
     /// iPadOS's text system types the characters, as it did before: for a Mac that repeats no key (a Sill
-    /// for Mac from before key repeat, whose window list says no `keyRepeat`), for a keyboard in another script than
-    /// the Latin alphabet (Russian, Greek, Arabic, Hindi…: the keyboard chosen on the iPad says which
-    /// script is meant, and the Mac's own layout would not give it), for one whose input method composes
-    /// or may (Chinese, Japanese, Korean, Vietnamese: its first letter has to reach it), for one it cannot
-    /// tell, and while the key row has a modifier latched (the character then makes the latched shortcut,
-    /// as it always has: `InputOverlayView.insertText`). The keys the text system never delivers still go
-    /// to the Mac as keys (ForwardedKeys.keyUsages, and any key with ⌘, ⌃ or ⌥ held).
+    /// for Mac from before key repeat, whose window list says no `keyRepeat`), for a keyboard in another
+    /// script than the Latin alphabet (Russian, Greek, Arabic, Hindi…: the keyboard chosen on the iPad says
+    /// which script is meant, and the Mac's own layout would not give it), for one whose input method
+    /// composes or may (Chinese, Japanese, Korean, Vietnamese, Hawaiian: its first letter has to reach it),
+    /// for one it cannot tell, and while the key row has a modifier latched (the character then makes the
+    /// latched shortcut, as it always has: `InputOverlayView.insertText`). The keys the text system never
+    /// delivers still go to the Mac as keys (ForwardedKeys.keyUsages, and any key with ⌘, ⌃ or ⌥ held).
     case text
     /// The Mac types them: the keyboard chosen on the iPad types the Latin alphabet directly (English,
     /// French, German, Spanish…). Letters, digits, punctuation, Space, Delete, Return, Tab and Shift reach
@@ -439,11 +439,19 @@ enum KeyTyping: Equatable {
 
     /// Whether a keyboard, by its primary language, types the Latin alphabet directly, so that the Mac may
     /// type its keys: its language is written in the Latin script (Foundation's likely script for it:
-    /// "en-US" and "sr-Latn" are Latn, "sr" Cyrl, "zh-Hant" Hant, "hi" Deva), and it is not Vietnamese,
-    /// whose Telex and VNI compose. Emoji and dictation have no script, nor a language Foundation does not
-    /// know.
+    /// "en-US" and "sr-Latn" are Latn, "sr" Cyrl, "zh-Hant" Hant, "hi" Deva, "ain" Kana, "crk" Cans), and
+    /// its input method does not compose (`composingLatin`). Emoji and dictation have no script, nor a
+    /// language Foundation does not know.
     static func typesOnMac(_ language: String) -> Bool {
         let lang = Locale.Language(identifier: language)
-        return lang.script?.identifier == "Latn" && lang.languageCode?.identifier != "vi"
+        return lang.script?.identifier == "Latn" && !composingLatin.contains(lang.languageCode?.identifier ?? "")
     }
+
+    /// The languages written in the Latin alphabet whose iPadOS keyboards have an input method of their own
+    /// that composes what is typed (its input manager says it composes text, TextInput's doesComposeText, in
+    /// the iOS 27.0 simulator runtime's TextInput bundles): Vietnamese (Telex, VNI and VIQR) and Hawaiian.
+    /// Every other keyboard with an input manager of its own is in another script, which `typesOnMac`
+    /// leaves to iPadOS (Chinese, Cantonese, Japanese, Korean, Thai, Burmese, Tamil, Cherokee, Ainu, and the
+    /// Indic, Arabic, Urdu and Cree transliteration keyboards), but Turkish's, which is the plain one.
+    static let composingLatin: Set<String> = ["vi", "haw"]
 }
