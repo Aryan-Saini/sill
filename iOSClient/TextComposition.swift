@@ -399,12 +399,15 @@ enum TextInputRules {
 /// itself at its own timing, each repeat a separate press on the Mac. Asked as each key goes down
 /// (InputOverlayView.pressesBegan; ForwardedKeys sends the key the way it says, and the key's up follows
 /// that way), from the keyboard iPadOS has selected (UIResponder.textInputMode's primary language), whether
-/// an input method or dictation is composing, and the key row's latch.
+/// an input method or dictation is composing, the key row's latch, and whether the Mac repeats a held key
+/// (`WindowList.keyRepeat`: a Mac from before key repeat would type each key once, where iPadOS repeats
+/// Delete and Space, so it is sent nothing new).
 enum KeyTyping: Equatable {
     /// An input method or dictation is composing (marked text): every key is its own until what it
     /// composes is chosen (the arrows move through its candidates, Return chooses, a shortcut goes to it).
     case composing
-    /// iPadOS's text system types the characters, as it did before: for a keyboard in another script than
+    /// iPadOS's text system types the characters, as it did before: for a Mac that repeats no key (a Sill
+    /// for Mac from before key repeat, whose window list says no `keyRepeat`), for a keyboard in another script than
     /// the Latin alphabet (Russian, Greek, Arabic, Hindi…: the keyboard chosen on the iPad says which
     /// script is meant, and the Mac's own layout would not give it), for one whose input method composes
     /// or may (Chinese, Japanese, Korean, Vietnamese: its first letter has to reach it), for one it cannot
@@ -423,10 +426,12 @@ enum KeyTyping: Equatable {
     /// The typing for a key going down now: `inputMode`, the selected keyboard's primary language (nil when
     /// iPadOS gives none), `keyboards`, the primary languages of every keyboard set up (asked only when it
     /// gives none: the Mac then types only if every keyboard set up, Emoji and dictation aside, would have
-    /// it type), `composing` (marked text) and `latched` (a modifier latched on the key row).
-    static func of(inputMode: String?, keyboards: @autoclosure () -> [String], composing: Bool, latched: Bool) -> KeyTyping {
+    /// it type), `composing` (marked text), `latched` (a modifier latched on the key row) and `macRepeats`
+    /// (the session's Mac repeats a held key: `WindowList.keyRepeat` 1 or more).
+    static func of(inputMode: String?, keyboards: @autoclosure () -> [String], composing: Bool, latched: Bool,
+                   macRepeats: Bool) -> KeyTyping {
         if composing { return .composing }
-        if latched { return .text }
+        if !macRepeats || latched { return .text }
         if let inputMode { return typesOnMac(inputMode) ? .keys : .text }
         let set = keyboards().filter(TextInputRules.isKeyboard)
         return !set.isEmpty && set.allSatisfy(typesOnMac) ? .keys : .text

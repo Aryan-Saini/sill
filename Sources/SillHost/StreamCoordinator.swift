@@ -2655,10 +2655,14 @@ package final class StreamCoordinator {
     // MARK: Catalog to clients
 
     private func listMessage() -> StreamMessage {
-        StreamMessage(kind: .windowList, timestamp: Date().timeIntervalSince1970, isKeyframe: false,
-                      payload: Wire.encode(WindowList(macName: macName, windows: catalog.infos, active: active, launchID: launchID,
-                                                      hostVersion: hostVersion, protocol: SillProtocol.current,
-                                                      gestures: TrackpadGesture.generation, clipboard: clipboard.advertised)))
+        var list = WindowList(macName: macName, windows: catalog.infos, active: active, launchID: launchID,
+                              hostVersion: hostVersion, protocol: SillProtocol.current,
+                              gestures: TrackpadGesture.generation, clipboard: clipboard.advertised)
+        // This host repeats a device's held key (KeyRepeat), so a device sends it a hardware keyboard's
+        // characters as keys.
+        list.keyRepeat = KeyRepeat.generation
+        return StreamMessage(kind: .windowList, timestamp: Date().timeIntervalSince1970, isKeyframe: false,
+                             payload: Wire.encode(list))
     }
 
     private func broadcastList() { server.broadcast(listMessage()) }

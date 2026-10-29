@@ -57,6 +57,7 @@ MUTANTS = [
      "return .post(virtualKey: h.virtualKey, flags: h.carried, next: h.due)"),
     ("looking again only at the interval", R, "        let look = now + min(h.timing.interval, Self.lookAgain)", "        let look = now + h.timing.interval"),
     ("stop leaves the key repeating", R, "    package mutating func stop() { held = nil }", "    package mutating func stop() {}"),
+    ("the window lists say a later generation", R, "package static let generation = 1", "package static let generation = 2"),
 ]
 caught = 0
 for name, rel, old, new in MUTANTS:

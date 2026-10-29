@@ -337,6 +337,10 @@ do {
     g.at(1.8) { $0.input(key(uRight, false, shift), from: a) }
     check(!g.repeats.isEmpty && g.repeats.allSatisfy { $0.flags == shift }, "⇧→ repeats carry shift: \(g.repeats.map { names($0.flags) })")
 }
+// What the host says of it in its window lists (WindowList.keyRepeat), which a device needs before it sends a
+// hardware keyboard's characters as keys.
+check(KeyRepeat.generation == 1, "keyRepeat 1 in every window list")
+
 // Letters, as a device sends them while the Mac types a hardware keyboard's characters (KeyTyping, #162's
 // letters: "hold p didnt work"): P held repeats as ← does, with no flags; then E pressed while P is held
 // takes over after its own delay, and P never again.

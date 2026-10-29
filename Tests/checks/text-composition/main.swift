@@ -759,8 +759,8 @@ check("the modifier bits are UIKeyModifierFlags'", R.shift == 1 << 17 && R.contr
 // MARK: - Who types a hardware keyboard's characters (KeyTyping, #162's letters)
 
 typealias T = KeyTyping
-func typing(_ mode: String?, _ keyboards: [String] = [], composing: Bool = false, latched: Bool = false) -> T {
-    T.of(inputMode: mode, keyboards: keyboards, composing: composing, latched: latched)
+func typing(_ mode: String?, _ keyboards: [String] = [], composing: Bool = false, latched: Bool = false, macRepeats: Bool = true) -> T {
+    T.of(inputMode: mode, keyboards: keyboards, composing: composing, latched: latched, macRepeats: macRepeats)
 }
 // The Latin alphabet typed directly: the Mac types (its own layout, dead keys and key repeat).
 let latin = ["en-US", "en", "en-GB", "en-AU", "en_US", "fr-FR", "fr-CA", "de-DE", "de-CH", "es-ES", "es-MX", "pt-BR", "it-IT",
@@ -783,6 +783,13 @@ check("Emoji, dictation and a language Foundation does not know: iPadOS types",
 check("marked text: the input method composes, whatever the keyboard",
       ["en-US", "zh-Hant", "ru-RU", "emoji"].allSatisfy { typing($0, composing: true) == .composing && typing($0, composing: true, latched: true) == .composing }
       && typing(nil, ["en-US"], composing: true) == .composing)
+// A Mac from before key repeat (its window list says no keyRepeat): iPadOS types, as before, whatever the
+// keyboard, since that Mac would type each key once where iPadOS repeats Delete and Space; marked text still first.
+check("a Mac that repeats no key: iPadOS types, whatever the keyboard",
+      (latin + composes + scripts + ["emoji"]).allSatisfy { typing($0, macRepeats: false) == .text }
+      && typing(nil, ["en-US"], macRepeats: false) == .text && typing("en-US", latched: true, macRepeats: false) == .text)
+check("…and marked text is the input method's whatever the Mac", typing("zh-Hant", composing: true, macRepeats: false) == .composing
+      && typing("en-US", composing: true, macRepeats: false) == .composing)
 check("a modifier latched on the key row: iPadOS types, so the character makes the latched shortcut as before",
       typing("en-US", latched: true) == .text && typing("fr-FR", latched: true) == .text && typing(nil, ["en-US"], latched: true) == .text)
 // No keyboard selected (iPadOS gives none): the keyboards set up decide, Emoji and dictation aside.
@@ -794,11 +801,12 @@ check("none selected and none set up (or only Emoji and dictation): iPadOS types
       typing(nil, []) == .text && typing(nil, ["emoji"]) == .text && typing(nil, ["emoji", "dictation"]) == .text)
 var setUpAsked = 0
 func setUp() -> [String] { setUpAsked += 1; return ["en-US"] }
-_ = T.of(inputMode: "en-US", keyboards: setUp(), composing: false, latched: false)
-_ = T.of(inputMode: "zh-Hant", keyboards: setUp(), composing: false, latched: false)
-_ = T.of(inputMode: nil, keyboards: setUp(), composing: true, latched: false)
+_ = T.of(inputMode: "en-US", keyboards: setUp(), composing: false, latched: false, macRepeats: true)
+_ = T.of(inputMode: "zh-Hant", keyboards: setUp(), composing: false, latched: false, macRepeats: true)
+_ = T.of(inputMode: nil, keyboards: setUp(), composing: true, latched: false, macRepeats: true)
+_ = T.of(inputMode: nil, keyboards: setUp(), composing: false, latched: false, macRepeats: false)
 check("the keyboards set up are asked for only when none is selected", setUpAsked == 0)
-_ = T.of(inputMode: nil, keyboards: setUp(), composing: false, latched: false)
+_ = T.of(inputMode: nil, keyboards: setUp(), composing: false, latched: false, macRepeats: true)
 check("…and are then", setUpAsked == 1)
 
 // MARK: - Random edit sequences

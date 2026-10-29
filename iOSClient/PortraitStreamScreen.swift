@@ -468,6 +468,7 @@ struct PortraitStreamScreen: View {
                          latchedModifiers: latched,
                          onModifiersConsumed: { latched = [] },
                          sendGesture: { client.sendGesture($0, fingers: $1) },
+                         macRepeatsKeys: { (client.hostKeyRepeat ?? 0) >= 1 },
                          readZoom: { [zoom] in zoom.zoom },
                          writeZoom: { [zoom] in zoom.set($0) })
         }

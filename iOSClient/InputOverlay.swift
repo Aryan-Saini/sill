@@ -88,6 +88,10 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
     /// True once the hover in progress has shown itself to be a Pencil. Sticky for the session so a
     /// Pencil reading zero for a moment at the bottom of its range does not flicker the pointer.
     private var hoverIsPencil = false
+    /// Whether the session's Mac repeats a key held down (`StreamClient.hostKeyRepeat`, the window list's
+    /// `keyRepeat`): a hardware keyboard's characters go to it as keys only then (KeyTyping), as a Mac that
+    /// repeats none would type each once. Asked as each key goes down.
+    var macRepeatsKeys: () -> Bool = { false }
     /// A three- or four-finger gesture this view decided, for the Mac (`StreamClient.sendGesture`,
     /// which checks this device's switch and the Mac's `gestures`, and shows the Desktop first while
     /// a window streams). True when it went.
@@ -1095,12 +1099,13 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
     }
 
     /// Who types a hardware keyboard's characters as a key goes down now (KeyTyping): the Mac, as keys,
-    /// while the keyboard selected on the iPad types the Latin alphabet directly and nothing is composed or
-    /// latched on the key row; else iPadOS's text system, or the input method composing.
+    /// while it repeats held keys, the keyboard selected on the iPad types the Latin alphabet directly and
+    /// nothing is composed or latched on the key row; else iPadOS's text system, or the input method
+    /// composing.
     private var keyTyping: KeyTyping {
         KeyTyping.of(inputMode: textInputMode?.primaryLanguage,
                      keyboards: UITextInputMode.activeInputModes.compactMap(\.primaryLanguage),
-                     composing: composition.isComposing, latched: !latchedModifiers.isEmpty)
+                     composing: composition.isComposing, latched: !latchedModifiers.isEmpty, macRepeats: macRepeatsKeys())
     }
 
     #if DEBUG
@@ -1109,7 +1114,9 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
         let keyboard = textInputMode?.primaryLanguage ?? "no keyboard selected"
         switch typing {
         case .keys: return "the Mac types: " + keyboard
-        case .text: return "iPadOS types: " + (latchedModifiers.isEmpty ? keyboard : "a modifier latched on the key row")
+        case .text:
+            if !macRepeatsKeys() { return "iPadOS types: the Mac repeats no key (a Sill for Mac before key repeat)" }
+            return "iPadOS types: " + (latchedModifiers.isEmpty ? keyboard : "a modifier latched on the key row")
         case .composing: return "the input method composes"
         }
     }
@@ -1494,6 +1501,9 @@ struct InputOverlay: UIViewRepresentable {
     var onModifiersConsumed: () -> Void = {}
     /// `StreamClient.sendGesture`; see `InputOverlayView.sendGesture`.
     var sendGesture: (TrackpadGestures.Gesture, Int) -> Bool = { _, _ in false }
+    /// Whether the session's Mac repeats a held key (`StreamClient.hostKeyRepeat`); see
+    /// `InputOverlayView.macRepeatsKeys`.
+    var macRepeatsKeys: () -> Bool = { false }
     /// The picture's zoom, kept by the stream screen (its StreamZoomModel, which ZoomedStreamView draws):
     /// read for every touch, written while two fingers pinch or move the picture. Nil keeps it in the
     /// view.
@@ -1513,6 +1523,7 @@ struct InputOverlay: UIViewRepresentable {
         uiView.setOwnPointer = setOwnPointer
         uiView.latchedModifiers = latchedModifiers
         uiView.sendGesture = sendGesture
+        uiView.macRepeatsKeys = macRepeatsKeys
         uiView.readZoom = readZoom
         uiView.writeZoom = writeZoom
         // Called straight from a UIKit text-input callback, never from inside a SwiftUI update,

@@ -60,6 +60,11 @@ package struct KeyRepeat: Sendable {
     /// How soon a held key that is waiting (its device quiet, or input held for an activation) is
     /// looked at again, at most.
     package static let lookAgain = 0.05
+    /// What this host says of it in every window list (`WindowList.keyRepeat`): 1, a held key repeated as
+    /// above. A device sends a hardware keyboard's characters as keys (letters, digits, Space, Delete…)
+    /// only to a host that says so, since a Mac that repeats none would type each of them once, where
+    /// iPadOS's text system repeats Delete and Space itself.
+    package static let generation = 1
 
     /// The Mac's settings (NSEvent.keyRepeatDelay and keyRepeatInterval) as the repeat takes them, or
     /// nil for no repeat: Off, or nonsense (zero or less, not a number, infinite: each fails these).

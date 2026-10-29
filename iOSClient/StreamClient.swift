@@ -858,6 +858,11 @@ final class StreamClient: ObservableObject {
     /// six, nil from a Mac before 2026-09-27, which is sent none (`sendGesture`). Cleared with the
     /// session.
     @Published var hostGestures: Int?
+    /// Whether this session's Mac repeats a key held down (`WindowList.keyRepeat`, KeyRepeat on the host):
+    /// 1 from a Mac with key repeat, nil from one before it. The stream's input view sends a hardware
+    /// keyboard's characters as keys only to a Mac that says so (KeyTyping); to one before it they go
+    /// through iPadOS's text system, as they always did. Cleared with the session.
+    var hostKeyRepeat: Int?
     /// The clipboard (kind 32, StreamClient+Clipboard, docs/clipboard-plan.md): what this session's
     /// Mac takes and sends (`WindowList.clipboard`, 1 for text), nil from a Mac before it or with Share
     /// clipboard with devices off. Cleared with the session.
@@ -3485,6 +3490,7 @@ final class StreamClient: ObservableObject {
         hostVersion = nil
         hostProtocol = nil
         hostGestures = nil
+        hostKeyRepeat = nil
         remoteRoute = nil
         macInfo = nil
         macInfoSaved = false
@@ -4034,6 +4040,7 @@ final class StreamClient: ObservableObject {
                 if self.hostVersion != list.hostVersion { self.hostVersion = list.hostVersion }
                 if self.hostProtocol != list.protocol { self.hostProtocol = list.protocol }
                 if self.hostGestures != list.gestures { self.hostGestures = list.gestures }
+                self.hostKeyRepeat = list.keyRepeat
                 // The clipboard: subscribe (or stop) as the Mac's word and this device's switch say.
                 self.hostClipboardChanged(list.clipboard)
                 if !self.sessionListed {
