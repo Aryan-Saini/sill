@@ -115,8 +115,9 @@ struct StreamScreen: View {
     @State private var textScale: Double? = nil
     /// The Aa slider is unfolded (finger down): the bars fade their other buttons meanwhile.
     @State private var scaleOpen = false
-    /// The thumbnail whose traffic-light submenu is open (held for 1.5 s). The bars clip their
-    /// content, so the submenu is drawn by this root, anchored to the thumbnail's frame.
+    /// The thumbnail whose traffic-light submenu is open (held for ThumbnailHold's length, 0.5 s unless
+    /// changed in Settings; issue #113). The bars clip their content, so the submenu is drawn by this
+    /// root, anchored to the thumbnail's frame.
     @State private var windowMenu: UInt32? = nil
     /// The Settings panel (the Mac's streaming settings) is open. Up here, next to the drawer, so a
     /// rotation keeps it open and it re-anchors in the other layout.
