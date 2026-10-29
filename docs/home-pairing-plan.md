@@ -1692,8 +1692,8 @@ Commit messages end with the session's attribution lines.
 - **The modal-loop rule** in the app; errors inline; a device-opened window never activates Sill.
 - **Tests never touch** Noah's Sill.app, `/Applications`, `me.saffer.sill.mac`, his login keychain or
   his iPad; no XCUITest, `recordVideo` or Simulator-tool `attach`; TEST ONLY hooks that bear on the
-  doors or pairing are honoured only by test hosts: not advertising and not a `.app`'s executable
-  (§4.3).
+  doors or pairing are honoured only by test hosts: not advertising and not Sill.app's own code
+  (§4.3: known by its signature and bundle since 2026-10-29, by a `.app` folder before).
 - **Require pairing lives with the trust list** (the identity store), never in UserDefaults, and
   the bundle takes no argument or hook that changes it.
 - **New iOS files** need their four pbxproj entries by hand. Swift 5 language mode.

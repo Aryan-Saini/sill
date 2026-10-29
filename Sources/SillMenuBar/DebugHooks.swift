@@ -79,10 +79,11 @@ import StreamProtocol
 ///                                              offscreen; no identity is loaded, no listener)
 ///
 /// These are the bare SillMenuBar binary's (defaults domain "SillMenuBar"; delete it after). Sill.app
-/// itself, an app bundle's executable, ignores every `-Sill…After` hook and `-requirePairing`, each
-/// with one line (docs/home-pairing-plan.md §6.6): they open, answer or remove pairings, or change
-/// what the doors admit, and any process of this user can start Sill.app with arguments, which then
-/// runs with Sill's Screen Recording and Accessibility grants. `-SillTestScreenHeight` and
+/// itself (`AppModel.bundled`: Sill's own code wherever it runs from, AppIdentity) ignores every
+/// `-Sill…After` hook and `-requirePairing`, each with one line (docs/home-pairing-plan.md §6.6):
+/// they open, answer or remove pairings, or change what the doors admit, and any process of this
+/// user can start Sill.app, or a copy of it, with arguments, which then runs with Sill's Screen
+/// Recording and Accessibility grants. `-SillTestScreenHeight` and
 /// `-SillSettingsShot` go with `-SillSettingsAfter` and are ignored the same way: Sill.app has no
 /// use for them. `--synthetic`, `-SillLogFile`,
 /// `-SillRenderPreviews` and the update check's `-SillUpdateFeed`, `-SillUpdateNow`,
