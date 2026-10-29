@@ -220,6 +220,11 @@ package final class StreamCoordinator {
     /// it takes are ignored, with a line each, as a Mac from before kind 44 skips every one, so a
     /// device's ask again after its wait runs for real (`keyframeIgnoreHook`). Zero otherwise.
     private var keyframeRequestsToIgnore: Int
+    /// TEST ONLY. `SILL_TEST_DESKTOP_FAIL=<n>` on a --synthetic host: the first n starts of the
+    /// Desktop's capture fail, as ScreenCaptureKit's "Start stream failed … The stream is nil" did on
+    /// 2026-10-28 (CatalogLook), so the host's one more try (n = 1) and a device's second ask (n = 2:
+    /// the try fails too) run for real (`desktopFailHook`). Zero otherwise.
+    private var desktopStartsToFail: Int
     static let keyframeRequestSpacing: CFTimeInterval = 1
     private lazy var keyframeRequestDrops = RefusalSummary(queue: .main, categories: ["keyframes"]) { counts in
         "Keyframe requests ignored: \(counts["keyframes"] ?? 0) in a minute, from devices asking more than once a second."
@@ -337,12 +342,15 @@ package final class StreamCoordinator {
         let noScreen = PointerTestHooks.noScreen(synthetic: synthetic, environment: env)
         WindowCatalog.screenless = noScreen.on
         let keyframeIgnore = Self.keyframeIgnoreHook(synthetic: synthetic, environment: env)
+        let desktopFail = Self.desktopFailHook(synthetic: synthetic, environment: env)
         pointer = PointerWatch(synthetic: synthetic, path: path.path)
         softwareOnly = software.on
         let userActive = DisplayWake.userActive(environment: env, testHost: synthetic)
         displayActivity = DisplayActivity(remote: userActive.remote)
         keyframeRequestsToIgnore = keyframeIgnore.count
-        testHookLines = [path.line, software.line, inputLog.line, userActive.line, keyframeIgnore.line, noScreen.line].compactMap { $0 }
+        desktopStartsToFail = desktopFail.count
+        testHookLines = [path.line, software.line, inputLog.line, userActive.line, keyframeIgnore.line, desktopFail.line,
+                         noScreen.line].compactMap { $0 }
         status = HostStatus()
         var home = StreamServer.HomeDoorMode.plain
         if homePairing, let remote {
@@ -1440,6 +1448,14 @@ package final class StreamCoordinator {
         // frame (WindowRestore, issue #57): another window or the Desktop picked, `.none` when the
         // last device leaves or the stream stops. A restart of the same window keeps it fitted.
         if case .window(let next) = source { restoreFits(keeping: next) } else { restoreFits(keeping: nil) }
+        // The catalog's look, before a capture is built from it (CatalogLook): after a spell with no
+        // device it can be hours old and its display gone (the black screen of 2026-10-28), so it is
+        // looked at again first. The Desktop reads its display after this and after its own await.
+        let lookBefore = (display: catalog.display?.displayID, age: catalog.lookAge)
+        if source != .none, !(synthetic && source == .desktop) {
+            await lookAgainIfStale()
+            guard !shuttingDown else { active = .none; broadcastList(); return }
+        }
 
         var filter: SCContentFilter?     // nil only for the synthetic test pattern
         var sourceRect: CGRect? = nil    // set only when the window streams from the virtual display
@@ -1538,26 +1554,12 @@ package final class StreamCoordinator {
                 describe = "a synthetic test pattern\(useSoftwareEncoder ? " (software encoder)" : "")"
                 title = "Test Pattern"; kind = .testPattern
             } else {
-                guard let d = catalog.display else { active = .none; broadcastList(); return }
-                // Sill's own windows (Settings, Log, the pairing window with its code) never go out
-                // in a Desktop stream. Fixed here at pipeline start: a running SCStream is never
-                // reconfigured, so a host that can show a pairing code (remote access) looks for
-                // Sill among every window when the last on-screen look missed it; excluding nothing
-                // would let a pairing window opened later reach the devices. Without Sill anywhere
-                // (the CLI has no windows), as before.
-                var own = catalog.ownApplication
-                if own == nil, remote != nil {
-                    own = await catalog.resolveOwnApplication()
-                    guard !shuttingDown else { active = .none; broadcastList(); return }
-                }
-                let displayFilter = own.map { SCContentFilter(display: d, excludingApplications: [$0], exceptingWindows: []) }
-                    ?? SCContentFilter(display: d, excludingWindows: [])
-                filter = displayFilter
-                // At most the display's own scale: ScreenCaptureKit scales a display up to fill a larger
-                // buffer (5120×2880 for a 1x 2560×1440 display: four times the pixels to encode).
-                displayScale = Self.displayScale(of: displayFilter)
-                let pixelScale = CaptureScale.effective(knob: captureScale, displayScale: displayScale)
-                width = evenPixels(CGFloat(d.width) * pixelScale); height = evenPixels(CGFloat(d.height) * pixelScale)
+                // The display as the newest look has it, read after every await (`desktopCapture`).
+                guard let plan = await desktopCapture() else { active = .none; broadcastList(); return }
+                if let line = CatalogLook.desktopLine(was: lookBefore.display, now: plan.displayID, age: lookBefore.age) { print(line) }
+                filter = plan.filter
+                displayScale = plan.displayScale
+                width = plan.width; height = plan.height
                 describe = "the whole desktop\(useSoftwareEncoder ? " (software encoder)" : "")"
                 title = "Whole Desktop"; kind = .desktop
             }
@@ -1586,6 +1588,10 @@ package final class StreamCoordinator {
                     print("Could not start streaming \(fallback): \(error)")
                     active = .none
                 }
+            } else if source == .desktop {
+                // One more try, from a new look at the displays, with one line (CatalogLook.retryLine).
+                await startDesktopAgain(after: error, describe: describe, title: title, kind: kind,
+                                        testPattern: (width: width, height: height))
             } else {
                 print("Could not start streaming \(describe): \(error)")
                 if virtualDisplay { stage.release() }   // nothing streams: never leave a window on the virtual display
@@ -1594,6 +1600,76 @@ package final class StreamCoordinator {
         }
         broadcastList()
         // Mid-switch requests (a viewport, the last client leaving) are applied by the defer.
+    }
+
+    /// The catalog's look, before a capture is built from it (CatalogLook): looked at once more when it
+    /// is old (the first pick after a spell with no device), there was none, or its display is no
+    /// longer among the active ones. Nil when the last look will do, else why it looked again. One
+    /// ScreenCaptureKit call, about 50 ms; while a device keeps the catalog polling, a pick needs none.
+    @discardableResult
+    private func lookAgainIfStale() async -> CatalogLook.Why? {
+        guard let why = CatalogLook.lookAgain(age: catalog.lookAge, display: catalog.display?.displayID,
+                                              displaysNow: WindowCatalog.activeDisplayIDs(),
+                                              pollInterval: CatalogLook.seconds(WindowCatalog.pollInterval)) else { return nil }
+        await catalog.refreshWindows()
+        return why
+    }
+
+    /// The Desktop's capture as the catalog's newest look has it: its display's filter, with Sill's
+    /// own windows left out, the display's scale and the size. The display is read after this
+    /// function's own await, so a look that landed meanwhile is the one used: on 2026-10-28 the filter
+    /// was built on a display read before an await, which the look that landed during it had replaced
+    /// (CatalogLook). Nil when the catalog has no display, or the host is quitting.
+    private func desktopCapture() async -> (filter: SCContentFilter, displayID: UInt32, displayScale: CGFloat?, width: Int, height: Int)? {
+        guard catalog.display != nil else { return nil }
+        // Sill's own windows (Settings, Log, the pairing window with its code) never go out
+        // in a Desktop stream. Fixed here at pipeline start: a running SCStream is never
+        // reconfigured, so a host that can show a pairing code (remote access) looks for
+        // Sill among every window when the last on-screen look missed it; excluding nothing
+        // would let a pairing window opened later reach the devices. Without Sill anywhere
+        // (the CLI has no windows), as before.
+        var resolved: SCRunningApplication? = nil
+        if catalog.ownApplication == nil, remote != nil {
+            resolved = await catalog.resolveOwnApplication()
+            guard !shuttingDown else { return nil }
+        }
+        guard let d = catalog.display else { return nil }
+        let own = catalog.ownApplication ?? resolved      // the newest look's, read with its display
+        let displayFilter = own.map { SCContentFilter(display: d, excludingApplications: [$0], exceptingWindows: []) }
+            ?? SCContentFilter(display: d, excludingWindows: [])
+        // At most the display's own scale: ScreenCaptureKit scales a display up to fill a larger
+        // buffer (5120×2880 for a 1x 2560×1440 display: four times the pixels to encode).
+        let scale = Self.displayScale(of: displayFilter)
+        let pixelScale = CaptureScale.effective(knob: captureScale, displayScale: scale)
+        return (displayFilter, d.displayID, scale, evenPixels(CGFloat(d.width) * pixelScale), evenPixels(CGFloat(d.height) * pixelScale))
+    }
+
+    /// The Desktop's one more try, after a start that failed: from a new look at the displays (the
+    /// test pattern has none, so the same start again), with one line (CatalogLook.retryLine). A second
+    /// failure is the line as before, and nothing streams; `select` broadcasts either way. On
+    /// 2026-10-28 the first start failed on a display gone since the last look, and the host never
+    /// tried again.
+    private func startDesktopAgain(after error: Error, describe: String, title: String, kind: HostStatusSnapshot.Stream.Kind,
+                                   testPattern: (width: Int, height: Int)) async {
+        var plan: (filter: SCContentFilter?, displayID: UInt32?, displayScale: CGFloat?, width: Int, height: Int)
+            = (nil, nil, nil, testPattern.width, testPattern.height)
+        if !synthetic {
+            await catalog.refreshWindows()
+            guard !shuttingDown, let next = await desktopCapture() else {
+                if !shuttingDown { print("Could not start streaming \(describe): \(error)") }   // no display in the new look
+                active = .none
+                return
+            }
+            plan = (next.filter, next.displayID, next.displayScale, next.width, next.height)
+        }
+        print(CatalogLook.retryLine(source: describe, error: "\(error)", display: plan.displayID))
+        do {
+            try await startPipeline(source: .desktop, filter: plan.filter, sourceRect: nil, displayScale: plan.displayScale,
+                                    width: plan.width, height: plan.height, describe: describe, title: title, kind: kind)
+        } catch {
+            print("Could not start streaming \(describe): \(error)")
+            active = .none
+        }
     }
 
     /// Encoder, then capture (ScreenCaptureKit for a filter, the test pattern without one), then
@@ -1623,6 +1699,13 @@ package final class StreamCoordinator {
                 Task { @MainActor in self?.parameterSetsSent(sets, at: sentAt) }
             }
             server.broadcast(StreamMessage(kind: .frame, timestamp: now, isKeyframe: isKey, payload: data))
+        }
+        if source == .desktop, desktopStartsToFail > 0 {
+            // TEST ONLY (SILL_TEST_DESKTOP_FAIL, a --synthetic host): this start fails where the capture
+            // would start, after the encoder was made, as ScreenCaptureKit's did on 2026-10-28.
+            desktopStartsToFail -= 1
+            throw NSError(domain: "CoreGraphicsErrorDomain", code: 1003,
+                          userInfo: [NSLocalizedDescriptionKey: "Start stream failed (TEST ONLY: SILL_TEST_DESKTOP_FAIL)"])
         }
         if let filter {
             capture.onFrame = { pixelBuffer, pts in enc.encode(pixelBuffer, pts: pts) }
@@ -2056,6 +2139,17 @@ package final class StreamCoordinator {
         guard let n = Int(raw), n > 0 else { return (0, "SILL_TEST_KEYFRAME_IGNORE=\(shown) ignored: a number of requests, 1 or more.") }
         let which = n == 1 ? "the first keyframe request (kind 44)" : "the first \(n) keyframe requests (kind 44)"
         return (n, "Test keyframes: \(which) ignored, as a Mac from before kind 44 skips every one (SILL_TEST_KEYFRAME_IGNORE).")
+    }
+
+    /// TEST ONLY: `SILL_TEST_DESKTOP_FAIL=<n>`, honoured only by a --synthetic host, with the one line
+    /// `start` prints about it. Nothing, and no line, without it.
+    static func desktopFailHook(synthetic: Bool, environment env: [String: String]) -> (count: Int, line: String?) {
+        guard let raw = env["SILL_TEST_DESKTOP_FAIL"], !raw.isEmpty else { return (0, nil) }
+        let shown = SafeText.label(raw, limit: 32)
+        guard synthetic else { return (0, "SILL_TEST_DESKTOP_FAIL=\(shown) ignored: only a --synthetic host takes it.") }
+        guard let n = Int(raw), n > 0 else { return (0, "SILL_TEST_DESKTOP_FAIL=\(shown) ignored: a number of starts, 1 or more.") }
+        let which = n == 1 ? "the first start of the Desktop's capture fails" : "the first \(n) starts of the Desktop's capture fail"
+        return (n, "Test Desktop: \(which), as ScreenCaptureKit's \"The stream is nil\" did on 2026-10-28 (SILL_TEST_DESKTOP_FAIL).")
     }
 
     /// TEST ONLY: `SILL_TEST_MENU_PID`, honoured only by a --synthetic host (which does not

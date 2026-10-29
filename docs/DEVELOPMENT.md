@@ -155,6 +155,7 @@ swift run -c release SillHost --synthetic            # the Desktop streams a tes
 SILL_TEST_PATTERN=picture:/path/to.jpg swift run -c release SillHost --synthetic   # the Desktop a still picture instead (TEST ONLY)
 SILL_TEST_STILL_AFTER=3 swift run -c release SillHost --synthetic   # no frame from 3 s on, as a window that stopped changing (TEST ONLY)
 SILL_TEST_KEYFRAME_IGNORE=1 swift run -c release SillHost --synthetic   # the first keyframe request ignored, as a Mac from before kind 44 ignores every one (TEST ONLY)
+SILL_TEST_DESKTOP_FAIL=2 swift run -c release SillHost --synthetic   # the first 2 Desktop starts fail, as on 2026-10-28; 1: the host's one more try streams (TEST ONLY)
 swift run -c release SillHost --remote               # the remote door for this run, on any free port (--remote=PORT)
 swift run -c release SillHost --remote --internet    # also admit paired devices from the internet
 swift run -c release SillHost --print-reachability   # the addresses a device would get away from home, then exit
@@ -321,9 +322,28 @@ again. Back from the background the device also makes its Bonjour browser again
 to mDNSResponder and a browser made before then lists what it saw then; the
 rows it had stay up for the new browser's first 3 s, so a Mac that stays listed
 never blinks. A Desktop stream that the Mac stops (its capture stopped) is
-asked for again by itself, at most once every 10 s.
+asked for again by itself, at most once every 10 s. When the device's own
+Desktop request brings nothing that lasts (the Mac could not start it, or
+stopped it within those 10 s) and you chose nothing since, it asks once more
+when the 10 s end, and so every 10 s while the Mac keeps failing, never faster:
+on 2026-10-28 the Mac could not start the Desktop the iPad asked for at connect,
+and the panel stayed black until it was left.
 docs/reconnect-after-sleep-plan.md has the rules;
 `iOSClient/DiscoveryPolicy.swift` is them, checked in `Tests/checks/policy`.
+
+The Mac looks at its windows and displays only while a device is connected
+(none at all while idle), so after a spell with no device its last look can be
+hours old, and a display can have come back under a new ID meanwhile (a dock or
+a monitor that turns off and on with the Mac's sleeps). Before it builds a
+capture, the host looks again when that look is older than two polls (4 s) or
+its display is no longer active, and the Desktop reads its display after every
+wait (`Sources/SillHost/CatalogLook.swift`, checked in
+`Tests/checks/catalog-look`; Sill.log's "Desktop: display 21 → 53 (the displays
+changed since the last look, 36 h ago)."). A Desktop whose capture still does
+not start is looked at again and tried once more, with one line ("Could not
+start streaming the whole desktop: ‹error›. Looked at the displays again: trying
+once more on display 53."); a second failure is the old line, and nothing
+streams.
 
 The gear at the end of the bar opens Settings: the Mac's streaming settings,
 changed from the device, and Disconnect at the bottom. After the Mac's settings
@@ -1302,6 +1322,7 @@ host on this Mac, which posts nothing. The clipboard's flags (`--clipboard`,
 `--copy`, `--copy-bytes`, `--raw32`, `--expect=clipboard=`) are under The
 clipboard, above: with `SILL_TEST_PASTEBOARD` the host's pasteboard is a
 private one, never this Mac's clipboard.
+`SILL_TEST_DESKTOP_FAIL=<n>` (a `--synthetic` host only) makes the first n starts of the Desktop's capture fail where the capture would start, as ScreenCaptureKit's "Start stream failed … The stream is nil" did on 2026-10-28: with 1 the host's one more try streams it; with 2 that try fails too, nothing streams, and a device asks for the Desktop again when its 10 s spacing ends (the console's `session: … asking for it again`).
 `SILL_TEST_NO_SCREEN=1` (a `--synthetic` host only) keeps the window catalog off ScreenCaptureKit altogether: the window list stays empty and no thumbnail is taken, so a headless test host asks macOS for no screen recording, which otherwise counts against the grant of whatever launched it and brings up macOS's reminder after every rebuilt binary.
 
 `Scripts/sillrelay.py --listen 0 --to HOST:PORT [--delay-ms N] [--rate-mbps R]
