@@ -71,6 +71,7 @@ enum MenuBuilder {
             case .allowAccessibility: .allowAccessibility
             case .showRemoteAccess: .showSettingsTab(.remoteAccess)
             case .showDevices: .showSettingsTab(.devices)
+            case .showGeneral: .showSettingsTab(.general)
             case .pairingRequest(let name, let showing): .showPairingRequest(name: name, showing: showing)
             case .none: .none
             }
