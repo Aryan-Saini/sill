@@ -6816,7 +6816,9 @@ good.
   (the secrets `SILL_TESTFLIGHT_KEY_ID`, `SILL_TESTFLIGHT_ISSUER_ID`,
   `SILL_TESTFLIGHT_KEY_P8`, an Admin key: cloud signing, no certificate or
   profile stored), and `--upload` too when the variable `SILL_TESTFLIGHT_IN_CI`
-  is `true`, the build number the commit count (`--build-number`); the .ipa is
+  is `true` and the commit is on main's first-parent line (another branch's
+  count can be a later nightly's), the build number the commit count
+  (`--build-number`); the .ipa is
   the artifact for 14 days (docs/release-checklist.md, "TestFlight from GitHub
   Actions"). `nightly.yml`: 03:17 UTC while the variable `SILL_NIGHTLY` is
   `true`, and by hand (`verify_only`); decide (the skip rule against the

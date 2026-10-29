@@ -492,7 +492,9 @@ jobs:
 
       # A night run again by hand (the same commit, so the same build number) finds its build in App
       # Store Connect already: it is exported for the artifact, not uploaded twice (App Store Connect
-      # refuses a number it has), and the next step gives it its groups.
+      # refuses a number it has), and the next step gives it its groups. A build with this number is
+      # this commit's: only commits on main's first-parent line, where each count is one commit's, are
+      # uploaded with their commit count (here, and testflight.yml refuses any other branch).
       - name: Archive, sign, export, check and upload (Scripts/release-ios.sh --sign-at-export --upload)
         if: steps.mode.outputs.mode == 'upload'
         env:

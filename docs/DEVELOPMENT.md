@@ -1890,7 +1890,8 @@ run only (xcodebuild's `CURRENT_PROJECT_VERSION=N`; the project is never
 changed), and `--whats-new FILE`, with `--upload` and `--api-key`, sets the
 build's What to Test once App Store Connect has processed it. The TestFlight
 workflow (`.github/workflows/testflight.yml`) runs it on GitHub, by hand only,
-with the commit count as the build number. docs/release-checklist.md,
+with the commit count as the build number, and uploads only a commit on main's
+own line (another branch's count can be a later nightly's). docs/release-checklist.md,
 "TestFlight", has the App Store Connect side, the record field by field.
 
 Nightlies (`.github/workflows/nightly.yml`; docs/release-checklist.md,

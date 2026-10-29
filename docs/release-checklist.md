@@ -818,20 +818,27 @@ had `Xcode_27.1.app` (27A9275), which the runs 40825231452 and 40843967209 took.
   signing exports with the same entitlements (tried here on 2026-09-26 with the Apple Account;
   through the key on 2026-10-29: run 40825231452, and 40843967209 with the build number given).
   `Sill-<version>-<build>.ipa` is the artifact for 14 days. Nothing is uploaded, unless:
-- the repository variable `SILL_TESTFLIGHT_IN_CI` is `true`: the run also uploads, as
-  `--upload` does here.
+- the repository variable `SILL_TESTFLIGHT_IN_CI` is `true` and the commit is on main's own line
+  (main, or a release tag on it): the run also uploads, as `--upload` does here. From any other
+  branch it exports only, with a notice saying why (below).
 
 The build number is the commit count (`git rev-list --count HEAD`), given with `--build-number`
-for the run only, as the nightlies' is: nothing to bump or commit first, and a commit's build never
-collides with another commit's. Run 40843967209 (branch `nightly-builds` at e59499f9, whose project
-says 4) exported 0.5.1 (987), App Store-signed.
+for the run only, as the nightlies' is: nothing to bump or commit first. Along main's first-parent
+line every commit's count is its own, but another branch's commit can have the count of a later
+commit of main (a branch four commits ahead of main has the count main gets by merging a pull
+request of three commits: the three and the merge), and the nightly of that commit would then find
+"its" build in App Store Connect and give the branch's to TestFlight's groups (reproduced with the
+workflows' own run blocks in the review of 2026-10-29). So uploads go only from main's line; to send a branch to TestFlight,
+upload it from this Mac with `release-ios.sh --bump --upload` (a committed number, far below the
+counts). Run 40843967209 (branch `nightly-builds` at e59499f9, whose project says 4) exported
+0.5.1 (987), App Store-signed.
 
 | Name | Kind | What it holds |
 |---|---|---|
 | `SILL_TESTFLIGHT_KEY_ID` | secret | The Key ID of an App Store Connect API key with the Admin role (Users and Access › Integrations › App Store Connect API › Team Keys › +). Cloud signing refuses any other role. |
 | `SILL_TESTFLIGHT_ISSUER_ID` | secret | The Issuer ID above the keys (the same for every key of the team). |
 | `SILL_TESTFLIGHT_KEY_P8` | secret | The key file `AuthKey_<Key ID>.p8`, in base64. Apple lets you download it once. |
-| `SILL_TESTFLIGHT_IN_CI` | variable | `true` also uploads, here and in the nightlies. Absent or anything else: export only. |
+| `SILL_TESTFLIGHT_IN_CI` | variable | `true` also uploads, here (a commit on main's own line only) and in the nightlies. Absent or anything else: export only. |
 
 ```
 gh secret set SILL_TESTFLIGHT_KEY_ID
@@ -874,6 +881,10 @@ What a nightly is:
 - Versions: what main says (0.6.0 since 2026-10-29, part 2's first item), with the commit count as
   the build number on both apps, as in "Sill 0.6.0 (990)". Never committed: make-app.sh has always
   stamped the count into the Mac's bundle, and `--build-number` gives it to xcodebuild for the run.
+  Only commits on main's first-parent line are uploaded with their count (the nightlies, and
+  testflight.yml, which exports other branches without uploading them), so a build number of the
+  version in App Store Connect names one commit of main, and a night run again finds its own build
+  there. From this Mac, give `--build-number` the count only for a commit of main's line too.
 - The words: `Scripts/nightly-notes.sh` writes them once a night for both apps, from the pull
   requests on main's first-parent line since the newest tag `v<version>` (merges and squashes), their
   titles from GitHub: Markdown for the pre-release (no @mention, so nobody is notified every night),
