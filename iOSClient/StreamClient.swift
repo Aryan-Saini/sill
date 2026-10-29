@@ -888,6 +888,9 @@ final class StreamClient: ObservableObject {
     /// its timeout (`receiptWait`).
     var clipboardReceipt: ClipboardReceipt?
     var clipboardReceiptExpiry: DispatchWorkItem?
+    /// A receipt's ⌘V (paste right away: ClipboardPolicy.pastesOnReceipt) during its `pasteDelay`;
+    /// the session's end cancels it.
+    var clipboardPasteWork: DispatchWorkItem?
     /// This device's path (status, interfaces, cost), for "did it leave home since the loss".
     var pathSignature = ""
     var pathMonitor: NWPathMonitor?
