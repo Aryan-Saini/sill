@@ -100,7 +100,19 @@ out in Insiders first tomorrow". Merge "Version 0.5.5 for both apps" (PR #244, b
   again (the PUT's fields; the POST's `name` and `type`, 404 without `custom_branch_policies`, 303 for a
   rule already there); actionlint 1.7.12 with the `xcode-27` label declared: only the 17 shellcheck
   notes 984d7f0c has too; CI's Build and check on 5d2bb590 (run 40865615093). The checklist's
-  TestFlight key line names the Admin key's own file, not the notary key's.
+  TestFlight key line names the Admin key's own file, not the notary key's. The review (2026-10-29;
+  four findings, all in the docs, one commit each; the report's "The review"): "What the environments
+  don't do" understated the route through main: `nightly` holds the same Developer ID and notary keys
+  as `release`, and the Admin key, so a commit on main reaches them at the next run from main with no
+  approval, and a ruleset requiring pull requests holds only against someone else's write access
+  (78248187; a loopback run of the workflows' own steps on main, GitHub's rule emulated with Ruby's
+  File.fnmatch, handed an attacker's release.sh the signing identity and notary profile and
+  release-ios.sh the key file); any `v*` tag waits on the approval alone, so What a tag does says to
+  approve only the tag you pushed, on the commit you tagged (a7c6787e); testflight.yml no longer
+  "exports other branches" (732c374f); steps 2 and 3 and the two variable lines lost their inline
+  comments, which zsh as it starts hands to `gh` as arguments (39b9ecfd: pasted into `zsh -f -i`, 7 of
+  29 calls broken before, none after). The harness again on the head's workflows, unchanged by the
+  review: 245, 52, 19, 12 and 16 of the same, 15 of 15 mutants.
 - **Untested, for Noah (docs/release-checklist.md, "Nightlies", "The first run"):** the privacy
   manifest's ActiveKeyboards (#147's `UITextInputMode.activeInputModes`, ITMS-91053) is declared on main
   since PR #243 (54BD.1; release-ios.sh's check of run 40843967209's binary against main's manifest: every
