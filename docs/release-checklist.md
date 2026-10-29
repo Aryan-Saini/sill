@@ -858,7 +858,7 @@ three secrets are part of its step 2, and the repository keeps no copy (its step
 ```
 gh secret set SILL_TESTFLIGHT_KEY_ID --env nightly
 gh secret set SILL_TESTFLIGHT_ISSUER_ID --env nightly
-base64 -i AuthKey_ABC123DEFG.p8 | gh secret set SILL_TESTFLIGHT_KEY_P8 --env nightly
+base64 -i <backup folder>/AuthKey_YYYYYYYYYY.p8 | gh secret set SILL_TESTFLIGHT_KEY_P8 --env nightly
 gh variable set SILL_TESTFLIGHT_IN_CI --body true     # after an export-only run has passed
 ```
 
@@ -1170,6 +1170,11 @@ step 4), in this order:
    `release` with the reviewer `Saffsanity`, `nightly` with none, both with
    `"custom_branch_policies": true`; then `tag v*` alone, and `branch main` alone. A `refs` of `null`
    lets any branch or tag in: fix that before going on.
+   A POST answered 404 found its environment without `custom_branch_policies` (the PUT before it
+   didn't take); one answered 303 found the rule there already. The look's commands, which only
+   read, ran on 2026-10-29 against other public repositories' environments (a tag rule with a
+   required reviewer, a `main` branch rule), so their filters fit what GitHub answers; the PUTs
+   and POSTs above have run nowhere.
 2. The secrets in each environment, from the same sources as the repository's were (GitHub never
    shows a secret again):
 

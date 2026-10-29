@@ -1854,11 +1854,11 @@ approves each run before it starts, and the signing secrets are that
 environment's, not the repository's. Its checkout is that tag, so there
 `--publish` checks the local tag (`SILL_RELEASE_TAG`) rather than ask origin.
 Pushing the tag, which a `--publish` from your Mac needs first, starts it too
-(with `SILL_SIGN_IN_CI` on, its publish job then waits for Noah's approval). Since the nightlies the
-release workflow embeds the profile too (the secret `SILL_PROVISION_PROFILE`,
-decoded to `Packaging/embedded.provisionprofile`), so with `SILL_SIGN_IN_CI` on a
-pushed tag publishes a release on the data-protection keychain, as one from
-your Mac. Apple's answers and logs for
+(with `SILL_SIGN_IN_CI` on, its publish job then waits for Noah's approval).
+Since the nightlies the release workflow embeds the profile too (the secret
+`SILL_PROVISION_PROFILE`, decoded to `Packaging/embedded.provisionprofile`),
+so with `SILL_SIGN_IN_CI` on a pushed tag publishes a release on the
+data-protection keychain, as one from your Mac. Apple's answers and logs for
 both submissions are the run's artifact `notary-v<version>` for 30 days: when
 the job's log says a notary log lists issues, read them there.
 
@@ -1903,22 +1903,23 @@ Nightlies (`.github/workflows/nightly.yml`; docs/release-checklist.md,
 "Nightlies"): every night main moved (09:17 UTC, while the repository variable
 `SILL_NIGHTLY` is `true`) and by hand, from main only: both builds run in the
 environment `nightly`, which holds the nine secrets. `Scripts/release.sh
---nightly --publish` builds main's head as a release, but universal (`SILL_UNIVERSAL=1`; make-app.sh
-takes `SILL_RELEASE_NIGHTLY=1` for an untagged HEAD), as
-`Sill-nightly-<yyyymmdd>-<sha7>.dmg` and `.zip` on the rolling pre-release
-`nightly` (the seven newest kept, never "latest"); `release-ios.sh
---build-number <commit count>` uploads the iOS build, and `Scripts/asc.swift`
-(App Store Connect's API: an ES256 token from the .p8 key with CryptoKit,
-Foundation only) waits for App Store Connect to process it, sets What to Test
-and gives it to every internal TestFlight group, and to the public beta group
-only while `SILL_NIGHTLY_PUBLIC_BETA` is `true`. `Scripts/nightly-notes.sh`
-writes both apps' words from the pull requests merged since the last release
-tag. A nightly says the version main says, 0.5.5, the pre-release number (the store release will be 0.6.0), with
-the commit count as its build; the update check never offers a nightly, and
-offers one nothing until a release newer than its version exists. A nightly
-reads the release's data-protection keychain items, so a device paired with
-one stays paired with the other. `swift Scripts/asc.swift groups --key-file
-… --key-id … --issuer …` lists the app's TestFlight groups (reads only).
+--nightly --publish` builds main's head as a release, but universal
+(`SILL_UNIVERSAL=1`; make-app.sh takes `SILL_RELEASE_NIGHTLY=1` for an
+untagged HEAD), as `Sill-nightly-<yyyymmdd>-<sha7>.dmg` and `.zip` on the
+rolling pre-release `nightly` (the seven newest kept, never "latest");
+`release-ios.sh --build-number <commit count>` uploads the iOS build, and
+`Scripts/asc.swift` (App Store Connect's API: an ES256 token from the .p8 key
+with CryptoKit, Foundation only) waits for App Store Connect to process it,
+sets What to Test and gives it to every internal TestFlight group, and to the
+public beta group only while `SILL_NIGHTLY_PUBLIC_BETA` is `true`.
+`Scripts/nightly-notes.sh` writes both apps' words from the pull requests
+merged since the last release tag. A nightly says the version main says,
+0.5.5, the pre-release number (the store release will be 0.6.0), with the
+commit count as its build; the update check never offers a nightly, and offers
+one nothing until a release newer than its version exists. A nightly reads the
+release's data-protection keychain items, so a device paired with one stays
+paired with the other. `swift Scripts/asc.swift groups --key-file … --key-id …
+--issuer …` lists the app's TestFlight groups (reads only).
 
 ## Known limitations
 
