@@ -1340,8 +1340,9 @@ Input (`--move`, `--tap`, `--key`, `--input`) goes only to a `--synthetic` host
 on this Mac, which posts nothing. With `SILL_TEST_INPUT_LOG=1` such a host
 prints each event it would have posted, a key with its flags and a click with
 the modifiers the last key would have left for it and where it goes, a scroll
-with its point deltas and phase (`Test input: scroll dy -12 dx 0, gesture
-changed (none)`; positive dy moves the content down), and the
+with its point deltas, phase and place (`Test input: scroll dy -12 dx 0,
+gesture changed (none) at 833,442`; positive dy moves the content down, and a
+trackpad's or a wheel's scroll lands where the pointer is, every event of it), and the
 check each key's up arms (`KeyUpCheck`, read on a real host a quarter of a
 second later), so what a device's keys and buttons leave behind (the Spotlight
 key's ⌘, a modifier held when a device leaves or the host stops, a button

@@ -76,6 +76,9 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
 
     /// Pan translation already turned into scroll, so each callback sends only the new delta.
     private var lastPanTranslation: CGPoint = .zero
+    /// The iPad's trackpad's or a wheel's scroll in progress: where the pointer was as it began, where all
+    /// of it goes, and its readings added up (PointerScroll).
+    private var pointerScroll = PointerScroll()
     /// True between the `.scrollGesture(.began)` this view sent and its `.ended`, so an end is
     /// never sent for a pan that could not begin (no video yet).
     private var scrollGestureOpen = false
@@ -352,8 +355,34 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
     }
 
     private func scroll(_ gesture: UIPanGestureRecognizer, _ source: ScrollSource) {
-        scroll(gesture.state, at: gesture.location(in: self), translation: gesture.translation(in: self),
-               velocity: gesture.state == .ended ? gesture.velocity(in: self) : .zero, from: source)
+        let velocity = gesture.state == .ended ? gesture.velocity(in: self) : .zero
+        guard source != .finger else {
+            scroll(gesture.state, at: gesture.location(in: self), translation: gesture.translation(in: self),
+                   velocity: velocity, from: source)
+            return
+        }
+        // The iPad's trackpad or a wheel: no finger moves, and the pan's location runs on with its
+        // translation while the pointer stays put, so the whole scroll goes where the pointer was as it
+        // began; each reading is taken and the translation zeroed, so it is what moved since the last
+        // one however UIKit counts (PointerScroll, #130).
+        let reading = gesture.translation(in: self)
+        gesture.setTranslation(.zero, in: self)
+        if gesture.state == .began {
+            pointerScroll.began(at: gesture.location(in: self), reading: reading)
+        } else {
+            pointerScroll.moved(reading)
+        }
+        #if DEBUG
+        if gesture.state == .ended || gesture.state == .cancelled {
+            // One line a scroll (a trackpad's gesture, a wheel's notches): how far, where, and how far UIKit's
+            // own location for the pan had run from there, for a device to show what the simulator did.
+            let own = gesture.location(in: self), at = pointerScroll.at, total = pointerScroll.total
+            print(String(format: "scroll: %@ %@ by %.1f,%.1f pt at %.1f,%.1f; the pan's own location ended %.1f,%.1f pt from it",
+                         source.rawValue, gesture.state == .ended ? "ended" : "cancelled", total.x, total.y,
+                         at.x, at.y, own.x - at.x, own.y - at.y))
+        }
+        #endif
+        scroll(gesture.state, at: pointerScroll.at, translation: pointerScroll.total, velocity: velocity, from: source)
     }
 
     /// Every scroll on the picture, finger, trackpad or wheel: `state`, where it is (the finger, or the

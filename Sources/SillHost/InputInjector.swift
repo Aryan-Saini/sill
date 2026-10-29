@@ -59,10 +59,10 @@ final class InputInjector {
     /// have left in the HID state table, which it would start from ("Test input: left mouse down
     /// (none) at 756,474", a button's with where it goes): what a device's keys leave for its next
     /// click, without posting anything; and the check a key's up arms (`KeyUpCheck`). A scroll event
-    /// says its point deltas and phase ("Test input: scroll dy 12 dx 0, gesture changed (none)"), so a
-    /// test reads which way a device's scroll went (positive dy moves the content down). A held key's
-    /// repeat says so ("Test input: key 123 repeat (option)"), and its start says when the repeats come
-    /// ("Test input: key 123 repeats after 0.50 s, every 0.033 s").
+    /// says its point deltas, phase and place ("Test input: scroll dy 12 dx 0, gesture changed (none)
+    /// at 756,474"), so a test reads which way a device's scroll went (positive dy moves the content
+    /// down) and where it lands. A held key's repeat says so ("Test input: key 123 repeat (option)"),
+    /// and its start says when the repeats come ("Test input: key 123 repeats after 0.50 s, every 0.033 s").
     var testLog = false
     /// The flags of the last keyboard event posted (a dry run's: that would have been), which the HID
     /// state table holds by KeyStrokes' inference: the check after a key's up reads the table against
@@ -160,8 +160,10 @@ final class InputInjector {
         default: what = "event \(event.type.rawValue)"
         }
         // A button's event says where it goes: a button's up with no source goes where the pointer is.
-        let button = event.type != .mouseMoved && event.type != .scrollWheel
-        let at = button ? " at \(Int(event.location.x.rounded())),\(Int(event.location.y.rounded()))" : ""
+        // So does a scroll event: the window under its location is the one it scrolls, every event of
+        // a gesture (`postScroll`).
+        let placed = event.type != .mouseMoved
+        let at = placed ? " at \(Int(event.location.x.rounded())),\(Int(event.location.y.rounded()))" : ""
         print("Test input: \(what) (\(KeyStrokes.names(lastKeyFlags)))\(at)")
     }
 
