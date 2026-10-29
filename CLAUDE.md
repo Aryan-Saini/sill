@@ -114,13 +114,27 @@ out in Insiders first tomorrow". Merge "Version 0.5.5 for both apps" (PR #244, b
   the two variable lines lost their inline comments, which zsh as it starts hands to `gh` as arguments
   (39b9ecfd: pasted into `zsh -f -i`, 7 of 29 calls broken before, none after). The harness again on
   the head's workflows, unchanged by the review: 245, 52, 19, 12 and 16 of the same, 15 of 15 mutants.
+  The second review (2026-10-29, on edda6b6e; the report's "The second review"): one finding, in the
+  workflow. The approval is the tag route's gate, but the publish job checked out the tag by name, and
+  given a ref actions/checkout v7.0.1 checks nothing against github.sha, so a tag force-moved after
+  the run began (or right after the approval) built and signed another commit while Noah's look still
+  matched (his local tag never moves). Reproduced on loopback (tag-move.py in nightly/tests: git
+  daemon on 127.0.0.1, checkout's git sequence from its source, the job's own steps with stand-ins):
+  the moved commit's release.sh got the identity, the notary profile and the token, a pushed tag, by
+  hand and annotated alike. Now the checkout is `${{ github.sha }}` and the tag check stops the run,
+  before the keychain and any build, when HEAD or the tag is not that commit (e6545f2b, with the
+  checklist's What a tag does, a tag ruleset's part, DEVELOPMENT.md and release.sh's comment): the
+  moved cases refused, the unmoved ones on. The harness on it: check.py 257 (12 new; 3 problems on
+  edda6b6e), run.py 52, env-steps.py 26 (7 new; 4 failing on edda6b6e), tf-mode.py 12, kc-steps.py 16,
+  rel-test 104, 21 of 21 mutants (6 new), zsh-paste 36 calls exact, actionlint's 17 notes as before.
 - **Untested, for Noah (docs/release-checklist.md, "Nightlies", "The first run"):** the privacy
   manifest's ActiveKeyboards (#147's `UITextInputMode.activeInputModes`, ITMS-91053) is declared on main
   since PR #243 (54BD.1; release-ios.sh's check of run 40843967209's binary against main's manifest: every
   API declared). Merge #244, then this; the environments `release` and `nightly` with their rules, the
   secrets in each, the nine repository secrets deleted ("Secrets and variables", steps 1 to 3: the `gh api`
   calls were never run); `gh workflow run nightly.yml -f verify_only=true` and its artifacts (the iOS key
-  from `nightly`);
+  from `nightly`); the first release through the environment `release` (its tag check passes on the
+  run's own commit, which the run's page shows);
   `SILL_SIGN_IN_CI` and `SILL_TESTFLIGHT_IN_CI` true; a run by hand: the pre-release, the notarized dmg on
   a second Mac (quarantined: opens, drags, opens, the iPad still paired), TestFlight's groups (the real
   names: the step lists them) and What to Test; `SILL_NIGHTLY` true; after his Insiders test,
@@ -6423,7 +6437,8 @@ good.
   (`gh auth status` asks GET /user, which the Actions token can't answer), and
   refuses to start unless origin's tag v‹version› names HEAD (gh would make a
   missing tag from the default branch's tip; not asked in the release
-  workflow, whose checkout is that tag and keeps no credentials); in
+  workflow, whose checkout is the run's own commit with every tag, stopping
+  when its tag moved, and keeps no credentials); in
   Saffsanity/sill it passes gh `--verify-tag`, anywhere else it warns that no
   Sill.app will offer the release. It uploads `Sill.dmg`, `Sill.dmg.sha256`,
   `Sill.zip` and `Sill.zip.sha256` (the zip kept for older links: the download
@@ -6866,7 +6881,9 @@ good.
   too, as two artifacts) unless the repository
   variable `SILL_SIGN_IN_CI` is `true`, then, in the environment `release`
   (only `v*` tags, Noah its required reviewer; its first step names a missing
-  secret and refuses a run by hand not started from its tag), the Developer
+  secret and refuses a run by hand not started from its tag; it checks out
+  the run's own commit, `github.sha`, and stops when the tag no longer names
+  it), the Developer
   ID .p12 into a temporary keychain, the notary key stored as a profile in it, the Developer ID
   profile decoded from `SILL_PROVISION_PROFILE` into
   `Packaging/embedded.provisionprofile` (since the nightlies), `release.sh
