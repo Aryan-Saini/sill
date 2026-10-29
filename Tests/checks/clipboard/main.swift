@@ -326,6 +326,24 @@ check(P.receiptWait(worstRttMs: nil) == 4 && P.receiptWait(worstRttMs: 0) == 4 &
 check(P.receiptWait(worstRttMs: 2500) == 10 && P.receiptWait(worstRttMs: 1001) > 4, "and four times the worst round trip above that")
 check(C.notSent(mac: "Mac mini") == "Didn’t reach Mac mini. Try Paste again.", "no receipt in time: the note")
 
+// Paste right away (2026-10-29; Noah: "still doesn't automatically Cmd+V"): with the device's switch on, a
+// Paste's receipt also presses ⌘V on the Mac. Only on a receipt that came in time, only while something
+// streams (the Mac drops input with nowhere to land), never with the switch off; no receipt, no ⌘V.
+for rightAway in [false, true] {
+    for late in [false, true] {
+        for streaming in [false, true] {
+            check(P.pastesOnReceipt(rightAway: rightAway, late: late, streaming: streaming) == (rightAway && !late && streaming),
+                  "⌘V on a receipt: switch \(rightAway), late \(late), streaming \(streaming)")
+        }
+    }
+}
+check(P.pasteKey == 0x19, "⌘V's key: V (HID usage 0x19)")
+check(P.pasteDelay > 0 && P.pasteDelay <= 0.1,
+      "⌘V a few tens of milliseconds after the receipt, never right behind it (the Mac's write is on a queue of its own): \(P.pasteDelay) s")
+check(P.receiptNote(pasted: true, mac: "Mac mini") == (text: "Pasted on Mac mini.", spoken: "Pasted on Mac mini."), "the note after ⌘V")
+check(P.receiptNote(pasted: false, mac: "Mac mini") == (text: C.sent(mac: "Mac mini"), spoken: C.sentSpoken(mac: "Mac mini")),
+      "the note without ⌘V: today's words, written and spoken")
+
 check(P.chipCorner(landscape: true, linkLineShown: false) == .topTrailing, "sideways: under the bar")
 check(P.chipCorner(landscape: true, linkLineShown: true) == .bottomTrailing, "sideways with the link's line at the top: the bottom corner")
 check(P.chipCorner(landscape: false, linkLineShown: false) == .bottomTrailing && P.chipCorner(landscape: false, linkLineShown: true) == .bottomTrailing,
@@ -346,6 +364,25 @@ check(C.switchTitle == "Share Clipboard" && C.rowTitle(mac: "Mac mini") == "Past
 check(C.footnote(on: true, mac: "Mac mini", device: "iPad") == "Text you copy on Mac mini is ready to paste on this iPad. To paste on Mac mini, copy text here, tap Paste, then press ⌘V there.",
       "the footnote, on")
 check(C.footnote(on: false, mac: "Mac mini", device: "iPhone") == "Nothing you copy goes between this iPhone and Mac mini while this is off.", "the footnote, off")
+// Paste right away's words: with the switch on they say where the text goes; with it off, today's.
+check(C.chipSubtitle(rightAway: true) == "It goes where the cursor is.", "the chip's subtitle with the switch on")
+check(C.chipSubtitle(rightAway: false) == C.chipSubtitle && C.chipSubtitle == "Then press ⌘V there.", "…off: today's")
+check(C.chipSpoken(mac: "Mac mini", device: "iPad", rightAway: true) == "Paste on Mac mini. Pastes the text you copied on this iPad where Mac mini’s cursor is.",
+      "the chip's spoken label with the switch on: no Command-V to press")
+check(C.chipSpoken(mac: "Mac mini", device: "iPad", rightAway: false) == C.chipSpoken(mac: "Mac mini", device: "iPad"), "…off: today's")
+check(C.pasteHint(mac: "Mac mini", device: "iPhone", rightAway: true) == "Pastes the text you copied on this iPhone where Mac mini’s cursor is.",
+      "the Paste button's hint with the switch on")
+check(C.pasteHint(mac: "Mac mini", device: "iPhone", rightAway: false) == C.pasteHint(mac: "Mac mini", device: "iPhone"), "…off: today's")
+check(C.pasted(mac: "Mac mini") == "Pasted on Mac mini.", "the note after ⌘V")
+check(C.rightAwayTitle(mac: "Mac mini") == "Paste on Mac mini Right Away", "the switch under Share Clipboard")
+check(C.footnote(on: true, rightAway: true, mac: "Mac mini", device: "iPad")
+      == "Text you copy on Mac mini is ready to paste on this iPad. To paste on Mac mini, copy text here and tap Paste: it goes where Mac mini’s cursor is. With Paste on Mac mini Right Away off, Paste only puts it on Mac mini’s clipboard.",
+      "the footnote with both on")
+check(C.footnote(on: true, rightAway: false, mac: "Mac mini", device: "iPad") == C.footnote(on: true, mac: "Mac mini", device: "iPad"),
+      "…with Paste on Mac mini Right Away off: today's")
+check(C.footnote(on: false, rightAway: true, mac: "Mac mini", device: "iPad") == C.footnote(on: false, mac: "Mac mini", device: "iPad")
+      && C.footnote(on: false, rightAway: false, mac: "Mac mini", device: "iPad") == C.footnote(on: false, mac: "Mac mini", device: "iPad"),
+      "…with Share Clipboard off: today's, whatever the switch under it")
 check(C.sharesLine(device: "iPad (iPad14,1)") == "Clipboard: iPad (iPad14,1) shares the clipboard.", "the host's line on a subscription")
 check(C.stoppedLine(device: "iPad (iPad14,1)") == "Clipboard: iPad (iPad14,1) stopped sharing the clipboard.", "…and on a stop")
 check(C.ignoredLine(rate: 3, tooLong: 1, undecodable: 0) == "Clipboard from devices ignored in a minute: 3 from devices sending more than 4 a second, 1 longer than 256 KB.",
@@ -354,9 +391,13 @@ check(C.ignoredLine(rate: 0, tooLong: 0, undecodable: 2) == "Clipboard from devi
 let words = [C.chipTitle(mac: "M"), C.chipSubtitle, C.chipSpoken(mac: "M", device: "iPad"), C.pasteHint(mac: "M", device: "iPad"), C.sent(mac: "M"),
              C.sentSpoken(mac: "M"), C.tooLong(mac: "M"), C.switchTitle, C.rowTitle(mac: "M"), C.footnote(on: true, mac: "M", device: "iPad"),
              C.footnote(on: false, mac: "M", device: "iPad"), C.sharesLine(device: "d"), C.stoppedLine(device: "d"), C.ignoredLine(rate: 1, tooLong: 1, undecodable: 1),
-             C.macFootnote, C.macAccessButton, C.notSent(mac: "M"), C.chipAnnouncement(mac: "M")]
+             C.macFootnote, C.macAccessButton, C.notSent(mac: "M"), C.chipAnnouncement(mac: "M"),
+             C.chipSubtitle(rightAway: true), C.chipSpoken(mac: "M", device: "iPad", rightAway: true),
+             C.pasteHint(mac: "M", device: "iPad", rightAway: true), C.pasted(mac: "M"), C.rightAwayTitle(mac: "M"),
+             C.footnote(on: true, rightAway: true, mac: "M", device: "iPad")]
     + [P.MacAccess.allowed, .notAsked, .asks, .denied].flatMap { [C.macAccessWarning($0), C.macAccessHint($0), C.macAccessLine($0)].compactMap { $0 } }
 check(words.allSatisfy { !$0.contains("—") && !$0.contains("–") }, "no dashes in the words")
+check(words.allSatisfy { !$0.contains("'") && !$0.contains("\"") }, "typographic quotes only: \(words.filter { $0.contains("'") || $0.contains("\"") })")
 
 // MARK: - Model 1: the device's subscription against the host's view of it
 
@@ -533,6 +574,53 @@ for run in 0..<2_000 {
 }
 check(hostFailures == 0, "2,000 random runs of three devices: each got exactly the Mac's plain copies made while macOS allowed reads, and the others' text (\(hostFailures) wrong)")
 check(accessWaits > 0, "…and macOS asked or denied in some (\(accessWaits) looks read nothing)")
+
+// MARK: - Model 3: paste right away
+
+// Random Pastes: the switch on or off at the tap and moved while the receipt is on its way, the receipt in
+// time, late (after "Didn’t reach…") or never, something streaming or not when it comes. The device
+// follows the glue of StreamClient+Clipboard: deviceSends at the tap, then at the receipt
+// pastesOnReceipt, ⌘V and receiptNote. ⌘V goes once for each Paste whose receipt came in time with the
+// switch on and something streaming, never for a Paste without a receipt, never with the switch off,
+// never twice; its note says "Pasted" exactly when it went, and the text it pastes always reached the
+// Mac before it (the Mac read the text before it echoed the ping that is the receipt).
+var pasteFailures = 0, chords = 0, noChords = 0
+for _ in 0..<5_000 {
+    var switchOn = Bool.random(using: &rng), streaming = true
+    var macHas: [String] = []          // the texts the Mac has read, in order
+    var pasted: [String] = []          // what each ⌘V pasted: the Mac's latest text at that moment
+    for n in 0..<Int.random(in: 1...12, using: &rng) {
+        if Int.random(in: 0..<4, using: &rng) == 0 { switchOn.toggle() }
+        streaming = Int.random(in: 0..<5, using: &rng) != 0
+        let text = "paste \(n)"
+        guard case .send(let payload) = P.deviceSends([text], connected: true, hostClipboard: P.generation, switchOn: true) else {
+            pasteFailures += 1; continue
+        }
+        if Bool.random(using: &rng) { switchOn.toggle() }     // moved while the receipt is on its way
+        switch Int.random(in: 0..<3, using: &rng) {
+        case 0:   // no receipt: the text may or may not have reached the Mac; no ⌘V, "Didn’t reach…"
+            if Bool.random(using: &rng), case .set(let got) = P.fromDevice(payload) { macHas.append(got) }
+            noChords += 1
+        case let kind:   // 1: in time, 2: late
+            guard case .set(let got) = P.fromDevice(payload) else { pasteFailures += 1; continue }
+            macHas.append(got)               // read before the ping is echoed
+            let goes = P.pastesOnReceipt(rightAway: switchOn, late: kind == 2, streaming: streaming)
+            let note = P.receiptNote(pasted: goes, mac: "M")
+            if goes {
+                chords += 1
+                pasted.append(macHas.last!)
+                if macHas.last != text || !(switchOn && kind == 1 && streaming) { pasteFailures += 1 }
+            } else {
+                noChords += 1
+                if switchOn && kind == 1 && streaming { pasteFailures += 1 }
+            }
+            if (note.text == C.pasted(mac: "M")) != goes || (note.text == C.sent(mac: "M")) == goes { pasteFailures += 1 }
+        }
+    }
+    if Set(pasted).count != pasted.count { pasteFailures += 1 }      // never twice
+}
+check(pasteFailures == 0, "5,000 random runs of Pastes: ⌘V once for each receipt in time with the switch on and something streaming, after the Mac had that text, and only then (\(pasteFailures) wrong)")
+check(chords > 0 && noChords > 0, "…and the model reached both (\(chords) ⌘V, \(noChords) without)")
 
 print("\(checks) checks, \(failures) failed")
 exit(failures == 0 ? 0 : 1)

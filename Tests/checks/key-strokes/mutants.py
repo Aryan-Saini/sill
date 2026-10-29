@@ -158,6 +158,14 @@ MUTANTS = [
     # Shifted return and tab
     ("shifted return and tab to the text system (the shift lost)", CHORDS, "            || (shiftedKeyUsages.contains(usage) && modifiers & KeyModifiers.shift.rawValue != 0)\n", ""),
     ("return and tab as keys whatever is held", CHORDS, "(shiftedKeyUsages.contains(usage) && modifiers & KeyModifiers.shift.rawValue != 0)", "shiftedKeyUsages.contains(usage)"),
+    # The clipboard's ⌘V after a Paste's receipt (paste right away)
+    ("Paste right away's ⌘V as one key down and up (the stuck command after Spotlight)", CHORDS,
+     "static let paste: [InputEvent] = press(ClipboardPolicy.pasteKey, with: .command)",
+     "static let paste: [InputEvent] = [.key(hidUsage: ClipboardPolicy.pasteKey, down: true, modifiers: KeyModifiers.command.rawValue), .key(hidUsage: ClipboardPolicy.pasteKey, down: false, modifiers: KeyModifiers.command.rawValue)]"),
+    ("Paste right away's V without command", CHORDS, "static let paste: [InputEvent] = press(ClipboardPolicy.pasteKey, with: .command)",
+     "static let paste: [InputEvent] = press(ClipboardPolicy.pasteKey, with: [])"),
+    ("Paste right away's ⌘ never let go", CHORDS, "static let paste: [InputEvent] = press(ClipboardPolicy.pasteKey, with: .command)",
+     "static let paste: [InputEvent] = Array(press(ClipboardPolicy.pasteKey, with: .command).dropLast())"),
 ]
 caught = 0
 for name, rel, old, new in MUTANTS:

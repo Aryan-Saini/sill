@@ -608,6 +608,8 @@ func tripwire(_ events: [InputEvent], _ want: [String], ignoring ups: Mac.Ignore
 
 // This device's Spotlight key: ⌘'s key up is checked for command (Space's up keeps it: ⌘ is down).
 tripwire(KeyChord.spotlight, ["55: command"], ignoring: .modifierUps, "this device's Spotlight key")
+// The clipboard's ⌘V (paste right away): the same, V's up keeping command while ⌘ is down.
+tripwire(KeyChord.paste, ["55: command"], ignoring: .modifierUps, "Paste right away's ⌘V")
 // The key row's ⌘esc, a latched ⌘S on the software keyboard, and ⌃⇧→: each modifier key's up.
 tripwire(KeyChord.press(uEsc, with: .command), ["55: command"], ignoring: .modifierUps, "the key row's ⌘esc")
 tripwire(KeyChord.press(uS, with: .command), ["55: command"], ignoring: .modifierUps, "a latched ⌘S")
@@ -1050,6 +1052,24 @@ check(ksCommand == command && ksShift == shift && ksControl == control && ksOpti
 // The Spotlight key: ⌘'s own key down, Space down and up with command, ⌘ up with nothing.
 check(KeyChord.spotlight == [key(uLCmd, true, command), key(uSpace, true, command), key(uSpace, false, command), key(uLCmd, false, 0)],
       "the Spotlight key sends \(KeyChord.spotlight)")
+// The clipboard's ⌘V after a Paste's receipt (paste right away, docs/clipboard-plan.md): the same shape,
+// V for Space; on this Mac command for V alone and nothing held after, nor on a Mac from before
+// 2026-09-27 (which posts each key's flags as they come), and ⌘'s up is the one up checked.
+do {
+    let uV: UInt16 = 0x19, kV: UInt16 = 9
+    check(ClipboardPolicy.pasteKey == uV && KeyStrokes.virtualKeys[uV] == kV, "⌘V's key is V, the Mac's virtual key 9")
+    check(KeyChord.paste == [key(uLCmd, true, command), key(uV, true, command), key(uV, false, command), key(uLCmd, false, 0)],
+          "Paste right away sends \(KeyChord.paste)")
+    var mac = Mac(); let a = Conn()
+    mac.send(KeyChord.paste + tap, from: a)
+    check(Array(mac.log.prefix(4)) == [.key(kCmd, true, command), .key(kV, true, command), .key(kV, false, command), .key(kCmd, false, 0)]
+          && mac.log.dropFirst(4).allSatisfy { $0 == .pointer(0) } && mac.table == 0 && mac.down.isEmpty && mac.broken.isEmpty,
+          "⌘V on this Mac, then a tap that is no ⌘-click: \(mac.log)")
+    var old = OldMac()
+    old.send(KeyChord.paste + tap)
+    check(old.log.contains(.key(kV, true, command)) && old.table == 0 && old.down.isEmpty && old.log.last == .pointer(0),
+          "⌘V on a Mac from before 2026-09-27 leaves nothing: \(old.log)")
+}
 // A key with nothing latched: the key alone, as before.
 check(KeyChord.press(uEsc, with: []) == bare(uEsc, 0), "escape with nothing latched: \(KeyChord.press(uEsc, with: []))")
 // Two latched: each modifier's key down in the trackpad's order with the flags so far, the key, the
