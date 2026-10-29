@@ -539,7 +539,9 @@ jobs:
       # too. Otherwise no external group is touched and nothing goes to Beta App Review.
       - name: Give the build to TestFlight's groups, with What to Test (Scripts/asc.swift distribute)
         if: steps.mode.outputs.mode == 'upload'
-        timeout-minutes: 100
+        # asc.swift's own bounds first: up to 90 minutes for processing, then What to Test, the groups and
+        # up to 10 minutes for the Beta App Review state, so its own words end a step that runs out.
+        timeout-minutes: 110
         env:
           SILL_TESTFLIGHT_KEY_ID: ${{ secrets.SILL_TESTFLIGHT_KEY_ID }}
           SILL_TESTFLIGHT_ISSUER_ID: ${{ secrets.SILL_TESTFLIGHT_ISSUER_ID }}
