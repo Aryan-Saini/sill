@@ -1036,7 +1036,10 @@ Throughout, `AWDL0` is awdl0's interface index, read at run time.
 - **The memory's key** (`macName`) moves to the Mac `id` that step 3 adds for saved addresses.
 - **Network exposure.** Direct Wireless is the first device-writable setting that widens it, which
   goes against the host-settings plan's §9 line ("a device sets stream quality, never network
-  exposure"). Revisit it with pairing (M5), before any remote device can change it.
+  exposure"). Revisit it with pairing (M5), before any remote device can change it. Revisited
+  2026-10-29 (the security scan's finding 8, PR #253): a device changes it only from a session
+  whose key is on the Mac's trust list, at home; never from away, from an unpaired key at an open
+  door, or at the CLI's plain door (`DeviceSettings.accepted`, kind 16's `sessionPaired`).
 - **Security prerequisites.** §9's payload-length cap and the kind 17 rate limit matter more with it
   on.
 
