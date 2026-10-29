@@ -371,7 +371,7 @@ comes later, when the cask qualifies (below).
       never a Sill for Mac 0.4.1). A release that changes only one app is Noah's call: both at
       the new number, or the other left at its last (nothing in the code compares the two).
       main carries the next release's number, both apps together, from soon after the last
-      release on: 0.6.0 since 2026-10-29 (PR "Version 0.6.0 for both apps"), ahead of 0.5.1 on
+      release on: 0.6.0 since 2026-10-29 (PR #244), ahead of 0.5.1 on
       the App Store and on GitHub. App Store Connect takes no new build of a version it has
       released (its train is closed), so every build of main for TestFlight needs the next
       number; and Sill.app's update check compares only release tags with the version it runs,
