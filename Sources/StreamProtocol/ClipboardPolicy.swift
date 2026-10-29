@@ -3,9 +3,10 @@ import Foundation
 /// The clipboard's rules, both ends (kind 32, docs/clipboard-plan.md): what a device's message asks
 /// of the host, which change of the Mac's pasteboard the host sends and to whom, when a device
 /// subscribes and stops, which text from the Mac a device writes, when the device offers its own
-/// clipboard to the Mac (the chip), when a Paste also presses ⌘V there, and every word. Pure (Foundation only): the host (HostClipboard)
-/// and the device (StreamClient+Clipboard) do only what reads and writes a pasteboard, and
-/// Tests/checks/clipboard checks this file with StreamProtocol's sources.
+/// clipboard to the Mac (the chip), when a Paste also presses ⌘V there, and every word. Pure
+/// (Foundation only): the host (HostClipboard) and the device (StreamClient+Clipboard) do only what
+/// reads and writes a pasteboard, and Tests/checks/clipboard checks this file with StreamProtocol's
+/// sources.
 public enum ClipboardPolicy {
     /// `WindowList.clipboard` from a host that takes and sends text.
     public static let generation = 1
