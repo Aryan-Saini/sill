@@ -891,10 +891,14 @@ private struct GestureRow: View {
 
 /// Hold to Show Window Controls (issue #113; ThumbnailHold): the title, the length beside it ("0.5 s")
 /// and the system's stepper, − and + a tenth of a second a press from 0.2 to 3 s (the capsule on iOS 26
-/// and later), counting whole tenths so no sum of presses drifts off the grid. One VoiceOver element, as
-/// a stepper is: "Hold to show window controls, 0.5 seconds", adjustable, a swipe up or down a tenth. The
-/// title wraps beside the stepper, as a switch's does, rather than the row stacking: in a panel 340 or
-/// 360 pt wide it never fits on one line beside the value and the stepper.
+/// and later), counting whole tenths so no sum of presses drifts off the grid. The title wraps beside the
+/// stepper, as a switch's does, rather than the row stacking: in a panel 340 or 360 pt wide it never fits
+/// on one line beside the value and the stepper.
+///
+/// For VoiceOver one adjustable element: "Hold to show window controls, 0.5 seconds", a swipe up or down a
+/// tenth (`ThumbnailHold.adjusted`). The system's stepper on iOS 27 is two buttons instead, each read with
+/// the whole label and the visible "0.5 s" ("…, 0.5 s, Hold to show window controls, Decrement"), which
+/// says neither the value in words nor what the row is.
 private struct ThumbnailHoldRow: View {
     let seconds: Double
     let set: (Double) -> Void
@@ -912,8 +916,16 @@ private struct ThumbnailHoldRow: View {
                     .fixedSize()
             }
         }
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(ThumbnailHold.spokenTitle)
         .accessibilityValue(ThumbnailHold.spokenValue(seconds))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: set(ThumbnailHold.adjusted(seconds, up: true))
+            case .decrement: set(ThumbnailHold.adjusted(seconds, up: false))
+            @unknown default: break
+            }
+        }
         .padding(.vertical, 4)
         .rowFrame()
     }
