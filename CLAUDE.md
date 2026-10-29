@@ -52,6 +52,20 @@ it: the door advertised and accepting over AWDL, radio range, on a stranger's wo
   (which counters it listed). Harness photos on a private iPad mini simulator (deleted after), 710×1000 and
   1000×710: `openpair` and `cli` the switch dimmed with the new footnote, `default` as before (sill-handoff's
   `triage/2026-10-29-security/f8-photos/`).
+- The review (2026-10-29, after 73f4892f; sill-handoff's `triage/2026-10-29-security/f8-direct-wireless-report.md`,
+  "The review"): the rule holds (the key from the TLS handshake at `.ready`, the list the status publishes with every
+  change of it before anything else runs, `accepted`'s `ok` the only way a device's change reaches the config). The
+  scan's own command took it at origin/main's plain door (`dw=1`, "Direct wireless on: listening on port … again.")
+  and is refused here (EXPECT FAIL). Every bypass tried on loopback was refused: at the open door a kind 17 forging
+  `sessionPaired`, an Int, duplicate keys, six at once and a paired device's name; a pairing window open after kind
+  21; the plain door; the remote door. What remains is by design or another finding's: a session that controls the
+  Mac's input can still turn it on in Sill's own menu or Settings (blind: Sill streams none of its windows), any
+  paired device can, and the cable's automatic pairing is finding 2. Two docs findings fixed: the plan's host rule
+  and the gates that change it at the plain door (91b83561), DEVELOPMENT.md's command-line host (881ac12f).
+  Re-run: `away-quality` 143 and 39 of 39 mutants, `compatibility` 146 and 36 of 36, `ledger` 116 and 16 of 16;
+  `run-all.sh`, all 56 (483 s); `swift build -c release`, only the CaptureProbe warning; the three iOS builds
+  (Xcode 27.1), only the known `StreamClient` capture warning; H2 against 150479b5, identical masked and sorted but
+  for one stats line as the client left.
 - **Untested, for Noah:** with this branch's Sill.app (release-signed with the profile) and this iPad
   build: a paired device's switch at home, on and off, Sill.app's menu and General pane following and
   `defaults read me.saffer.sill.mac directWireless` saved; Require pairing off and a device the Mac has not
