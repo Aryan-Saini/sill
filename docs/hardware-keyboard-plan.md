@@ -61,7 +61,9 @@ The Mac already takes both kinds of scroll: phased gestures with momentum, and b
 - The action sends the key down and up through the path a forwarded hardware key takes
   (`ForwardedKeys`), carrying the command's modifiers: down with them, up with the modifier keys down
   on the Mac. A key command gives no key-up, so the up follows the down at once (a tap; holding Esc
-  repeats it, as UIKit repeats a held key's command).
+  repeats it, as UIKit repeats a held key's command). Since #162 (2026-10-28) an Esc held through
+  `pressesBegan` is down on the Mac until its release, and the Mac's host repeats it at the Mac's own
+  timing, as every key held there (open question 12).
 - **Both channels, one key press.** A device that delivers the press to `pressesBegan` as well must
   not send Esc twice (`ForwardedKeys`, pure, checked in `key-strokes`):
   - the press came first: Esc is down on the Mac through it (`down` has it), so the key command
@@ -188,6 +190,23 @@ Settings panel already cover the stream for hit-testing.
     (`UIAccessibility.isSwitchControlRunning`) but not Full Keyboard Access (the iOS 27.1 SDK's UIKit
     headers name no such test), so for Full Keyboard Access the alternative is Q1's: the Keyboard button's
     second press stops keys for the session.
+12. **Key repeat** (#162, branch `key-repeat`; Noah, 2026-10-27: "same as a regular keyboard, wait times
+    and all … Same as desktop", so decided; what follows are the build's defaults). The Mac's host repeats
+    a key held down on the device after the Mac's own Delay Until Repeat and at its Key Repeat Rate
+    (`KeyRepeat`, read from NSEvent at each key's down): the keys that reach the Mac as keys (the arrows,
+    Esc, Forward Delete, Home, End, Page Up and Down, the F-keys, any key with ⌘, ⌃ or ⌥ held), and the
+    portrait key row's esc, tab and arrows, down from the touch to the release (`HeldCap`; a phone's esc
+    and tab stay taps at the accessibility text sizes, where a long press shows the cap large). The text
+    system's keys (letters, digits, Space, Delete, Return and Tab without ⇧) keep iPadOS's own repeat, and
+    an Esc through its key command iPadOS's repeat of the command. Defaults taken: a modifier pressed or
+    let go mid-hold changes the repeats after it and never stops them, as on a Mac; one key at a time, the
+    last pressed, and an earlier key still held does not take over again; the repeats wait while the
+    device has said nothing for half a second (a stalled link can hold the key's up back for seconds
+    before the Mac gives the device up) and start over after the delay once it speaks; a delay under
+    0.1 s and an interval under 15 ms count as those, and Off (a delay or an interval of a minute or more)
+    repeats nothing. Known: ⇧ let go while a hardware ⇧→ is held keeps selecting until → comes up (the
+    text system keeps ⇧'s own key, so the Mac never hears it go). Alternative: the device repeats (#163:
+    0.4 s, then 20 a second, its own timing, not the Mac's).
 
 ## Test plan
 

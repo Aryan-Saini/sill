@@ -710,6 +710,43 @@ line in a chat box that sends on Return, and Shift-Tab moves focus back
 as every typed character does. The key row's shift, latched, does the same for
 the on-screen keyboard's return and tab.
 
+A key held down repeats on the Mac as a key of the Mac's own keyboard does
+(#162). Sill for Mac repeats it: an event it posts never repeats by itself (the
+HID system repeats only the keyboards it reads), so a held arrow, Forward Delete
+or ⌘Z used to reach the Mac once. After the Mac's own Delay Until Repeat, at its
+Key Repeat Rate (System Settings › Keyboard: NSEvent's `keyRepeatDelay` and
+`keyRepeatInterval`, read at each key's down, 0.5 s and 1/30 s on the Mac this
+was built on), each repeat is the key's down again with the autorepeat flag
+(what an app sees as `isARepeat`) and the modifiers in force at that moment: ⌥
+let go while ← stays down turns word jumps into single steps, ⇧ pressed while
+→ repeats starts a selection. Every key repeats but the modifiers, Caps Lock, fn
+and the media keys, one key at a time, the last pressed. The repeat stops at the
+key's up, at another key's down or typed text, at a trackpad gesture's shortcut,
+when the device leaves or Sill quits, and when input has nowhere to land
+(nothing streams, or a switch dropped what was held); it waits while input is
+held for an app's activation, and it waits while the device is quiet: half a
+second without a word from it (a device pings four times a second) stops the
+repeats until it is heard again, and they start over after the delay, since a
+stalled network can hold a key's up back for seconds before the Mac gives the
+device up. Which keys get it: those a device sends to the Mac as keys, a
+hardware keyboard's arrows, Esc, Forward Delete, Home, End, Page Up and Down,
+the F-keys and any key with ⌘, ⌃ or ⌥ held (⌘Z, ⌥⌫, ⌥←), and the portrait key
+row's esc, tab and arrows, which stay down while a finger is on them (down at the
+touch, up at the release; what is latched goes down with the key and is spent at
+the touch; `HeldCap`), but for a phone's esc and tab at the accessibility text
+sizes, whose long press shows the cap large and stays a tap. Letters, digits, Space, Delete, Return and Tab typed
+through iPadOS's text system repeat as before, at iPadOS's own key repeat
+(Settings › Accessibility › Keyboards › Key Repeat), as does the on-screen
+keyboard's delete; an Esc that reaches the Mac through its key command (an iPad
+that keeps it from `pressesBegan`) repeats as iPadOS repeats a key command. No
+wire change: every device gets it from a Mac with this build.
+`Sources/SillHost/KeyRepeat.swift` is the rule, checked in `Tests/checks/key-repeat`;
+the key row's caps are `HeldCap` in `iOSClient/KeyChords.swift`, checked in
+`Tests/checks/key-strokes`. A host that posts counts `in.keyRepeat` in its `[1s]`
+lines; a `--synthetic` one with `SILL_TEST_INPUT_LOG=1` prints each repeat
+(`Test input: key 123 repeat (none)`) and when they start (`Test input: key 123
+repeats after 0.50 s, every 0.033 s`).
+
 Over the picture, two fingers on a Magic Keyboard's trackpad (or a Magic
 Trackpad or Magic Mouse) scroll the window under the pointer as a finger does,
 with the same coast after a flick, and a mouse's wheel scrolls it in plain
@@ -1229,7 +1266,8 @@ Mac's messages, the update check, the disk image's window, where everything goes
 on a phone held upright, who moves the Mac's pointer, the Mac's menus on both
 ends, which three-finger strokes are gestures and what the Mac does with one,
 which modifiers a device's keys leave set on the Mac, what an input method or
-dictation sends the Mac and whose Control-Space it is, the first-run tour,
+dictation sends the Mac and whose Control-Space it is, when a held key repeats
+on the Mac, the first-run tour,
 pairing at home (the doors, the cable, the device's rows), whether screen
 sharing shows the pairing window, which keychain Sill.app keeps its identity
 in, the away quality and the link's judgement, the iPhone Duo's layouts, what
@@ -1279,7 +1317,19 @@ python3 Scripts/sillclient.py PORT 3 desktop --input='{"key":{"hidUsage":44,"dow
 ```
 
 (`$T/path` holds one line, `0 756 474`: the scripted pointer gives the test
-pattern a place for input to land.) `--gesture=NAME[,FINGERS]@T` sends a
+pattern a place for input to land.) `--key=USAGE,HOLD@T` holds a key down for
+HOLD seconds, pinging four times a second meanwhile as a device does (the host
+repeats a held key only while its device is heard from), and `--ping=0.25` pings
+so for a whole run (a key held with `--input`). The left arrow held 1.2 s, with
+the input log on:
+
+```
+python3 Scripts/sillclient.py PORT 6 desktop --key=80,1.2@2
+```
+
+prints `Test input: key 123 down (none)`, `Test input: key 123 repeats after
+0.50 s, every 0.033 s`, about twenty `Test input: key 123 repeat (none)` from
+half a second on, then `Test input: key 123 up (none)`. `--gesture=NAME[,FINGERS]@T` sends a
 trackpad gesture (kind 28), and, like the input flags, only to a `--synthetic`
 host on this Mac, which posts nothing. The clipboard's flags (`--clipboard`,
 `--copy`, `--copy-bytes`, `--raw32`, `--expect=clipboard=`) are under The
