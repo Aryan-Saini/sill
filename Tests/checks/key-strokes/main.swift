@@ -914,12 +914,21 @@ enum HeldItem { case input(InputEvent, ObjectIdentifier), chord(ObjectIdentifier
 /// RevokedInput (`fixed`), or as they were before it. What the receive loop hands on waits for the main
 /// actor in order (`inbox`: a Task each), and so does the server's mark of a device it cut off, behind what
 /// it had already handed on. The Mac decides to cut a device off on the main actor (RemoteAccess), and
-/// since the review of PR #254 the coordinator marks it there and then (`marksAtDecision`, `onCutOff`).
+/// since the review of PR #254 the coordinator marks it there and then (`marksAtDecision`, `onCutOff`): every
+/// session of its key the coordinator has registered. A session the door admits waits for the main actor to
+/// be registered (`admitLate`, `unregistered`), ahead of its messages; one admitted while the Mac decided
+/// registers only behind the decision, and since the resumed review it is cut off as it registers
+/// (`checksAtRegistration`, RemoteAccess.stillServes: its key was cut, `cutKeys`). Sessions share a key
+/// through `keyOf` (a move's second connection, or one a device opens when it sees the removal coming).
 struct Host {
     let fixed: Bool
     var marksAtDecision = true
-    enum Job { case input(InputEvent, ObjectIdentifier), gesture(ObjectIdentifier), mark(ObjectIdentifier) }
+    var checksAtRegistration = true
+    enum Job { case input(InputEvent, ObjectIdentifier), gesture(ObjectIdentifier), mark(ObjectIdentifier), register(ObjectIdentifier) }
     var inbox: [Job] = []
+    var unregistered: Set<ObjectIdentifier> = []  // admitted by the server, its registration still waiting
+    var keyOf: [ObjectIdentifier: ObjectIdentifier] = [:]   // a session's key, by default its own
+    var cutKeys: Set<ObjectIdentifier> = []       // keys a decision cut off (the trust as it is now)
     var board = Board()
     var connected: Set<ObjectIdentifier> = []
     var marked: Set<ObjectIdentifier> = []        // StreamServer: Client.revoked
@@ -962,6 +971,9 @@ struct Host {
                 if fixed, revoked.contains(d) { drop(d) } else { deliver(.chord(d)) }
             case .mark(let d):
                 if fixed, connected.contains(d) { revoked.insert(d) }   // ignored once it has left (no route)
+            case .register(let d):
+                unregistered.remove(d)
+                if fixed, checksAtRegistration, cutKeys.contains(key(d)) { revoked.insert(d) }
             }
         }
     }
@@ -1016,9 +1028,19 @@ struct Host {
     /// handed on, but before anything it hands on later (`onClientRevoked`).
     mutating func revoke(_ d: ObjectIdentifier) {
         guard connected.contains(d) else { return }
-        if fixed, marksAtDecision { revoked.insert(d) }
-        marked.insert(d)
-        inbox.append(.mark(d))
+        let k = key(d)
+        cutKeys.insert(k)
+        for c in connected.sorted() where key(c) == k {
+            if fixed, marksAtDecision, !unregistered.contains(c) { revoked.insert(c) }   // the coordinator's routes
+            marked.insert(c)                                                            // the server's clients
+            inbox.append(.mark(c))
+        }
+    }
+    func key(_ d: ObjectIdentifier) -> ObjectIdentifier { keyOf[d] ?? d }
+    /// A session the server admits now (another connection of `as`'s key): its registration waits for the
+    /// main actor, ahead of anything it sends.
+    mutating func admitLate(_ d: ObjectIdentifier, as k: ObjectIdentifier) {
+        connected.insert(d); keyOf[d] = key(k); unregistered.insert(d); inbox.append(.register(d))
     }
     /// Its connection closes (the goodbye handed to the network, or 0.25 s): onClientDisconnected, behind
     /// what was read before it.
@@ -1301,46 +1323,84 @@ do {
         }
     }
 }
+// A second connection of the device's key (a move's, or one a device opens when it sees the removal coming),
+// admitted while the Mac decided: its registration waits on the main actor behind that decision, which cannot
+// name it (the resumed review of PR #254). Cut off as it registers (RemoteAccess.stillServes), nothing it sent
+// lands; registered unmarked, what it sent while the Mac saved the change landed after the decision, until the
+// server's mark.
+do {
+    for atRegistration in [true, false] {
+        var h = Host(fixed: true); h.checksAtRegistration = atRegistration
+        let A = newDevice(); h.connected = [A]
+        h.receive(key(uC, true, 0), from: A)                                 // A holds C
+        let A2 = newDevice(); h.admitLate(A2, as: A)                          // while the Mac decides
+        h.read(move, from: A2); h.read(key(uS, true, 0), from: A2); h.read(.pointer(.leftDown, x: 0.5, y: 0.5), from: A2)
+        h.read(.text("x"), from: A2); h.readGesture(from: A2)
+        let mark = h.board.posted.count
+        h.revoke(A)                                                           // the decision: A marked, A2 not yet registered
+        h.read(key(uS, false, 0), from: A2); h.read(.pointer(.leftUp, x: 0.5, y: 0.5), from: A2)   // after the server's mark
+        h.drain()
+        let got = whats(h.board.posted, from: mark)
+        if atRegistration {
+            check(got.isEmpty, "a connection admitted while the Mac decided, cut off as it registers: nothing of it lands: \(got)")
+            check(h.dropped[A2] == 7, "its input dropped and counted: \(h.dropped[A2] ?? 0)")
+        } else {
+            check(got == ["move", "key 1 down (none)", "left down", "text", "chord", "key 1 up (none)", "left up where the pointer is"],
+                  "registered unmarked (the review's branch), what it sent while the Mac decided landed after the decision: \(got)")
+        }
+        h.leave(A); h.leave(A2)
+        check(h.board.keys.down.isEmpty && h.board.leftOwner == nil, "nothing of either down once both left")
+    }
+}
 // Random sessions: A, removed at a random moment and gone a few events later (its connection closed),
 // B alongside, C leaving at a random moment, holds for activations coming and going, each ended by the
 // app coming up or by a switch; spells in which the main actor is busy and what is read waits for it, one
 // of them ending with the Mac's decision to remove A (its keychain write); each sends downs, ups (its own,
 // strays, and another's), moves, text, scrolls and gestures, and A, once removed, often the up of
-// something it holds. From the decision on nothing lands for A but the up of something it holds down by
-// the posted events; the same for C's held input once it has left; A's own up of what it holds goes at
-// once while nothing is held or waits; nothing of B's is dropped; once A and C have left, no key of theirs
-// is down, and no button of A's. Marked only by the server (the branch before its review), A's input read
-// while the Mac decided lands after the decision in many sessions; as the glue was before the fix, most
-// sessions land A's input after its removal.
+// something it holds. In half the sessions a second connection of A's key (A2: a move's, or one a device
+// opens when it sees the removal coming) is admitted as that spell begins, so it registers only behind the
+// decision, and sends as A does. From the decision on nothing lands for A or A2 but the up of something each
+// holds down by the posted events; the same for C's held input once it has left; A's own up of what it holds
+// goes at once while nothing is held or waits; nothing of B's is dropped; once A, A2 and C have left, no key
+// of theirs is down, and no button of A's or A2's. Without the check at registration (the review's branch),
+// A2's input lands after the decision in many of the sessions that have it; marked only by the server (the
+// branch before its review), A's input read while the Mac decided lands after the decision in many sessions;
+// as the glue was before the fix, most sessions land A's input after its removal.
 do {
     var rng = Rng(state: 0x0010_EE0E)
-    var bad = 0, oldLanded = 0, serverMarkLanded = 0, ownUps = 0, removed = 0, buttonsAtLeaving = 0, waited = 0
+    var bad = 0, oldLanded = 0, serverMarkLanded = 0, lateLanded = 0, ownUps = 0, removed = 0, buttonsAtLeaving = 0, waited = 0
+    var lateAtReview = 0, lateWithoutCheck = 0
     let things: [UInt16] = [uLCmd, uLShift, uLCtrl, uC, uS, uEsc]
-    for (fixed, atDecision) in [(true, true), (true, false), (false, false)] {
+    for (fixed, atDecision, atRegistration) in [(true, true, true), (true, true, false), (true, false, false), (false, false, false)] {
         for run in 0..<3000 {
-            var h = Host(fixed: fixed); h.marksAtDecision = atDecision
-            let review = fixed && atDecision
+            var h = Host(fixed: fixed); h.marksAtDecision = atDecision; h.checksAtRegistration = atRegistration
+            let review = fixed && atDecision && atRegistration
             let A = newDevice(), B = newDevice(), C = newDevice()
             h.connected = [A, B, C]
             let revokeAt = 3 + rng.below(30), goneAfter = 1 + rng.below(12), cLeavesAt = 2 + rng.below(50)
             let busyBefore = rng.below(5)          // the decision's own spell: the keychain's write
+            let late = busyBefore > 0 && rng.chance(50)
+            var A2: ObjectIdentifier? = nil
             var mark: Int? = nil, cMark: Int? = nil
             var problem: String? = nil
             var busy = false
             for step in 0..<60 {
-                if step == revokeAt - busyBefore { busy = true }
+                if step == revokeAt - busyBefore {
+                    busy = true
+                    if late { let a2 = newDevice(); A2 = a2; h.admitLate(a2, as: A) }   // admitted while the Mac decides
+                }
                 if step == revokeAt {
                     if review, h.inbox.contains(where: { if case .input(_, let x) = $0 { return x == A } else { return false } }) { waited += 1 }
                     mark = h.board.posted.count; h.revoke(A); busy = false; h.drain()
                 }
-                if step == revokeAt + goneAfter { busy = false; h.leave(A) }
+                if step == revokeAt + goneAfter { busy = false; h.leave(A); if let A2 { h.leave(A2) } }
                 if step == cLeavesAt { busy = false; h.drain(); cMark = h.board.posted.count; h.leave(C) }   // what it sent before it left first
                 if busy, step < revokeAt - busyBefore || step > revokeAt { if rng.chance(40) { busy = false; h.drain() } }
                 else if !busy, rng.chance(6) { busy = true }
                 if !busy, rng.chance(12) {
                     if !h.holding { h.holding = true } else if rng.chance(70) { h.replay() } else { h.switchDrop() }
                 }
-                let d = rng.pick([A, A, A, B, C])
+                let d = A2.map { rng.pick([A, A, $0, $0, B, C]) } ?? rng.pick([A, A, A, B, C])
                 if rng.chance(5) { if busy { h.readGesture(from: d) } else { h.gesture(from: d) }; continue }
                 var e: InputEvent
                 let mine = h.board.ups(of: d)
@@ -1381,31 +1441,41 @@ do {
             }
             h.drain()
             if h.holding || !h.held.isEmpty { if rng.chance(70) { h.replay() } else { h.switchDrop() } }
-            h.leave(A); h.leave(C)
+            h.leave(A); h.leave(C); if let A2 { h.leave(A2) }
             if mark != nil { removed += 1 }
+            if A2 != nil, review { lateAtReview += 1 }
+            if A2 != nil, fixed, atDecision, !atRegistration { lateWithoutCheck += 1 }
             if let mark, let p = onlyLetsGo(h.board.posted, of: A, from: mark) {
-                if review { problem = problem ?? "A after its removal: \(p)" } else if fixed { serverMarkLanded += 1 } else { oldLanded += 1 }
+                if fixed && atDecision { problem = problem ?? "A after its removal: \(p)" } else if fixed { serverMarkLanded += 1 } else { oldLanded += 1 }
+            }
+            if fixed, atDecision, let mark, let A2, let p = onlyLetsGo(h.board.posted, of: A2, from: mark) {
+                if review { problem = problem ?? "A2 (A's key, admitted while the Mac decided) after the decision: \(p)" } else { lateLanded += 1 }
             }
             if fixed, let cMark, let p = onlyLetsGo(h.board.posted, of: C, from: cMark), problem == nil { problem = "C after it left: \(p)" }
-            if fixed, h.board.keys.down.values.contains(A) || h.board.keys.down.values.contains(C), problem == nil {
+            if fixed, h.board.keys.down.values.contains(where: { $0 == A || $0 == C || $0 == A2 }), problem == nil {
                 problem = "a key of a device that left is still down: \(h.board.keys.down)"
             }
-            if fixed, h.board.leftOwner == A || h.board.rightOwner == A, problem == nil {
+            if fixed, [h.board.leftOwner, h.board.rightOwner].contains(where: { $0 != nil && ($0 == A || $0 == A2) }), problem == nil {
                 problem = "a button of the removed device is still down after it left"
             }
             if review { buttonsAtLeaving += h.board.buttonsLetGo }
             if fixed, let n = h.dropped[B], problem == nil { problem = "\(n) of B's events dropped, though the Mac still served it" }
-            if fixed, let problem { bad += 1; if bad <= 3 { print("FAIL: revoked run \(run)\(review ? "" : " (marked by the server alone)"): \(problem)") } }
+            if fixed, let problem {
+                bad += 1
+                if bad <= 3 { print("FAIL: revoked run \(run)\(review ? "" : atDecision ? " (no check at registration)" : " (marked by the server alone)"): \(problem)") }
+            }
         }
     }
-    check(removed == 9000, "every session removed A: \(removed) of 9000")
-    check(bad == 0, "random sessions with a removal: \(bad) of 6000 landed input of a device the Mac no longer served, or left something down")
+    check(removed == 12000, "every session removed A: \(removed) of 12000")
+    check(bad == 0, "random sessions with a removal: \(bad) of 9000 landed input of a device the Mac no longer served, or left something down")
     check(waited > 1000, "the decision found A's input waiting for the main actor in many sessions: \(waited) of 3000")
+    check(lateAtReview > 500, "a second connection of A's key admitted while the Mac decided, in many sessions: \(lateAtReview) of 3000")
+    check(lateLanded > lateWithoutCheck / 5, "without the check at registration (the review's branch), its input landed after the decision in many of them: \(lateLanded) of \(lateWithoutCheck)")
     check(serverMarkLanded > 500, "marked by the server alone (before the review), A's input read while the Mac decided landed after the decision: \(serverMarkLanded) of 3000")
     check(ownUps > 500, "its own ups were tried at once in many sessions: \(ownUps)")
     check(oldLanded > 2000, "as the glue was before, most sessions landed its input after its removal: \(oldLanded) of 3000")
     check(buttonsAtLeaving > 100, "the removed device's buttons let go of as it left in many sessions: \(buttonsAtLeaving)")
-    print("revoked: 3000 sessions with a removal and a departure, its input waiting at the decision in \(waited); its own ups at once \(ownUps) times; its buttons let go of as it left \(buttonsAtLeaving) times; marked by the server alone \(serverMarkLanded) of 3000, before the fix \(oldLanded) of 3000 landed its input after the removal")
+    print("revoked: 3000 sessions with a removal and a departure, its input waiting at the decision in \(waited), a second connection of its key admitted while the Mac decided in \(lateAtReview); its own ups at once \(ownUps) times; its buttons let go of as it left \(buttonsAtLeaving) times; without the check at registration such a connection's input landed after the decision in \(lateLanded) of \(lateWithoutCheck); marked by the server alone \(serverMarkLanded) of 3000, before the fix \(oldLanded) of 3000 landed its input after the removal")
 }
 
 // MARK: Random sessions

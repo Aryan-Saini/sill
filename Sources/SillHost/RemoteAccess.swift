@@ -145,7 +145,8 @@ package final class RemoteAccess {
     /// once, on the main actor as the change is decided (security scan finding 10, the review of
     /// PR #254). Its messages still waiting for the main actor, read off the network while this Mac
     /// saved the change (the keychain's write), then land nothing either: the server's own mark, as it
-    /// says goodbye, reaches the coordinator only behind them.
+    /// says goodbye, reaches the coordinator only behind them. A session admitted meanwhile, not yet
+    /// registered there, is cut off as it registers (`stillServes`).
     var onCutOff: (((ClientRoute) -> Bool) -> Void)?
 
     /// TEST ONLY: the file store's directory, where a test hook may leave the current pairing link
@@ -480,6 +481,19 @@ package final class RemoteAccess {
             print("Removed \(device.displayName); closed \(n) connection\(n == 1 ? "" : "s").")
         })
         return nil
+    }
+
+    /// Whether this Mac still serves a session admitted with `route`, by its settings and paired devices
+    /// now (DoorPolicy.stillServes): false for one a change has cut off since its door admitted it. The
+    /// coordinator asks as it registers a session, so one admitted while this Mac decided the change
+    /// (behind which its registration waited, out of `onCutOff`'s sight) is cut off before any message of
+    /// it lands (security scan finding 10, the review of PR #254).
+    func stillServes(_ route: ClientRoute) -> Bool {
+        let fp = route.fingerprint
+        let t = DoorPolicy.Trust(hasKey: fp != nil, paired: fp.map { key in paired.contains { $0.fingerprintData == key } } ?? false,
+                                 requirePairing: requirePairing, remoteAccess: remoteAccess, internetAccess: internetAccess)
+        return DoorPolicy.stillServes(route.isRemote ? .remote : .home, encrypted: route.encrypted,
+                                      wasPaired: route.pairedName != nil, origin: route.origin, t)
     }
 
     /// Renames a paired device (the Mac's own label for it).

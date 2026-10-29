@@ -80,5 +80,13 @@ M = [
     ("after the gate: home, removed read as pairingRequired", F, "            if wasPaired { return Goodbye.removed }", "            if wasPaired { return Goodbye.pairingRequired }"),
     ("after the gate: home drops a key paired meanwhile", F, "            if t.paired { return nil }", "            if t.paired && wasPaired { return nil }"),
     ("after the gate: home keeps a removed key while Require pairing is off", F, "            if wasPaired { return Goodbye.removed }\n", ""),
+    # Still served (security scan finding 10, the review of PR #254): a session registered behind the decision.
+    ("still served: every session, cut off or not", F, "        return afterGate(door, wasPaired: wasPaired, origin: origin, t, remoteSessions: 0) == nil",
+     "        return true"),
+    ("still served: a plain session judged as a TLS one", F, "        guard encrypted else { return true }\n", ""),
+    ("still served: the remote door's limit counts as a cut", F, "afterGate(door, wasPaired: wasPaired, origin: origin, t, remoteSessions: 0) == nil",
+     "afterGate(door, wasPaired: wasPaired, origin: origin, t, remoteSessions: maxRemoteSessions) == nil"),
+    ("still served: judged as if never paired (Remove with Require pairing off missed)", F,
+     "afterGate(door, wasPaired: wasPaired, origin: origin, t, remoteSessions: 0) == nil", "afterGate(door, wasPaired: false, origin: origin, t, remoteSessions: 0) == nil"),
 ]
 sys.exit(0 if module.mutate("door-policy", M, sys.argv[1]) else 1)

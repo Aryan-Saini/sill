@@ -429,16 +429,24 @@ package final class StreamCoordinator {
                     $0.devices.append(HostStatusSnapshot.Device(id: id, endpoint: "\(connection.endpoint)", name: route.pairedName,
                                                                 route: link, remoteRoute: route.label))
                 }
+                // Admitted while the Mac was deciding a change that cuts it off (Remove, Require pairing,
+                // Remote Access or internet access: the decision saved it, a keychain write or its prompt,
+                // while this registration waited behind it, out of `cutOff`'s sight): cut off now, before
+                // any message of it, which all come after this (security scan finding 10, the review of
+                // PR #254). The server says goodbye to it as to the others. Nothing of it wakes the display
+                // or counts as the paired device's last connection.
+                if let remote = self.remote, !remote.stillServes(route) { self.markRevoked(id) }
+                let cut = self.revoked.contains(id)
                 // A paired key's session, at either door: the pane's "last connected", and over the
                 // cable the iPhone or iPad the key runs on (learned once).
-                if let fp = route.fingerprint, route.pairedName != nil {
+                if !cut, let fp = route.fingerprint, route.pairedName != nil {
                     let words = route.label ?? Self.homeRouteWords(route, link: link)
                     self.remote?.sessionStarted(fingerprint: fp, route: words, cableDevice: route.cableDevice)
                 }
                 // Home or away before its catalog: its settings state says which quality it sets.
                 self.routesChanged(joined: id, endpoint: "\(connection.endpoint)")
                 // A sleeping display gives black frames: the session's start wakes it, as a key would.
-                self.deviceActive(.connect, connection)
+                if !cut { self.deviceActive(.connect, connection) }
                 // Catalog first: the client's UI needs it even if the keyframe is slow to come.
                 self.catalog.thumbnailsWanted = true
                 self.sendCatalog(to: connection)
@@ -1769,8 +1777,8 @@ package final class StreamCoordinator {
     /// names is marked now, so its messages still waiting for the main actor (read off the network
     /// while the Mac saved the change, the keychain's write) land nothing either. The server marks each
     /// again as it says goodbye (`clientRevoked`). A connection whose registration still waits here (one
-    /// admitted while the Mac was saving the change) is the server's alone to mark: what it sent before
-    /// that mark still lands, for at most the save's length.
+    /// admitted while the Mac was saving the change) is marked as it registers, before any message of it
+    /// (RemoteAccess.stillServes, `onClientConnected`).
     private func cutOff(_ matching: (ClientRoute) -> Bool) {
         for (id, route) in routes where matching(route) { markRevoked(id) }
     }
