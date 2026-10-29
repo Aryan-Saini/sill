@@ -861,7 +861,7 @@ key at all. A run takes about 5 minutes of macOS time (What it costs, below).
 
 ## Nightlies
 
-`.github/workflows/nightly.yml` (2026-10-29; issue #134) builds main every night it moved, at 03:17
+`.github/workflows/nightly.yml` (2026-10-29; issue #134) builds main every night it moved, at 09:17
 UTC, and when run by hand: Actions › Nightly › Run workflow, or `gh workflow run nightly.yml`. GitHub
 lists a workflow, and runs it by hand or on a schedule, only once its file is on main.
 
@@ -892,8 +892,8 @@ What a nightly is:
   the build (a look a minute, 90 minutes at most), gives it What to Test, and gives it to TestFlight's
   groups (below). A night run again by hand finds its build in App Store Connect and only gives it its
   groups again.
-- Versions: what main says (0.6.0 since 2026-10-29, part 2's first item), with the commit count as
-  the build number on both apps, as in "Sill 0.6.0 (990)". Never committed: make-app.sh has always
+- Versions: what main says (0.5.5 since 2026-10-29, the pre-release number, part 2's first item; the store release will be 0.6.0), with the commit count as
+  the build number on both apps, as in "Sill 0.5.5 (990)". Never committed: make-app.sh has always
   stamped the count into the Mac's bundle, and `--build-number` gives it to xcodebuild for the run.
   Only commits on main's first-parent line are uploaded with their count (the nightlies, and
   testflight.yml, which exports other branches without uploading them), so a build number of the
@@ -933,8 +933,7 @@ For a nightly tester:
 - The update check never offers a nightly: it reads only
   `https://api.github.com/repos/Saffsanity/sill/releases/latest`, which never lists a pre-release
   (`UpdatePolicy.feed`), refuses an answer that says `prerelease` anyway (`UpdatePolicy.release`), and
-  "nightly" is no version. A nightly Sill.app says 0.6.0 with its build number, so it is offered
-  nothing until a release newer than 0.6.0 exists: a nightly tester moves to the 0.6.0 release by hand.
+  "nightly" is no version. A nightly Sill.app says 0.5.5 with its build number, so the update check offers it the 0.6.0 release once that is published, like everyone else's.
 - Going back: on the Mac, quit Sill, download the release from https://getsill.app/download and
   replace Sill in Applications; nothing to set up again. On a device, TestFlight › Sill › Previous
   Builds installs an earlier build, and the App Store installs the release over a TestFlight build
@@ -989,12 +988,12 @@ The first run, for Noah:
    `iOSClient/PrivacyInfo.xcprivacy` now declares `NSPrivacyAccessedAPICategoryActiveKeyboards`
    with 54BD.1. `release-ios.sh`'s check of run 40843967209's binary against main's manifest
    declares every required-reason API it uses (ActiveKeyboards, SystemBootTime, UserDefaults).
-2. Merge "Version 0.6.0 for both apps": App Store Connect takes no new build of 0.5.1, which it has
+2. Merge "Version 0.5.5 for both apps": App Store Connect takes no new build of 0.5.1, which it has
    released.
 3. Merge "Nightly builds".
 4. `gh workflow run nightly.yml -f verify_only=true` (or Run workflow with "Verify only" ticked).
    Check decide's summary (the notes and What to Test), the Mac job's artifacts
-   `Sill-nightly-<date>-<sha7>-adhoc.zip` and `.dmg`, the iOS job's `Sill-0.6.0-<count>.ipa`
+   `Sill-nightly-<date>-<sha7>-adhoc.zip` and `.dmg`, the iOS job's `Sill-0.5.5-<count>.ipa`
    ("Signed for App Store Connect and checked … Nothing was uploaded") and its summary's "TestFlight's
    groups": `Scripts/asc.swift groups` reads them through the key (nothing else), so this run already
    shows the key works with App Store Connect's API and which groups the nightlies will go to.
@@ -1006,10 +1005,10 @@ The first run, for Noah:
    on a second Mac (downloaded, so quarantined: it opens, the drag, Sill opens, the iPad still
    paired), the iOS job's last step ("Assigned build … to: Insiders", "Public beta: not given") and
    TestFlight on the iPad (the build with its What to Test).
-7. `gh variable set SILL_NIGHTLY --body true`: every night from the next 03:17 UTC on.
+7. `gh variable set SILL_NIGHTLY --body true`: every night from the next 09:17 UTC on.
 8. Once a nightly has worked in Insiders: `gh variable set SILL_NIGHTLY_PUBLIC_BETA --body true`
    (§6's Test Information filled in first). The next nightly goes to the public beta group and to Beta
-   App Review; the first build of 0.6.0 is reviewed in full.
+   App Review; the first build of a version is reviewed in full.
 
 What it costs: nothing, in a public repository. A night is three jobs on `xcode-27`: about 2 minutes
 to decide, 25 to 45 for Sill for Mac (the checks, the build, two notarizations), and 10 for Sill for

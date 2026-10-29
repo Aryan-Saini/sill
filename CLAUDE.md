@@ -12,8 +12,8 @@ Formerly winstream; the folder still carries the old name.
 the brief and its Progress are in ~/Downloads/sill-handoff/nightly-plan.md, the procedure in
 docs/release-checklist.md, "Nightlies").** Noah: "Setup the nightly build strategy" (the nine secrets set
 2026-10-29), then, before the build: "hold off on giving the testflight build to public beta until I try it
-out in Insiders first tomorrow". Merge "Version 0.6.0 for both apps" (PR #244, branch `version-0.6.0`) first.
-- `.github/workflows/nightly.yml`: 03:17 UTC while the repository variable `SILL_NIGHTLY` is `true`, and by
+out in Insiders first tomorrow". Merge "Version 0.5.5 for both apps" (PR #244, branch `version-0.6.0`) first.
+- `.github/workflows/nightly.yml`: 09:17 UTC while the repository variable `SILL_NIGHTLY` is `true`, and by
   hand (`verify_only` forces the ad hoc, no-upload path); a scheduled night whose main is the sha at the end
   of the pre-release's notes builds nothing; only main publishes. decide writes the night's words once
   (`Scripts/nightly-notes.sh`: the pull requests merged since the newest `v<version>` tag) and fixes the
@@ -30,7 +30,7 @@ out in Insiders first tomorrow". Merge "Version 0.6.0 for both apps" (PR #244, b
   TestFlight group, and the public beta group (the external group with the public link) only while
   `SILL_NIGHTLY_PUBLIC_BETA` is `true`, with Beta App Review right after; asc.swift refuses `--public-beta`
   unless its environment says that too. Unset at first, on Noah's word.
-- A nightly is 0.6.0 (N), N the commit count on both apps, never committed. The update check never offers
+- A nightly is 0.5.5 (N), N the commit count on both apps, never committed (the store release will be 0.6.0). The update check never offers
   one (`UpdatePolicy.feed` is /releases/latest, which lists no pre-release; `UpdatePolicy.release` refuses
   `prerelease: true`; "nightly" is no version), and offers a nightly nothing until a release newer than its
   version exists. A nightly reads the release's data-protection keychain items (same team, bundle ID and
@@ -74,8 +74,7 @@ out in Insiders first tomorrow". Merge "Version 0.6.0 for both apps" (PR #244, b
   31 shell mutants; the workflows 204 structural checks and 46 blocks under bash -n, 44 of 44 run blocks
   executed; the signing run's artifact rechecked (0.5.1 (987), Apple Distribution, get-task-allow false).
   Not changed here, for the session that talks to Noah: the version (the handoff records his 08:55 UTC
-  decision that pre-release builds say 0.5.5 and the release 0.6; #244 and these docs say 0.6.0) and the
-  hour (09:17 UTC there; 03:17 here); PR #247's README and download-page words repeat this one's.
+  decision that pre-release builds say 0.5.5 and the release 0.6: #244 and these docs say 0.5.5 since the main session's fix-up of 2026-10-29) and the hour (09:17 UTC, applied the same way); PR #247's README and download-page words repeat this one's.
 - **Untested, for Noah (docs/release-checklist.md, "Nightlies", "The first run"):** the privacy
   manifest's ActiveKeyboards (#147's `UITextInputMode.activeInputModes`, ITMS-91053) is declared on main
   since PR #243 (54BD.1; release-ios.sh's check of run 40843967209's binary against main's manifest: every
@@ -83,7 +82,7 @@ out in Insiders first tomorrow". Merge "Version 0.6.0 for both apps" (PR #244, b
   `SILL_SIGN_IN_CI` and `SILL_TESTFLIGHT_IN_CI` true; a run by hand: the pre-release, the notarized dmg on
   a second Mac (quarantined: opens, drags, opens, the iPad still paired), TestFlight's groups (the real
   names: the step lists them) and What to Test; `SILL_NIGHTLY` true; after his Insiders test,
-  `SILL_NIGHTLY_PUBLIC_BETA` true (Test Information filled in; the first build of 0.6.0 reviewed in full).
+  `SILL_NIGHTLY_PUBLIC_BETA` true (Test Information filled in; the first build of a version reviewed in full).
 
 **Pinch to zoom (2026-10-28/29, addhumal's PR #196 with maintainer edits; issue #65).** Noah's decisions of
 2026-10-19/20: pinch to zoom, not a slider; Photos-like, centred on the point between the fingers, the Mac's cursor
@@ -6841,7 +6840,7 @@ good.
   count can be a later nightly's), the build number the commit count
   (`--build-number`); the .ipa is
   the artifact for 14 days (docs/release-checklist.md, "TestFlight from GitHub
-  Actions"). `nightly.yml`: 03:17 UTC while the variable `SILL_NIGHTLY` is
+  Actions"). `nightly.yml`: 09:17 UTC while the variable `SILL_NIGHTLY` is
   `true`, and by hand (`verify_only`); decide (the skip rule against the
   pre-release's sha, the date, the build number, the notes once), Sill for Mac
   (`release.sh --nightly --publish` with `SILL_SIGN_IN_CI`, else ad hoc

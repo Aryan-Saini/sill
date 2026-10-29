@@ -1,4 +1,4 @@
-# Nightly builds of Sill from main (docs/release-checklist.md, "Nightlies"): at 03:17 UTC every night
+# Nightly builds of Sill from main (docs/release-checklist.md, "Nightlies"): at 09:17 UTC every night
 # that main moved, and by hand (Actions › Nightly › Run workflow). Three jobs:
 #
 # - decide: on a schedule, nothing at all unless the repository variable SILL_NIGHTLY is true; by
@@ -38,7 +38,7 @@ name: Nightly
 
 on:
   schedule:
-    - cron: '17 3 * * *'
+    - cron: '17 9 * * *'
   workflow_dispatch:
     inputs:
       verify_only:

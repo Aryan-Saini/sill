@@ -1895,7 +1895,7 @@ own line (another branch's count can be a later nightly's). docs/release-checkli
 "TestFlight", has the App Store Connect side, the record field by field.
 
 Nightlies (`.github/workflows/nightly.yml`; docs/release-checklist.md,
-"Nightlies"): every night main moved (03:17 UTC, while the repository variable
+"Nightlies"): every night main moved (09:17 UTC, while the repository variable
 `SILL_NIGHTLY` is `true`) and by hand. `Scripts/release.sh --nightly --publish`
 builds main's head as a release, but universal (`SILL_UNIVERSAL=1`; make-app.sh
 takes `SILL_RELEASE_NIGHTLY=1` for an untagged HEAD), as
@@ -1907,7 +1907,7 @@ Foundation only) waits for App Store Connect to process it, sets What to Test
 and gives it to every internal TestFlight group, and to the public beta group
 only while `SILL_NIGHTLY_PUBLIC_BETA` is `true`. `Scripts/nightly-notes.sh`
 writes both apps' words from the pull requests merged since the last release
-tag. A nightly says the version main says, the next release's (0.6.0), with
+tag. A nightly says the version main says, 0.5.5, the pre-release number (the store release will be 0.6.0), with
 the commit count as its build; the update check never offers a nightly, and
 offers one nothing until a release newer than its version exists. A nightly
 reads the release's data-protection keychain items, so a device paired with
