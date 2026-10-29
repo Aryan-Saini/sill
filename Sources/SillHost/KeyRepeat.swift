@@ -50,8 +50,9 @@ package struct KeyRepeat: Sendable {
     /// The shortest time between two repeats (System Settings' fastest is 1/30 s, `defaults` can set
     /// 1/60 s): a shorter Key Repeat Rate counts as this.
     package static let shortestInterval = 0.015
-    /// A wait or an interval this long or longer repeats nothing: System Settings' Key Repeat Rate
-    /// "Off" stores one of thousands of seconds.
+    /// A wait or an interval this long or longer repeats nothing: no keyboard's repeat waits a minute,
+    /// and System Settings' Key Repeat Rate "Off" is, by report, stored as a far longer wait (not checked
+    /// here: no setting of this Mac was changed).
     package static let off = 60.0
     /// How long a device may say nothing before its key stops repeating: a device pings every 0.25 s
     /// (StreamClient.pingInterval), so this is two pings missed.

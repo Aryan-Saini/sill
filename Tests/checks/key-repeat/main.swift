@@ -193,7 +193,7 @@ check(KeyRepeat.timing(delay: 0.5, interval: 1.0 / 30) == thisMac, "this Mac's 0
 check(KeyRepeat.timing(delay: 0.25, interval: 2) == KeyRepeat.Timing(delay: 0.25, interval: 2),
       "System Settings' shortest delay and slowest rate as they are")
 check(KeyRepeat.timing(delay: 2, interval: 1.0 / 30) == KeyRepeat.Timing(delay: 2, interval: 1.0 / 30), "the longest delay, 2 s")
-check(KeyRepeat.timing(delay: 5000, interval: 1.0 / 30) == nil, "Key Repeat Rate Off (a delay of 5,000 s): no repeat")
+check(KeyRepeat.timing(delay: 5000, interval: 1.0 / 30) == nil, "a delay of 5,000 s (Key Repeat Rate Off, as reported): no repeat")
 check(KeyRepeat.timing(delay: 0.5, interval: 5000) == nil, "an interval of 5,000 s: no repeat")
 check(KeyRepeat.timing(delay: 60, interval: 0.03) == nil && KeyRepeat.timing(delay: 0.5, interval: 60) == nil,
       "a minute or more: no repeat")

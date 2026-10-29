@@ -734,10 +734,10 @@ the F-keys and any key with ⌘, ⌃ or ⌥ held (⌘Z, ⌥⌫, ⌥←), and the
 row's esc, tab and arrows, which stay down while a finger is on them (down at the
 touch, up at the release; what is latched goes down with the key and is spent at
 the touch; `HeldCap`), but for a phone's esc and tab at the accessibility text
-sizes, whose long press shows the cap large and stays a tap. Letters, digits, Space, Delete, Return and Tab typed
-through iPadOS's text system repeat as before, at iPadOS's own key repeat
-(Settings › Accessibility › Keyboards › Key Repeat), as does the on-screen
-keyboard's delete; an Esc that reaches the Mac through its key command (an iPad
+sizes, whose long press shows the cap large and stays a tap. Letters, digits,
+Space, Delete, Return and Tab typed through iPadOS's text system repeat as
+before, at iPadOS's own key repeat (its setting is among Accessibility's
+keyboard settings), as does the on-screen keyboard's delete; an Esc that reaches the Mac through its key command (an iPad
 that keeps it from `pressesBegan`) repeats as iPadOS repeats a key command. No
 wire change: every device gets it from a Mac with this build.
 `Sources/SillHost/KeyRepeat.swift` is the rule, checked in `Tests/checks/key-repeat`;
