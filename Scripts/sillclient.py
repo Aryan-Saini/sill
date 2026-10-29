@@ -73,7 +73,8 @@ The Mac's pointer (kind 26; docs/pointer-visibility-plan.md):
                      moving it, and how many input messages (kind 8) the host had read from it
   --move=X,Y@T       a pointer move (kind 8) to the frame fractions X, Y, T seconds in
   --tap=X,Y@T        a move there, a left down and a left up: three kind 8 messages
-  --key=USAGE@T      a key down and up (a USB HID usage, no modifiers): two kind 8 messages
+  --key=USAGE[,HOLD]@T  a key down and up (a USB HID usage, no modifiers): two kind 8 messages, the up
+                     HOLD seconds after the down when given (a key held), else at once
   --input=JSON@T     this literal kind 8 payload T seconds in (split on the last @), as written: an
                      input the flags above do not make, such as a scroll or a scroll gesture's phase
                      ({"scrollGesture":{"_0":"began","x":0.5,"y":0.5}}); one kind 8 message
@@ -216,6 +217,14 @@ def usage(text):
     u = number(text, "--key")
     if not 0 <= u <= 65535: raise ValueError(f"--key: a HID usage from 0 to 65535, got {u}")
     return u
+
+def key_spec(text):
+    """--key's USAGE[,HOLD]: the usage, and the seconds its up comes after its down (None: at once)."""
+    u, comma, hold = text.partition(",")
+    if not comma: return (usage(u), None)
+    h = number(hold, "--key's HOLD", float)
+    if not (h == h and 0 < h <= 600): raise ValueError(f"--key: HOLD from just over 0 to 600 seconds, got {hold!r}")
+    return (usage(u), h)
 
 def synthetic_listener(port):
     """Whether every process listening on this Mac's TCP `port` is a --synthetic host (lsof, ps): the only
@@ -487,8 +496,15 @@ try:
                           else gesture(text) if name == "gesture"
                           else unescape(text) if name == "copy"
                           else "x" * number(text, "--copy-bytes") if name == "copy-bytes"
-                          else usage(text) if name == "key" else text)
-            events.append((number(t, f"--{name}'s @T", float), i, name, text, parsed))
+                          else key_spec(text) if name == "key" else text)
+            when = number(t, f"--{name}'s @T", float)
+            if name == "key":
+                # A key held (HOLD) is two sends: its down at T, its up HOLD seconds later.
+                code, hold = parsed
+                events.append((when, i, name, text, (code, "down" if hold is not None else "both")))
+                if hold is not None: events.append((when + hold, i, name, text, (code, "up")))
+            else:
+                events.append((when, i, name, text, parsed))
         elif name in VALUED:
             if not body: raise ValueError(f"--{name} needs a value")
             if name in ("big-payload", "flood") and number(body, f"--{name}") < 1: raise ValueError(f"--{name} must be at least 1")
@@ -751,7 +767,11 @@ def fire(e, now):
         s.sendall(pointer_input("move", *parsed) + pointer_input("leftDown", *parsed) + pointer_input("leftUp", *parsed))
         print(f"  sent tap {text} (move, down, up) at {at}")
     elif name == "key":
-        s.sendall(key_input(parsed, True) + key_input(parsed, False)); print(f"  sent key {parsed} (down, up) at {at}")
+        code, phase = parsed
+        if phase == "both":
+            s.sendall(key_input(code, True) + key_input(code, False)); print(f"  sent key {code} (down, up) at {at}")
+        else:
+            s.sendall(key_input(code, phase == "down")); print(f"  sent key {code} {phase} at {at}")
     elif name == "input":
         s.sendall(msg(8, text.encode())); print(f"  sent input {text} at {at}")
     elif name == "gesture":
@@ -765,8 +785,11 @@ def fire(e, now):
         s.sendall(msg(32, text.encode())); print(f"  sent raw kind 32 {text} at {at}")
 while time.time() - t0 < dur:
     now = time.time()
-    while events and now - t0 >= events[0][0]:
-        fire(events.pop(0), now)
+    try:
+        while events and now - t0 >= events[0][0]:
+            fire(events.pop(0), now)
+    except OSError as e:
+        print(f"send failed at {now - t0:.2f}s: {e}"); break
     try:
         if pinging and now >= nextping:
             s.sendall(msg(10, struct.pack(">d", now))); nextping = now + 1
