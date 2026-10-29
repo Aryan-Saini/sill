@@ -123,7 +123,12 @@ let listOld = "ALF: total number of apps = 2 \n\n1 :  \(app) \n \t ( Allow incom
 same(R.listed(listOld), [R.Listed(path: app, blocks: false), R.Listed(path: exe, blocks: true)], "the legacy form")
 same(R.listed("Total number of apps = 0 \n"), [], "an empty list is a list")
 same(R.listed(""), nil, "nothing is no list")
-same(R.listed("usage: socketfilterfw [-h]\n"), nil, "the usage is no list")
+// The tool's usage, as macOS 27.0.1 prints it for an option it does not know (status 255): it names
+// --listapps, so only a text with the total is a list (the review, 2026-10-29: a stand-in without
+// "apps" let a reading that takes any mention of apps for a list pass).
+let usage27 = "usage: /usr/libexec/ApplicationFirewall/socketfilterfw [-h] [--getglobalstate] [--setglobalstate on | off] [--getblockall] [--setblockall on | off] [--listapps] [--getappblocked <path>] [--blockapp <path>] [--unblockapp <path>] [--add <path>] [--remove <path>] [--getallowsigned] [--setallowsigned on | off] [--setallowsignedapp on | off] [--getstealthmode] [--setstealthmode on | off]\n"
+same(R.listed(usage27), nil, "the usage is no list")
+same(R.listed("usage: socketfilterfw [-h]\n"), nil, "a short usage is no list")
 same(R.listed("Total number of apps = 2 \n1 : /a \n2 : /b \n             (Block incoming connections)\n"),
      [R.Listed(path: "/a", blocks: nil), R.Listed(path: "/b", blocks: true)], "a rule with no state line keeps none")
 same(R.listed("Total number of apps = 1 \n             (Block incoming connections)\n1 : /a \n"),

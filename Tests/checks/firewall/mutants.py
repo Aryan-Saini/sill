@@ -47,6 +47,7 @@ MUTANTS = {
                                     "guard !number.isEmpty else { return nil }"),
     "L6 a number that names nothing is a rule": ("return name.isEmpty ? nil : name", "return name"),
     "L7 the older total unread": ('if line.lowercased().contains("total number of apps")', 'if line.hasPrefix("Total number of apps")'),
+    "L8 any mention of apps is a list": ('if line.lowercased().contains("total number of apps")', 'if line.lowercased().contains("apps")'),
     # answers
     "N1 the list never read": ("listed: raw.listApps.flatMap(listed),", "listed: nil,"),
     "N2 the bundle's answer from the executable's text": ("raw.bundle.map { appAnswer($0, path: bundle) }",
