@@ -8,6 +8,38 @@ Formerly winstream; the folder still carries the old name.
 
 ## Current step
 
+**The macOS firewall that blocks Sill's executable (2026-10-29, branch `firewall-executable-block` from main
+at 150479b5; PR #250; the security batch, Noah's go of 2026-10-29).** A user's report: the firewall keeps a
+rule per path, and a Mac held `/Applications/Sill.app` allowed and `…/Contents/MacOS/Sill` blocked
+(`socketfilterfw --listapps`): nothing reached Sill from the network, System Settings showed it allowed, and
+`--getappblocked` on the bundle said "permitted"; `sudo socketfilterfw --unblockapp` on the executable fixed it.
+No wire change.
+- `FirewallCheck` asks `/usr/libexec/ApplicationFirewall/socketfilterfw` `--getglobalstate`, then while on
+  `--getblockall`, `--getappblocked` for the running executable (`proc_pidpath`) and its bundle, and
+  `--listapps`: a process each, read-only, no privileges (macOS 27.0.1: 4–8 ms each, no prompt; one run with
+  `--listapps` after `--getappblocked` was killed, 6 of 6; no `com.apple.alf.plist` there). At launch, when the
+  listener comes up, when Sill.app's General opens or Sill becomes active over it, and when a device gets in
+  from the network while the verdict says none can (`asksAgain`); never on a timer.
+- `FirewallRule` (pure, `Tests/checks/firewall`, 335 checks, 64 mutants): off, allows,
+  `blocks(executable:bundle:)` (its own answer or its rule in the list, either enough), `blocksAll`, unknown.
+  While it blocks: General's line in the Permissions style with `sudo …/socketfilterfw --unblockapp <the running
+  executable's path>` (a line per option; Copy copies one line), for Block all where to turn it off; the menu's
+  "Devices Can’t Connect — The macOS firewall blocks Sill’s executable." (opens General); one log line per change
+  ("Firewall: …"; none for a first verdict that blocks nothing). Sill never runs the command. support.html's
+  "Your Mac isn’t listed" gains the case (Sill's own line marked `<!-- Firewall`). TEST ONLY
+  `SILL_TEST_FIREWALL=executable|bundle|both|all|off|allowed|unreadable` or a file holding one, test hosts only;
+  the previews are the rule's verdicts on those answers; `-SillPrintMenuAfter` prints General's line.
+- Verified: the check and mutants; `run-all.sh`, all 57; a clean release build (the CaptureProbe warning
+  only); main's CLI output identical masked and sorted, idle and with a client; previews main's but the 16 new
+  files, menu.txt's two samples and General's path; live on loopback, blocked → allowed → Block all →
+  unreadable, a VPN-origin client clearing a stale verdict, the bare app's menu and line, this Mac's real
+  firewall "none (allows)". Not built: an Unblock button with the admin password (`osascript` off the main
+  thread, or a privileged helper), Noah's call.
+- **Untested, for Noah:** the report's state by hand (`sudo …/socketfilterfw --add …/Contents/MacOS/Sill`, then
+  `--blockapp`; `--remove` after): the device's tap failing, the menu item and log line, General's line and
+  Copy, the command in Terminal, then both gone without a relaunch; Block all on and off; VoiceOver; macOS 14
+  or 15 (answers that don't read log "Firewall: couldn’t read …" once and show nothing).
+
 **Pinch to zoom (2026-10-28/29, addhumal's PR #196 with maintainer edits; issue #65).** Noah's decisions of
 2026-10-19/20: pinch to zoom, not a slider; Photos-like, centred on the point between the fingers, the Mac's cursor
 not involved; a slight pinch out stays zoomed and only a pinch all the way out (or a lift within 2 % of it) gives the
@@ -6033,7 +6065,16 @@ good.
   rate, the suggestion, the host's lines, and which restarts judge afresh
   (`judgedAfresh`); pure, `Tests/checks/link-judge`),
   `HostStatus` (the snapshot the app shows, pushed on events; `onChange`
-  publishes the devices' settings state), `DeviceSettings` (what a device may
+  publishes the devices' settings state; `firewall`, the macOS firewall's
+  verdict), `FirewallRule` (what the macOS firewall's read-only answers mean
+  for this host: a rule that blocks the running executable or its bundle, or
+  Block all incoming connections, keeps devices out; Settings › General's
+  line with the Terminal command that unblocks it, the menu's subtitle, the
+  log's lines; the TEST ONLY SILL_TEST_FIREWALL's canned answers; pure,
+  `Tests/checks/firewall`) and `FirewallCheck` (asks `socketfilterfw` five
+  read-only questions, a process each, no privileges: at launch, when the
+  listener comes up, when Sill.app's General opens, when a device gets in
+  while the verdict says none can), `DeviceSettings` (what a device may
   set, `HostConfig` ↔ wire), `HostLog` (the print shadow, the app's ring and
   log file),
   `WindowCatalog` (polls windows and thumbnails only while a client is
@@ -6759,7 +6800,7 @@ good.
   writer, against Finder's own layout of the file, make-dmg.sh's layout
   arguments and the SVG's size and edge), `door-policy`, `duo` (DuoPosture;
   `tour` and `phone-portrait` take the Duo's real sizes too), `encoder-mailbox`,
-  `encoder-slowstate`, `fence`, `gesture-chords`, `gestures`, `goodbye`,
+  `encoder-slowstate`, `fence`, `firewall` (FirewallRule), `gesture-chords`, `gestures`, `goodbye`,
   `hardware-keyboard` (iOSClient's HardwareKeyboardPolicy),
   `home-device`, `home-model`, `home-records`, `home-txt`, `installed-apps`
   (InstalledApps on a fake applications folder), `key-strokes` (the
@@ -6844,6 +6885,8 @@ SILL_TEST_LOOPBACK=1 SILL_TEST_HOTKEYS='108=off,173=off' .build/release/SillHost
 swift run -c release SillHost --no-clipboard  # share nothing of the clipboard with devices (on by default, as in Sill.app)
 SILL_TEST_LOOPBACK=1 SILL_TEST_SOFTWARE_ENCODER=1 SILL_TEST_NO_ROUTER=1 SILL_TEST_PASTEBOARD=me.saffer.sill.test.x SILL_TEST_CLIPBOARD_LOG=1 .build/release/SillHost --synthetic   # the clipboard on a pasteboard of its own (never this Mac's), each decision printed with sizes
 SILL_TEST_NO_SCREEN=1 SILL_TEST_LOOPBACK=1 SILL_TEST_SOFTWARE_ENCODER=1 SILL_TEST_NO_ROUTER=1 .build/release/SillHost --synthetic   # TEST ONLY: ScreenCaptureKit never asked (no window list, no thumbnails), so a host an agent runs asks macOS for no screen recording
+SILL_TEST_FIREWALL=executable SILL_TEST_NO_SCREEN=1 SILL_TEST_LOOPBACK=1 SILL_TEST_SOFTWARE_ENCODER=1 SILL_TEST_NO_ROUTER=1 .build/release/SillHost --synthetic   # TEST ONLY: the macOS firewall's answers canned (executable|bundle|both|all|off|allowed|unreadable, or a file holding one, read at each check): "Firewall: the macOS firewall blocks Sill’s executable, …"
+/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate; …/socketfilterfw --listapps; …/socketfilterfw --getappblocked PATH   # the firewall, read-only as any user; never --unblockapp, --add, --remove or --set* (they change it, with sudo)
 python3 Scripts/sillclient.py PORT 6 none --clipboard --copy=hello@2 --expect=clipboard=none   # subscribe, send text as a device's Paste does; each kind 32 printed
 SILL_TOUCHRIG_SIM='Sill touchrig' Tests/touchrig/run.sh new && Tests/touchrig/run.sh --rev origin/main base && Tests/touchrig/compare.py .build/touchrig/base.log .build/touchrig/new.log   # the surfaces under synthesized touches
 Tests/checks/run-all.sh                 # every pure check, as CI runs them (~5 min; --mutants adds the mutants, well over an hour)

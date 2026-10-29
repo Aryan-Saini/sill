@@ -136,9 +136,10 @@ package struct HostStatusSnapshot: Equatable {
     /// otherwise.
     package var audio: Audio?
     /// What the macOS firewall does to devices connecting to this host (FirewallRule), as last asked:
-    /// at launch, when the listener comes up, when Settings › General opens. Nil before the first
-    /// answer. While it blocks them, Settings › General shows why with the Terminal command that
-    /// unblocks Sill, and the menu says "Devices Can’t Connect".
+    /// at launch, when the listener comes up, when Settings › General opens, when a device gets in
+    /// while it said none could. Nil before the first answer. While it blocks them, Settings › General
+    /// shows why with the Terminal command that unblocks Sill, and the menu says "Devices Can’t
+    /// Connect".
     package var firewall: FirewallRule.Verdict?
 
     /// The Mac's sound as the menu's card and Settings show it.

@@ -144,7 +144,7 @@ serves the root or `/docs`, never `/site`. So:
   paragraph that Virtual Display is on unless you turn it off (PR #236, Sill for Mac's default
   since 2026-10-27) between `<!-- Virtual Display` and `<!-- /Virtual Display -->`, and
   support.html's sentence that Sill for Mac names a firewall that blocks it, in its menu and its
-  Settings (PR #000; the item's command before it holds for the builds out too), between
+  Settings (PR #250; the item's command before it holds for the builds out too), between
   `<!-- Firewall` and `<!-- /Firewall -->`. A republish before those
   releases (for words that hold for the builds already out, such as support.html's on a Mac asleep
   or restarted, or on a black picture) deletes the blocks of each release not out yet in the
