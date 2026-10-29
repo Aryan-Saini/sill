@@ -55,6 +55,27 @@ out in Insiders first tomorrow". Merge "Version 0.6.0 for both apps" (PR #244, b
   Distribution: NOAH WILLIAM SAFFER (9B2KKVM937)", the App Store profile, get-task-allow false; nothing
   uploaded. Tonight's real notes: 36 pull requests since v0.5.1, What to Test 3,179 bytes. nightly.yml
   itself runs only once it is on main.
+- The review (2026-10-29, after ba85e191; the plan's "The review"): seven findings, each reproduced, then
+  fixed in a commit of its own. testflight.yml uploaded from any branch with the commit count, so a branch
+  four commits ahead of main had the count of a later nightly, which took the branch's build for its own
+  and gave it to TestFlight's groups (both workflows' run blocks in a synthetic repository): uploads only
+  from main's first-parent line now, other branches export (7c62d6c1; the mode step 12 of 12, 9 before).
+  The first nightly, published by hand that morning (0.5.5 (987), tag `nightly` at 150479b5), is universal
+  and its notes give the TestFlight public beta link: the workflow's Mac job builds with `SILL_UNIVERSAL=1`
+  (598d68be) and `nightly_testflight_link` keeps the link in every night's notes (0458239d; the hand-made
+  pre-release taken over with the stand-in gh, 8 of 8, 7 before). A malformed .p12 or notary key ended at
+  security's or notarytool's words with the file left until the cleanup: named errors in nightly.yml and
+  release.yml (2623acee; 16 of 16, 4 before). The distribute step's 100 minutes equalled asc.swift's 90 +
+  10 (measured: 300 s of processing, then 601 s for the review state): 110 (86e59547). Docs: the privacy
+  manifest's ActiveKeyboards is PR #243's, on main (e3dbf133); part 2 contradicted Nightlies on the iOS
+  build number, and a release must move main to the next version before the next night (df11fb07).
+  Re-run, all passing: asc.swift 114 and the review's 9, 23 of 23 mutants, a 13-minute token wait (20
+  requests, renewed at 600 s); release.sh and the notes 104 (a link check added); release-ios.sh 48; 31 of
+  31 shell mutants; the workflows 204 structural checks and 46 blocks under bash -n, 44 of 44 run blocks
+  executed; the signing run's artifact rechecked (0.5.1 (987), Apple Distribution, get-task-allow false).
+  Not changed here, for the session that talks to Noah: the version (the handoff records his 08:55 UTC
+  decision that pre-release builds say 0.5.5 and the release 0.6; #244 and these docs say 0.6.0) and the
+  hour (09:17 UTC there; 03:17 here); PR #247's README and download-page words repeat this one's.
 - **Untested, for Noah (docs/release-checklist.md, "Nightlies", "The first run"):** the privacy
   manifest's ActiveKeyboards (#147's `UITextInputMode.activeInputModes`, ITMS-91053) is declared on main
   since PR #243 (54BD.1; release-ios.sh's check of run 40843967209's binary against main's manifest: every
