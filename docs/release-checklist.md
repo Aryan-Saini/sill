@@ -424,7 +424,8 @@ comes later, when the cask qualifies (below).
       anywhere but Saffsanity/sill, so leave `SILL_RELEASE_REPO` unset (in `~/.sill-release` and as
       a repository variable). One way or the other for a version: pushing the tag, which a local
       `--publish` needs first, also starts the release workflow. With `SILL_SIGN_IN_CI` set to
-      `true` that run publishes the release, so don't also run `--publish` here (whichever comes
+      `true` that run publishes the release once Noah approves it (Releasing from GitHub Actions ›
+      What a tag does), so don't also run `--publish` here (whichever comes
       second stops at "already exists"); without it the run only verifies (macOS minutes either
       way). Neither the variable nor any secret is set on 2026-09-27, so a pushed tag only verifies.
 - [ ] Release notes: `--publish` gives the release a one-line body (the version, the build and
@@ -982,7 +983,8 @@ nightly makes it again.
 A release after nightlies: the version is already on main (part 2's first item), so tag the commit.
 Sill for Mac: with `SILL_SIGN_IN_CI` on, as the nightlies need it, pushing the tag starts release.yml's
 publish job, which waits for Noah's approval in the environment `release` (GitHub notifies him; the
-run's page › Review deployments › release › Approve and deploy) and then builds, notarizes and publishes the
+run's page › Review deployments › release › Approve and deploy, once the run is his tag on the
+commit he tagged: What a tag does) and then builds, notarizes and publishes the
 release itself, the profile embedded; don't also
 run `release.sh --publish` from this Mac (it would find the release there and stop). The pre-release
 stays beside the release, never "latest". Sill for iPhone and iPad: App Store Connect already has
@@ -1078,8 +1080,13 @@ above.
 - With `SILL_SIGN_IN_CI` set to `true`: sign and publish, in the environment `release` (Secrets and
   variables, below). The job waits for Noah's approval before it starts: GitHub notifies him, and
   the run's page › Review deployments › release › Approve and deploy lets it go (Reject fails the
-  run). By hand, start it from the tag itself (Run workflow › Use workflow from › Tags › the
-  tag, with the same tag as the input): the environment refuses a run from a branch, and the job's
+  run). Approve only the tag you pushed, on the commit you tagged: the run's page names who pushed
+  it, the tag and its commit (`git rev-list -n 1 v<version>` here gives the one you tagged). Any
+  `v*` tag pushed by anyone with write access waits there the same way, the workflow's own checks
+  are that tag's, and the approval is all that stands between it and a release that every
+  Sill.app's update check offers (What the environments don't do, below). By hand, start it from
+  the tag itself (Run workflow › Use workflow from › Tags › the tag, with the same tag as the
+  input): the environment refuses a run from a branch, and the job's
   first step a run from another tag. That first step also stops the run, naming them, when the
   environment lacks any of its six secrets. Then the same checks, then the Developer ID
   certificate goes into a temporary keychain with a random password, the notary key into a profile
