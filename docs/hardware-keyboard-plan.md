@@ -235,7 +235,10 @@ Settings panel already cover the stream for hit-testing.
     as on a Mac; one key at a time, the last pressed, and an earlier key still held does not take over
     again; the repeats wait while the device has said nothing for half a second (a stalled link can hold the
     key's up back for seconds before the Mac gives the device up) and start over after the delay once it
-    speaks; a delay under 0.1 s and an interval under 15 ms count as those, and Off (a delay or an interval
+    speaks; a key's first repeat waits for a word from its device heard no earlier than 0.3 s before it is
+    due (`KeyRepeat.firstWord`, the review of #162's letters: a letter typed or a Delete, its up held back by
+    a stall, is never repeated; a key held has its word in time, a ping every quarter of a second); a delay
+    under 0.1 s and an interval under 15 ms count as those, and Off (a delay or an interval
     of a minute or more) repeats nothing. Known: while iPadOS types the characters, ⇧ let go while a
     hardware ⇧→ is held keeps selecting until → comes up (the text system keeps ⇧'s own key, so the Mac
     never hears it go; while the Mac types them ⇧ is a key of its own and the repeats follow it).

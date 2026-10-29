@@ -35,7 +35,7 @@ MUTANTS = [
     ("a key that never repeats repeats", R,
      "guard let device, let timing, Self.repeats(virtualKey: virtualKey) else { held = nil; return }",
      "guard let device, let timing else { held = nil; return }"),
-    ("no wait before the first repeat", R, "                    due: now + timing.delay, quietSince: nil)", "                    due: now + timing.interval, quietSince: nil)"),
+    ("no wait before the first repeat", R, "                    due: now + timing.delay, quietSince: nil, firstAfter:", "                    due: now + timing.interval, quietSince: nil, firstAfter:"),
     ("the down's flags not carried", R, "carried: flags, timing: timing, pressedAt: now,", "carried: 0, timing: timing, pressedAt: now,"),
     ("a second down keeps the first's time", R, "        held = Held(virtualKey: virtualKey, device: device,",
      "        if held?.virtualKey == virtualKey { return }\n        held = Held(virtualKey: virtualKey, device: device,"),
@@ -57,6 +57,14 @@ MUTANTS = [
      "return .post(virtualKey: h.virtualKey, flags: h.carried, next: h.due)"),
     ("looking again only at the interval", R, "        let look = now + min(h.timing.interval, Self.lookAgain)", "        let look = now + h.timing.interval"),
     ("stop leaves the key repeating", R, "    package mutating func stop() { held = nil }", "    package mutating func stop() {}"),
+    # The first repeat's word (the review of #162's letters: a letter typed, its up held back by a stalled link)
+    ("the first repeat needs no word (a stalled up repeats a letter typed)", R,
+     "        if let after = h.firstAfter, heard <= after { return .wait(until: look) }\n", ""),
+    ("any word since the press will do, whatever the delay", R,
+     "firstAfter: now + max(0, timing.delay - Self.firstWord))", "firstAfter: now)"),
+    ("the press itself is the word", R, "if let after = h.firstAfter, heard <= after {", "if let after = h.firstAfter, heard < after {"),
+    ("no word after a quiet spell", R, "            h.firstAfter = now + max(0, h.timing.delay - Self.firstWord)\n", ""),
+    ("the word a ping too late (firstWord 0.15 s)", R, "    package static let firstWord = 0.3", "    package static let firstWord = 0.15"),
     ("the window lists say a later generation", R, "package static let generation = 1", "package static let generation = 2"),
 ]
 caught = 0

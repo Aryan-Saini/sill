@@ -748,7 +748,14 @@ held for an app's activation, and it waits while the device is quiet: half a
 second without a word from it (a device pings four times a second) stops the
 repeats until it is heard again, and they start over after the delay, since a
 stalled network can hold a key's up back for seconds before the Mac gives the
-device up. Which keys get it: those a device sends to the Mac as keys, a
+device up. A key's first repeat also waits for a word from the device heard no
+earlier than 0.3 s before it is due (`KeyRepeat.firstWord`): the link keeps the
+device's messages in order, so a word heard then says the key was still down,
+and a key only tapped (a letter typed, a Delete) whose up a stall holds back is
+never repeated, which a ping sent during the tap, before its up, would otherwise
+have allowed for half a second. A key held down has its word in time, its device
+pinging every quarter of a second; a late ping makes the first repeat wait for
+it. Which keys get it: those a device sends to the Mac as keys, a
 hardware keyboard's arrows, Esc, Forward Delete, Home, End, Page Up and Down,
 the F-keys and any key with ⌘, ⌃ or ⌥ held (⌘Z, ⌥⌫, ⌥←), its letters, digits,
 punctuation, Space, Delete, Return and Tab whenever the Mac types them (below),

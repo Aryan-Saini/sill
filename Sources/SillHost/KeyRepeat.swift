@@ -26,6 +26,14 @@ import Foundation
 //     once the device is heard again it starts over, after the delay: a network can hold a key's up
 //     for seconds before the Mac gives the device up (eviction, 4 to 8 s), which a keyboard's cable
 //     never does, and a held ⌥⌫ would otherwise go on deleting words through a Wi-Fi stall.
+//   - Its first repeat (after the press, and after the device was quiet) waits for a word from its
+//     device heard since, and no earlier than `firstWord` before that repeat is due (`firstAfter`), so
+//     a key only pressed, its up held back by a stalled link, is not repeated: the link keeps the
+//     device's messages in order, so a word that came after the up comes after it, and a ping sent while
+//     the key was down for a moment, before its up (a letter typed, a Delete), says nothing of the key
+//     half a second on. A held key's pings come every quarter of a second, so the word is there by then
+//     (`firstWord` is a ping's interval and a margin): the first repeat waits only for a ping that comes
+//     late. With a Delay Until Repeat under `firstWord` any word since the press does.
 //
 // Pure: Foundation only, checked with swiftc (Tests/checks/key-repeat, with KeyStrokes; its `package`
 // access needs -package-name sill). Nothing here posts or sleeps: InputInjector tells it each keyboard
@@ -57,6 +65,12 @@ package struct KeyRepeat: Sendable {
     /// How long a device may say nothing before its key stops repeating: a device pings every 0.25 s
     /// (StreamClient.pingInterval), so this is two pings missed.
     package static let silence = 0.5
+    /// How long before a key's first repeat is due (after its press, or after its device was quiet) its
+    /// device must have been heard, at the earliest, for that repeat to go out (`Held.firstAfter`): a ping's
+    /// interval (0.25 s) and 50 ms for its lateness, so a key held down has its word in time, and a key
+    /// pressed for a moment (a letter typed, up a tenth of a second later) whose up a stalled link holds
+    /// back has none: the pings sent while it was down came before.
+    package static let firstWord = 0.3
     /// How soon a held key that is waiting (its device quiet, or input held for an activation) is
     /// looked at again, at most.
     package static let lookAgain = 0.05
@@ -103,6 +117,10 @@ package struct KeyRepeat: Sendable {
         /// While its device is quiet: when that device was last heard before it went quiet, so its next
         /// word starts the repeat over.
         package var quietSince: Double?
+        /// Before the first repeat after its press (or after its device was quiet): its device must be heard
+        /// after this time for that repeat to go out, the later of the press (or the device heard again) and
+        /// `firstWord` before the repeat is due; nil once it went out.
+        package var firstAfter: Double?
     }
 
     package private(set) var held: Held?
@@ -127,7 +145,7 @@ package struct KeyRepeat: Sendable {
         }
         guard let device, let timing, Self.repeats(virtualKey: virtualKey) else { held = nil; return }
         held = Held(virtualKey: virtualKey, device: device, carried: flags, timing: timing, pressedAt: now,
-                    due: now + timing.delay, quietSince: nil)
+                    due: now + timing.delay, quietSince: nil, firstAfter: now + max(0, timing.delay - Self.firstWord))
     }
 
     /// No key repeats any more: typed text or a trackpad gesture's shortcut went out (keys of their
@@ -163,6 +181,7 @@ package struct KeyRepeat: Sendable {
             guard let heard, heard > quiet else { return .wait(until: look) }
             h.quietSince = nil
             h.due = now + h.timing.delay
+            h.firstAfter = now + max(0, h.timing.delay - Self.firstWord)
             held = h
             return .wait(until: h.due)
         }
@@ -172,7 +191,10 @@ package struct KeyRepeat: Sendable {
             held = h
             return .wait(until: look)
         }
+        // The first repeat: only once the device is heard late enough to say the key is still down.
+        if let after = h.firstAfter, heard <= after { return .wait(until: look) }
         if landing == .held { return .wait(until: look) }
+        h.firstAfter = nil
         h.due = max(h.due + h.timing.interval, now + h.timing.interval / 2)
         held = h
         return .post(virtualKey: h.virtualKey, flags: h.carried | holding, next: h.due)

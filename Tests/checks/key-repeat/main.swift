@@ -210,7 +210,7 @@ check(KeyRepeat.timing(delay: 0.05, interval: 0.001) == KeyRepeat.Timing(delay: 
 check(KeyRepeat.timing(delay: 1.0 / 6, interval: 1.0 / 60) == KeyRepeat.Timing(delay: 1.0 / 6, interval: 1.0 / 60),
       "`defaults`' faster settings over the floor as they are")
 check(KeyRepeat.shortestDelay == 0.1 && KeyRepeat.shortestInterval == 0.015 && KeyRepeat.off == 60
-      && KeyRepeat.silence == 0.5 && KeyRepeat.lookAgain == 0.05, "the constants")
+      && KeyRepeat.silence == 0.5 && KeyRepeat.lookAgain == 0.05 && KeyRepeat.firstWord == 0.3, "the constants")
 
 // MARK: Which keys repeat
 
@@ -271,7 +271,7 @@ do {
     g.at(1.0) { $0.input(key(uLeft, true), from: a) }
     g.at(4.0) { $0.input(key(uLeft, false), from: a) }
     check(g.repeats.isEmpty && g.rep.held == nil, "Key Repeat Off: no repeat in 3 s, got \(g.repeats.count)")
-    var f = Glue(); f.join(a)
+    var f = Glue(); f.join(a, at: 0.05)       // a ping at 1.05 s, between the press and its first repeat (firstWord)
     f.timing = KeyRepeat.timing(delay: 0.01, interval: 0.001)
     f.at(1.0) { $0.input(key(uLeft, true), from: a) }
     f.at(1.2) { $0.input(key(uLeft, false), from: a) }
@@ -619,14 +619,14 @@ do {
           "heard again at 3.0 s: the repeat starts over 0.5 s later: \(back.first.map { $0.t } ?? -1)")
     check(sameTimes(back.map(\.t), expectedTimes(down: back[0].t - 0.5, up: 4.0)), "then on its cadence")
 }
-// The device quiet from just before its key's down, its last word: a repeat only while that word is
-// at most half a second old (the first, due 0.5 s after it), none after.
+// The device quiet from just before its key's down, its last word: no repeat. The down says nothing of the key
+// half a second on (KeyRepeat.firstWord: the first repeat needs a word heard since, within 0.3 s of it).
 do {
     var g = Glue(); let a = Conn(); g.join(a)
     g.silence(a, from: 0.9)
     g.at(1.0) { $0.input(key(uLeft, true), from: a) }
     g.run(to: 3)
-    check(g.repeats.count == 1 && near(g.repeats[0].t, 1.5), "its last word was the key's down: one repeat, at 0.5 s: \(g.repeats.map(\.t))")
+    check(g.repeats.isEmpty, "its last word was the key's down: no repeat: \(g.repeats.map(\.t))")
     var h = Glue(); h.join(a)
     h.timing = KeyRepeat.timing(delay: 0.6, interval: 1.0 / 30)
     h.silence(a, from: 0.9)
@@ -652,6 +652,92 @@ do {
     g.resume(a, at: 1.95)
     g.at(2.4) { $0.input(key(uLeft, false), from: a) }
     check(sameTimes(g.repeats.map(\.t), expectedTimes(down: 1.0, up: 2.4)), "a 0.45 s pause between pings: the repeat goes on")
+}
+
+// MARK: The first repeat's word (KeyRepeat.firstWord)
+
+// A key pressed for a moment (a letter typed, a Delete: up 0.1 s after its down, as the Mac types a hardware
+// keyboard's characters, #162's letters), its up held back by a stalled link. The link keeps the device's messages
+// in order: the pings due during the stall come after the up, together when it ends. A ping sent while the key
+// was down, before the up, is no word that it is still down half a second on: never a repeat, at any phase of the
+// pings and any stall. Before the first-word rule a stall of more than 0.4 s repeated it one to three times on this
+// Mac (and in this model whatever the phase: the key's own down counted as the word).
+do {
+    var repeated: [String] = [], runs = 0
+    for phase in stride(from: 0.0, to: 0.25, by: 0.01) {
+        for stall in [0.3, 0.41, 0.45, 0.5, 0.6, 1.0, 2.0] {
+            var g = Glue(); let a = Conn(); g.join(a)
+            let down = 1.0 + phase, up = down + 0.1
+            g.at(down) { $0.input(key(uA, true), from: a) }
+            g.silence(a, from: up)                 // nothing heard after the up until the stall ends
+            g.resume(a, at: up + stall)
+            g.at(up + stall) { $0.input(key(uA, false), from: a) }
+            g.run(to: up + stall + 1)
+            runs += 1
+            if !g.repeats.isEmpty { repeated.append("phase \(phase), stall \(stall): \(g.repeats.count)") }
+        }
+    }
+    check(repeated.isEmpty, "a letter typed, its up held back by a stall: never repeated (\(repeated.count) of \(runs): \(repeated.prefix(4)))")
+    // Held for real, the same pings: its first repeat on time at every phase (a ping comes within any 0.3 s).
+    var late: [String] = []
+    for phase in stride(from: 0.0, to: 0.25, by: 0.01) {
+        var g = Glue(); let a = Conn(); g.join(a)
+        let down = 1.0 + phase
+        g.at(down) { $0.input(key(uA, true), from: a) }
+        g.at(down + 1.0) { $0.input(key(uA, false), from: a) }
+        if !sameTimes(g.repeats.map(\.t), expectedTimes(down: down, up: down + 1.0)) { late.append("phase \(phase): \(g.repeats.first?.t ?? -1)") }
+    }
+    check(late.isEmpty, "a key held 1 s: its first repeat at 0.5 s and then on its cadence at every phase of the pings: \(late)")
+}
+// A ping late (the one due at 1.25 s heard at 1.52 s): the first repeat waits for it and goes at once, then on its
+// cadence; nothing quiet, nothing started over.
+do {
+    var g = Glue(); let a = Conn(); g.join(a)
+    g.at(1.0) { $0.input(key(uA, true), from: a) }
+    g.silence(a, from: 1.2)
+    g.resume(a, at: 1.52)
+    g.at(2.0) { $0.input(key(uA, false), from: a) }
+    let t = g.repeats.map(\.t)
+    check(!t.isEmpty && t[0] >= 1.52 - 1e-9 && t[0] <= 1.52 + KeyRepeat.lookAgain + 1e-9 && g.rep.held == nil,
+          "a late ping: the first repeat when it comes: \(t.first ?? -1)")
+    check(t.count >= 13 && zip(t, t.dropFirst()).allSatisfy { $1 - $0 >= thisMac.interval / 2 - 1e-9 }, "then on: \(t.count) repeats")
+}
+// System Settings' shortest Delay Until Repeat (0.25 s, under firstWord): any word since the press will do. A ping
+// between the press and the first repeat: on time; the device quiet from the press: none.
+do {
+    var g = Glue(); let a = Conn(); g.join(a, at: 0.05)     // pings at 1.05, 1.30…
+    g.timing = KeyRepeat.timing(delay: 0.25, interval: 1.0 / 30)
+    g.at(1.0) { $0.input(key(uA, true), from: a) }
+    g.at(1.6) { $0.input(key(uA, false), from: a) }
+    check(!g.repeats.isEmpty && near(g.repeats[0].t, 1.25), "a 0.25 s delay, a ping since the press: the first repeat at 0.25 s: \(g.repeats.first?.t ?? -1)")
+    var h = Glue(); h.join(a, at: 0.05)
+    h.timing = KeyRepeat.timing(delay: 0.25, interval: 1.0 / 30)
+    h.silence(a, from: 0.99)
+    h.at(1.0) { $0.input(key(uA, true), from: a) }
+    h.run(to: 3)
+    check(h.repeats.isEmpty, "a 0.25 s delay, nothing heard since the press: no repeat: \(h.repeats.map(\.t))")
+}
+// After a quiet spell the repeat starts over, and its first repeat needs a word too: heard again for a moment (a
+// ping at 3.0 s and a message at 3.1 s, then a second stall), no repeat after it. Without the word the repeat
+// starting over at 3.0 s would go out at 3.5 s on the message heard at 3.1 s.
+do {
+    var g = Glue(); let a = Conn(); g.join(a)
+    g.at(1.0) { $0.input(key(uLeft, true), from: a) }
+    g.silence(a, from: 1.6)
+    g.resume(a, at: 3.0)
+    g.silence(a, from: 3.0)
+    g.at(3.1) { $0.input(.pointer(.move, x: 0.5, y: 0.5), from: a) }
+    g.at(5.0) { $0.input(key(uLeft, false), from: a) }
+    check(g.repeats(between: 2.2, 5.1).isEmpty, "heard again for a moment after a quiet spell: no repeat after it: \(g.repeats(between: 2.2, 5.1).map(\.t))")
+    // Heard again for good: the repeat starts over after the delay, on time.
+    var h = Glue(); h.join(a)
+    h.at(1.0) { $0.input(key(uLeft, true), from: a) }
+    h.silence(a, from: 1.6)
+    h.resume(a, at: 3.0)
+    h.at(5.0) { $0.input(key(uLeft, false), from: a) }
+    let back = h.repeats(between: 2.2, 5.1)
+    check(!back.isEmpty && back[0].t >= 3.5 - 1e-9 && back[0].t <= 3.5 + KeyRepeat.lookAgain + 1e-9,
+          "heard again for good: the repeat starts over 0.5 s later: \(back.first?.t ?? -1)")
 }
 
 // MARK: Late steps
