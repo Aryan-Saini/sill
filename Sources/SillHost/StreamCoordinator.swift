@@ -390,6 +390,9 @@ package final class StreamCoordinator {
         injector.watch = pointer
         injector.dryRun = synthetic
         injector.testLog = synthetic && inputLog.on
+        // A held key repeats (KeyRepeat) only while its device is heard from: a network can hold the
+        // key's up back for seconds before the device is given up.
+        injector.heardFrom = { [server] id in server.lastHeard(from: id) }
         stage.onWarp = { [pointer] in pointer.sillMoved() }
         // The identity's TXT record (its tag, and `p` on a TLS home door) must be in the first
         // registration: set before `server.start()`.
@@ -401,6 +404,7 @@ package final class StreamCoordinator {
         // the once-a-second stats send nothing). One before `server.start()` reaches nobody, and
         // every device gets a fresh state in `sendCatalog`, so early calls are harmless.
         status.onChange = { [weak self] in self?.publishSettings() }
+        injector.repeatLanding = { [weak self] in self?.keyRepeatLanding() ?? .nowhere }
         menus.prepare = { [weak self] in await self?.focusForMenus() ?? true }
         menus.currentTarget = { [weak self] in self?.menuTarget() }
         menus.onSubscribersChanged = { [weak self] any in self?.watchFrontmostApp(any) }
@@ -1008,7 +1012,8 @@ package final class StreamCoordinator {
                 // drag): input has nowhere to land. The up of a key or a button the Mac has down still
                 // goes (DroppedInput), a button's where the pointer is (`.null`), so no modifier this
                 // device pressed stays down to make a later click a ⌘-click, and no button to make
-                // every later move a drag.
+                // every later move a drag. A held key no longer repeats (KeyRepeat).
+                injector.stopRepeating()
                 if injector.isUpOfSomethingDown(event) { deliver(event, in: .null, from: device) }
                 return
             }
@@ -1394,6 +1399,7 @@ package final class StreamCoordinator {
             }
         }
         releaseKeysOfDevicesThatLeft()
+        injector.stopRepeating()            // nor does a held key repeat into the next source (KeyRepeat)
         encoder = nil                  // deinit invalidates the VT session
         server.resetForNewStream()          // every client waits for the next parameter sets + keyframe
         lastParameterSets = nil             // and the new stream's first go out as a new frame (DisplayWake)
@@ -1797,6 +1803,16 @@ package final class StreamCoordinator {
         let left = leftWhileHeld
         leftWhileHeld = []
         for device in left { injector.releaseKeys(of: device) }
+    }
+
+    /// Where a held key's repeat would land now (InputInjector.repeatLanding, KeyRepeat), as a
+    /// device's input lands: nowhere while it has nowhere to land (nothing streams, or the source's
+    /// rectangle cannot be read: the repeat stops), held while input waits for an app's activation (a
+    /// repeat must not go out ahead of it), else on the source.
+    private func keyRepeatLanding() -> KeyRepeat.Landing {
+        guard currentSourceRect() != nil else { return .nowhere }
+        if !heldInput.isEmpty || CFAbsoluteTimeGetCurrent() < holdUntil { return .held }
+        return .lands
     }
 
     private func raiseIfInteracting(_ event: InputEvent) {

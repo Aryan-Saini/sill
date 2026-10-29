@@ -2,10 +2,10 @@ import Foundation
 import StreamProtocol
 
 // The keys this device sends for a shortcut: the Spotlight key's ⌘Space, the portrait key row's keys
-// with whatever is latched, a latched ⌘, ⌃ or ⌥ on the software keyboard (a latched shift with its
-// return or tab too), the modifiers the portrait trackpad holds down around a click or a drag, and a
-// hardware keyboard's keys (Esc also through a key command, sent once whichever channel iPadOS
-// uses). One place, so each goes out the way a keyboard sends it: a shortcut's modifiers pressed
+// with whatever is latched (held down from the touch to the release: `HeldCap`), a latched ⌘, ⌃ or ⌥
+// on the software keyboard (a latched shift with its return or tab too), the modifiers the portrait
+// trackpad holds down around a click or a drag, and a hardware keyboard's keys (Esc also through a key
+// command, sent once whichever channel iPadOS uses). One place, so each goes out the way a keyboard sends it: a shortcut's modifiers pressed
 // with their own keys around it, and every key's up after its down (2026-09-27, the stuck command
 // after Spotlight). A shortcut sent as one key down and up carrying its modifiers left them set on
 // every Mac from before that fix, which posted the up as it came, and the next click there was a
@@ -55,12 +55,21 @@ struct KeyModifiers: OptionSet {
 enum KeyChord {
     /// One key with `modifiers`, as a keyboard sends it: each modifier's own key down, the key down
     /// and up carrying them all, each modifier's key up (`modifiersDown`, `modifiersUp`). With nothing
-    /// latched, the key alone.
+    /// latched, the key alone. `down` then `up`, at once.
     static func press(_ usage: UInt16, with modifiers: KeyModifiers) -> [InputEvent] {
-        modifiersDown(modifiers)
-            + [.key(hidUsage: usage, down: true, modifiers: modifiers.rawValue),
-               .key(hidUsage: usage, down: false, modifiers: modifiers.rawValue)]
-            + modifiersUp(modifiers)
+        down(usage, with: modifiers) + up(usage, with: modifiers)
+    }
+
+    /// A key going down with `modifiers`, as a keyboard presses it: each modifier's own key down, then
+    /// the key down carrying them all. A key held so is repeated by the Mac (KeyRepeat, on the host)
+    /// until its `up`.
+    static func down(_ usage: UInt16, with modifiers: KeyModifiers) -> [InputEvent] {
+        modifiersDown(modifiers) + [.key(hidUsage: usage, down: true, modifiers: modifiers.rawValue)]
+    }
+
+    /// Its release: the key up still carrying `modifiers`, then their own keys up in reverse.
+    static func up(_ usage: UInt16, with modifiers: KeyModifiers) -> [InputEvent] {
+        [.key(hidUsage: usage, down: false, modifiers: modifiers.rawValue)] + modifiersUp(modifiers)
     }
 
     /// Spotlight on the Mac: exactly ⌘Space, ⌘'s own key down, Space down and up, ⌘ up.
@@ -85,6 +94,72 @@ enum KeyChord {
             held.remove(key.flag)
             return .key(hidUsage: key.usage, down: false, modifiers: held.rawValue)
         }
+    }
+}
+
+/// The portrait key row's esc, tab and arrows, held (#162): a cap's key goes down when a finger lands on
+/// it and comes up when the finger lifts, slides off or is cancelled, so the Mac repeats it while it is
+/// held, after its own Delay Until Repeat and at its Key Repeat Rate, as it repeats a key of its own
+/// keyboard (KeyRepeat, on the host: an event Sill posts never repeats by itself). What is latched goes
+/// down with it, its modifiers' own keys first (`KeyChord.down`), and is spent at the touch, so a
+/// modifier latched while the cap is held waits for the next key (the caller spends the latch when a
+/// key goes down with it: `spendsLatch`). One cap at a time, as the Mac repeats one key at a time: a
+/// finger on a second cap lets the first come up first. The cap's own action, which its Button sends as
+/// the finger lifts on it, sends nothing more, or the up of a press whose end was not told yet (so a
+/// release the press's end missed still lets the key up); a cap activated with no touch (VoiceOver,
+/// Switch Control, Voice Control, Full Keyboard Access) sends its whole press at once, as every cap did
+/// before. The latching modifiers, the Keyboard cap and Spotlight are taps, as before.
+struct HeldCap {
+    /// The cap whose key is down on the Mac, with the modifiers it went down with.
+    private(set) var down: (usage: UInt16, modifiers: KeyModifiers)?
+    /// A finger's press on a cap whose action has not come: when the finger left it (nil while it is
+    /// still on it). The cap's action then, or within `actionWindow` of the finger leaving, is its own.
+    private struct Touch { var endedAt: Double? }
+    private var touches: [UInt16: Touch] = [:]
+    /// How long after the finger leaves a cap its Button's action counts as the touch's own: SwiftUI
+    /// sends it as the press ends, just before or just after.
+    static let actionWindow = 0.5
+
+    /// A finger landed on cap `usage` at `time` (systemUptime) with `latched` latched: the cap held
+    /// before it comes up, then this cap's key goes down with `latched`; nothing when this cap is down
+    /// already.
+    mutating func touchDown(_ usage: UInt16, latched: KeyModifiers, at time: Double) -> [InputEvent] {
+        touches[usage] = Touch(endedAt: nil)
+        if down?.usage == usage { return [] }
+        let before = releaseAll()
+        down = (usage, latched)
+        return before + KeyChord.down(usage, with: latched)
+    }
+
+    /// The finger left cap `usage` at `time` (lifted, slid off, cancelled): its key up, with the
+    /// modifiers it went down with, if it is the cap down.
+    mutating func touchUp(_ usage: UInt16, at time: Double) -> [InputEvent] {
+        if touches[usage]?.endedAt == nil { touches[usage]?.endedAt = time }
+        guard let held = down, held.usage == usage else { return [] }
+        down = nil
+        return KeyChord.up(usage, with: held.modifiers)
+    }
+
+    /// Cap `usage`'s action at `time`: after a touch, nothing (its key went down and up with it), or the
+    /// up of the press if its end was not told yet: the action comes with the release; with no touch, the
+    /// whole press with `latched`.
+    mutating func activated(_ usage: UInt16, latched: KeyModifiers, at time: Double) -> [InputEvent] {
+        if let touch = touches.removeValue(forKey: usage), time - (touch.endedAt ?? time) <= Self.actionWindow {
+            return down?.usage == usage ? touchUp(usage, at: time) : []
+        }
+        return KeyChord.press(usage, with: latched)
+    }
+
+    /// Whether what a cap sent spent the latch: a key went down with it (a touch's down, a whole press).
+    static func spendsLatch(_ events: [InputEvent]) -> Bool {
+        events.contains { if case .key(_, true, _) = $0 { return true } else { return false } }
+    }
+
+    /// The cap down comes up: the key row leaving the screen, after which no release comes.
+    mutating func releaseAll() -> [InputEvent] {
+        guard let held = down else { return [] }
+        down = nil
+        return KeyChord.up(held.usage, with: held.modifiers)
     }
 }
 

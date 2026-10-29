@@ -89,6 +89,73 @@ No wire change.
   it), after the same spell: black for about 10 s, then the Desktop by itself (the console's `session: still nothing
   streams 10 s after …; asking for it again`); a monitor unplugged while the Desktop streams (ScreenCaptureKit stops
   the capture): the Desktop back within 10 s; VoiceOver unchanged (nothing new is drawn or said).
+**Held keys repeat, as on the Mac (2026-10-28, branch `key-repeat` from main at 6c5b5d2; issue #162; PR #240).**
+Noah, 2026-10-27: "#162 should expand to make holding down keys work on all keys when held, same as a
+regular keyboard, wait times and all, where non-command keys wait a second before starting their
+repeating. Same as desktop." An event posted from a CGEventSource never repeats (the HID system repeats
+only the keyboards it reads), so a held arrow, ⌥← or ⌘Z reached the Mac once. The host repeats it; no
+wire change, so every device gets it from a Mac with this build. Supersedes addhumal's #163 (the device
+repeating at its own 0.4 s and 20 a second), which this branch leaves alone.
+- Host (`KeyRepeat`, pure; `Tests/checks/key-repeat`): InputInjector tells it each keyboard event it
+  posts and steps it at the times it names (a Task on the main actor); a key held down repeats after
+  the Mac's own Delay Until Repeat and at its Key Repeat Rate (NSEvent's keyRepeatDelay and
+  keyRepeatInterval, read at each key's down: 0.5 s and 1/30 s on this Mac), each repeat the key's
+  down again with the autorepeat flag (kCGKeyboardEventAutorepeat) and the flags in force (what the
+  down carried less a modifier let go since, and what the modifier keys down hold now: ⇧ pressed while
+  → repeats selects, ⌥ let go turns word jumps into steps). Every key but the modifiers, Caps Lock,
+  fn and the media keys; one key at a time, the last pressed (an earlier one still held never takes
+  over again). It stops at its up (any device's), another key's down, typed text, a gesture's chord,
+  its device leaving and the host's end (every key let go), and input with nowhere to land (the
+  coordinator's `keyRepeatLanding`, `currentSourceRect` nil, and select's drop point); it waits while
+  input is held for an activation (a repeat never overtakes it), and while its device has been quiet
+  half a second (`StreamServer.lastHeard`, every message's header; a device pings every 0.25 s), then
+  starts over after the delay: a stalled link can hold the key's up back for the 4 to 8 s before the
+  Mac drops the device. A late wake posts once, the next at least half an interval on. Off (a delay
+  or an interval of a minute or more) and nonsense repeat nothing; a delay under 0.1 s and an
+  interval under 15 ms count as those. `in.keyRepeat` on a host that posts; a `--synthetic` host
+  counts `in.dry`, and with SILL_TEST_INPUT_LOG=1 prints "Test input: key 123 repeats after 0.50 s,
+  every 0.033 s" at each press and "Test input: key 123 repeat (none)" for each repeat.
+- Device (`HeldCap` in KeyChords.swift, checked in `key-strokes`): the portrait key row's esc, tab and
+  arrows go down at a finger's touch and up at its release (a ButtonStyle's isPressed; `KeyChord.down`
+  and `up`, `press` = both), what is latched going down with the key and spent at the touch; one cap at
+  a time; the Button's own action after a touch sends nothing, or the up of a press whose end
+  isPressed had not told yet (the action comes with the release: a missed end never leaves a key down
+  repeating), an activation with no touch (VoiceOver, Switch Control, Voice Control, a keyboard) the
+  whole press as before; the latch is spent when a key goes down with it (`spendsLatch`); the row
+  leaving the screen lets a held cap up. A phone's esc and tab stay taps at the accessibility text sizes, where a long press
+  shows the cap large (`capsHold`). The latching modifiers, Keyboard and Spotlight are taps as before.
+  Keys typed through iPadOS's text system (letters, digits, Space, Delete, Return and Tab without ⇧)
+  keep iPadOS's own repeat, as does the on-screen keyboard's delete.
+- sillclient.py: `--key=USAGE,HOLD@T` (a key held, pinging four a second meanwhile, as a device) and
+  `--ping=S`.
+- Defaults taken (docs/hardware-keyboard-plan.md, open question 12): modifiers mid-hold change the
+  repeats, never stop them; the silence pause; the floors; the accessibility-size taps. Known: ⇧ let go
+  while a hardware ⇧→ is held keeps selecting until → comes up (the text system keeps ⇧'s own key).
+- Verified: `key-repeat` 100 checks (2,400 random sessions, 600 held to the exact cadence) and 36 of 36
+  mutants (in CI's matrix); `key-strokes` 385 (32 new) and 99 of 99 (16 new, two retargeted to `press`'s
+  new body); `run-all.sh`, all 56; `swift build -c release`, only the CaptureProbe warning; the iOS app
+  Debug and Release for the simulator and Debug for a device, only the known StreamClient warning
+  (StreamClient.swift:4110); H2 against origin/main's CLI from `git archive`: idle identical masked and
+  sorted, with a client identical but for which seconds count the software encoder's
+  `enc.mailboxDrop`; live on loopback synthetic hosts with the input log, eleven runs: ← held 1.2 s
+  (the down, 21 repeats from 0.48 s at 29.7 a second, the up), a tap and a 0.3 s hold (none), ⌥←
+  with ⌥ let go mid-hold (option, then none), ⇧ pressed mid-hold (shift, then none), ⌘Z (command),
+  → over ← (← stops, → repeats), text (stops), pings stopped (repeats end half a second after the
+  last), the client leaving (its key up, nothing after), a pick of none (stops; the up still goes),
+  Esc. Not run: the key row's caps pressed on a screen. A scratch rig (the cap's SwiftUI Button and
+  HeldCapStyle with HeldCap, pressed by Tests/touchrig's TouchSynth on a private iOS 27.0 simulator,
+  deleted after) reached no SwiftUI control at all, through `sendEvent` or UIKit's HID entry point (iOS
+  27 has no `UITouch setGestureView:`), so the press's report is untested; if SwiftUI never reports it
+  the caps are taps as before, and a missed end is ended by the action.
+- **Untested, for Noah** (a Mac build of this branch and the iPad with a Magic Keyboard): hold ←, →,
+  ⌥←, ⌘→, Forward Delete and ⌘Z in TextEdit and a terminal: the first repeat after this Mac's delay
+  and then at its rate, as the Mac's own keyboard (System Settings › Keyboard changes both), and
+  nothing after the release; ⇧ pressed while → repeats selects; letters held repeat at iPadOS's own
+  rate as before; Esc held in vim. Upright on the iPad mini and iPhone, hold the key row's esc, tab
+  and arrows (repeats until the finger lifts; with ⌥ latched, word jumps), slide off a cap (it stops),
+  turn the device while holding one (it stops), VoiceOver's double tap (one press), an accessibility
+  text size's long press on esc (the large cap, one Esc). Wi-Fi off while holding a key: the repeats
+  stop within about half a second. Sill.log's `[1s]` lines count `in.keyRepeat`.
 **Pinch to zoom (2026-10-28/29, addhumal's PR #196 with maintainer edits; issue #65).** Noah's decisions of
 2026-10-19/20: pinch to zoom, not a slider; Photos-like, centred on the point between the fingers, the Mac's cursor
 not involved; a slight pinch out stays zoomed and only a pinch all the way out (or a lift within 2 % of it) gives the
@@ -6170,7 +6237,16 @@ good.
   events and Spotlight ignored them), HID keys as KeyStrokes gives them, each
   device's keys let go when it leaves and every key and button at the host's
   end, the check after each key's up, a button's up with nowhere to land where
-  the pointer is; the TEST ONLY input log), `KeyStrokes` (a device's key as the
+  the pointer is; a held key's repeats, as KeyRepeat steps them (a Task on the
+  main actor), each a key down with the autorepeat flag; the TEST ONLY input
+  log), `KeyRepeat` (a device's key held down repeated as the Mac's own keyboard
+  repeats a key, #162: after NSEvent's keyRepeatDelay, at its keyRepeatInterval,
+  every key but the modifiers, Caps Lock, fn and the media keys, the last key
+  pressed alone, the flags in force at each repeat, stopped at its up, another
+  key, text, a gesture's shortcut, the device leaving, the host's end and input
+  with nowhere to land, waiting while input is held for an activation and while
+  the device is quiet half a second (StreamServer.lastHeard); pure,
+  `Tests/checks/key-repeat`), `KeyStrokes` (a device's key as the
   Mac's: its virtual key, and the flags each event carries from the modifier
   keys the devices hold down, so a key's up leaves only what is held;
   `KeyUpCheck`, whether an up took its modifiers out of the HID state table;
@@ -6621,7 +6697,9 @@ good.
   shortcut with its modifiers' own keys pressed around it, the Spotlight key's
   ⌘Space, the trackpad's modifier keys around a click; `ForwardedKeys`, a
   hardware key's up after its down, and Esc's key command sent once beside
-  pressesBegan; pure, `Tests/checks/key-strokes` with the
+  pressesBegan; `HeldCap`, the portrait key row's esc, tab and arrows down from
+  a finger's touch to its release, so the Mac repeats them (#162); pure,
+  `Tests/checks/key-strokes` with the
   host's KeyStrokes), `TrackpadView` (the relative pad: its
   cursor a `PadCursor`, from the anchor; a recognizer that only counts fingers;
   `verticalSpan`, a phone's width ÷ 1.6; its two-finger scroll and coast in
@@ -6844,7 +6922,9 @@ good.
   `encoder-slowstate`, `fence`, `gesture-chords`, `gestures`, `goodbye`,
   `hardware-keyboard` (iOSClient's HardwareKeyboardPolicy),
   `home-device`, `home-model`, `home-records`, `home-txt`, `installed-apps`
-  (InstalledApps on a fake applications folder), `key-strokes` (the
+  (InstalledApps on a fake applications folder), `key-repeat` (the host's
+  KeyRepeat with KeyStrokes, against a model of InputInjector's glue and a
+  clock), `key-strokes` (the
   host's KeyStrokes and the device's KeyChords, against a model of the Mac's
   HID state table and of a Mac from before), `keychain`, `keyframe-recovery` (iOSClient's
   KeyframeRecovery, against a model of the event history), `ledger`, `link-judge`,
@@ -6922,6 +7002,7 @@ SILL_TEST_LOOPBACK=1 SILL_TEST_SOFTWARE_ENCODER=1 SILL_TEST_POINTER_PATH=$T/path
 python3 Scripts/sillclient.py PORT 6 desktop --pointer --move=0.25,0.25@3   # each kind 26 as it arrives; input goes only to a --synthetic host
 SILL_TEST_INPUT_LOG=1 SILL_TEST_LOOPBACK=1 SILL_TEST_SOFTWARE_ENCODER=1 SILL_TEST_POINTER_PATH=$T/path .build/release/SillHost --synthetic   # prints each event a dry run would post ("Test input: key 49 up (none)")
 python3 Scripts/sillclient.py PORT 3 desktop --input='{"key":{"hidUsage":44,"down":true,"modifiers":1048576}}@1' --input='{"key":{"hidUsage":44,"down":false,"modifiers":1048576}}@1.05' --tap=0.5,0.5@1.5   # an older device's Spotlight key, then a tap
+python3 Scripts/sillclient.py PORT 6 desktop --key=80,1.2@2   # ← held 1.2 s (pinging four a second, as a device): with the input log, "Test input: key 123 down (none)", repeats from 0.5 s on ("… repeat (none)", 30 a second on this Mac), then its up
 python3 Scripts/sillclient.py PORT 8 none --gesture=swipeUp@3 --gesture=swipeDown@4   # a synthetic host logs "Gesture from …: swipe up → Mission Control (shortcut 108: key 160, fn) (not posted: a test host)"
 SILL_TEST_LOOPBACK=1 SILL_TEST_HOTKEYS='108=off,173=off' .build/release/SillHost --synthetic   # TEST ONLY: the gestures read this table (over macOS 27's own; `defaults` alone) instead of this Mac's shortcuts
 swift run -c release SillHost --no-clipboard  # share nothing of the clipboard with devices (on by default, as in Sill.app)

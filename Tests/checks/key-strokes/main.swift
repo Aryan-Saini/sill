@@ -1104,6 +1104,203 @@ do {
     check(fixed.table == 0 && fixed.log.last == .pointer(0), "this device's Spotlight key leaves nothing on an older Mac: \(fixed.log)")
 }
 
+// MARK: The key row's caps held (HeldCap, #162)
+//
+// Escape, tab and the arrows of the key row go down when a finger lands on them and up when it leaves
+// (HeldCap), so the Mac repeats a cap held down (KeyRepeat, Tests/checks/key-repeat); what is latched
+// goes down with the key, its modifiers' own keys first, and is spent at the touch; one cap at a time;
+// the Button's own action after a touch sends nothing, and an assistive technology's activation (no
+// touch) the whole press, as before.
+
+let uTab: UInt16 = 0x2B, uUp: UInt16 = 0x52, uDown: UInt16 = 0x51
+
+// A key going down and up with what is latched: `press` is exactly `down` then `up`.
+check(KeyChord.down(uLeft, with: [.option]) == [key(uLOpt, true, option), key(uLeft, true, option)]
+      && KeyChord.up(uLeft, with: [.option]) == [key(uLeft, false, option), key(uLOpt, false, 0)],
+      "⌥←'s down and up: \(KeyChord.down(uLeft, with: [.option])) then \(KeyChord.up(uLeft, with: [.option]))")
+check(KeyChord.down(uEsc, with: []) == [key(uEsc, true, 0)] && KeyChord.up(uEsc, with: []) == [key(uEsc, false, 0)],
+      "escape with nothing latched: its down, its up")
+do {
+    var all = true
+    for bits in 0..<16 {
+        var latched: KeyModifiers = []
+        if bits & 1 != 0 { latched.insert(.control) }
+        if bits & 2 != 0 { latched.insert(.shift) }
+        if bits & 4 != 0 { latched.insert(.option) }
+        if bits & 8 != 0 { latched.insert(.command) }
+        for u in [uEsc, uTab, uLeft, uRight, uUp, uDown] where KeyChord.press(u, with: latched) != KeyChord.down(u, with: latched) + KeyChord.up(u, with: latched) {
+            all = false
+        }
+    }
+    check(all, "a press is its down then its up, for every latch")
+}
+
+// A finger on escape, then off: its down at the touch, its up at the release; the Button's action as
+// the finger lifts sends nothing more, before the press ends or after it.
+do {
+    var h = HeldCap()
+    check(h.touchDown(uEsc, latched: [], at: 1.0) == [key(uEsc, true, 0)] && h.down?.usage == uEsc, "escape's touch: its down")
+    check(h.touchUp(uEsc, at: 1.8) == [key(uEsc, false, 0)] && h.down == nil, "the release: its up")
+    check(h.activated(uEsc, latched: [], at: 1.81).isEmpty, "the action just after: nothing")
+    check(h.activated(uEsc, latched: [], at: 1.85) == KeyChord.press(uEsc, with: []), "a second activation after it is a press of its own")
+    var g = HeldCap()
+    _ = g.touchDown(uTab, latched: [.option], at: 1.0)
+    check(g.activated(uTab, latched: [.shift], at: 1.5) == [key(uTab, false, option), key(uLOpt, false, 0)] && g.down == nil,
+          "the action before the press's end is told: it is the release, the key and its ⌥ up")
+    check(g.touchUp(uTab, at: 1.51).isEmpty, "then the press's end: nothing more")
+    check(g.activated(uTab, latched: [], at: 3.0) == KeyChord.press(uTab, with: []), "a later activation: the whole press")
+    // The latch is spent when a key goes down with it: a touch's down, a whole press; never by an up.
+    check(HeldCap.spendsLatch(KeyChord.down(uEsc, with: [])) && HeldCap.spendsLatch(KeyChord.press(uTab, with: [.shift]))
+          && !HeldCap.spendsLatch(KeyChord.up(uLeft, with: [.option])) && !HeldCap.spendsLatch([]),
+          "the latch: spent by a down or a press, not by an up or nothing")
+}
+// With ⌥ latched: ⌥'s own key and ← go down at the touch, ← and then ⌥ come up at the release; a
+// modifier latched meanwhile is not the held cap's (touchUp takes no latch).
+do {
+    var h = HeldCap()
+    check(h.touchDown(uLeft, latched: [.option], at: 1.0) == [key(uLOpt, true, option), key(uLeft, true, option)], "⌥ latched: ⌥ and ← down")
+    check(h.down?.modifiers == [.option], "the cap holds what it went down with")
+    check(h.touchUp(uLeft, at: 2.0) == [key(uLeft, false, option), key(uLOpt, false, 0)], "the release: ← up, then ⌥ up")
+}
+// VoiceOver, Switch Control or a keyboard activates a cap with no touch: the whole press with what is
+// latched, as before; also long after a touch that slid off the cap (no action came for it).
+do {
+    var h = HeldCap()
+    check(h.activated(uTab, latched: [.shift], at: 5.0) == KeyChord.press(uTab, with: [.shift]), "an activation with no touch: ⇧Tab pressed")
+    _ = h.touchDown(uEsc, latched: [], at: 6.0)
+    _ = h.touchUp(uEsc, at: 6.2)
+    check(h.activated(uEsc, latched: [], at: 7.0) == KeyChord.press(uEsc, with: []), "0.8 s after a slid-off touch: the whole press")
+    _ = h.touchDown(uEsc, latched: [], at: 8.0)
+    check(h.activated(uEsc, latched: [], at: 8.4) == [key(uEsc, false, 0)], "the action with the finger still on it, as told: its up")
+    check(h.activated(uEsc, latched: [], at: 8.45) == KeyChord.press(uEsc, with: []), "a second activation: its own press")
+    check(h.touchUp(uEsc, at: 8.5).isEmpty, "the press's end after: nothing more")
+}
+// A finger on a second cap: the first comes up first (one key at a time), then the second goes down;
+// the first's own release and action later send nothing.
+do {
+    var h = HeldCap()
+    check(h.touchDown(uLeft, latched: [.command], at: 1.0) == [key(uLCmd, true, command), key(uLeft, true, command)], "⌘←'s touch")
+    check(h.touchDown(uRight, latched: [], at: 1.5) == [key(uLeft, false, command), key(uLCmd, false, 0), key(uRight, true, 0)],
+          "a finger on →: ← and ⌘ up, then → down")
+    check(h.touchUp(uLeft, at: 1.7).isEmpty && h.activated(uLeft, latched: [], at: 1.7).isEmpty, "←'s release and action: nothing")
+    check(h.down?.usage == uRight, "→ is the cap down")
+    check(h.touchUp(uRight, at: 2.0) == [key(uRight, false, 0)] && h.activated(uRight, latched: [], at: 2.0).isEmpty, "→'s release, its action")
+}
+// The same cap's press told twice (no release between): one down. Off the cap and back: up, then down.
+do {
+    var h = HeldCap()
+    check(h.touchDown(uUp, latched: [], at: 1.0) == [key(uUp, true, 0)] && h.touchDown(uUp, latched: [.shift], at: 1.1).isEmpty,
+          "a second press of the cap down: nothing, and the latch stays (nothing came back)")
+    check(h.touchUp(uUp, at: 1.2) == [key(uUp, false, 0)] && h.touchDown(uUp, latched: [], at: 1.3) == [key(uUp, true, 0)]
+          && h.touchUp(uUp, at: 1.4) == [key(uUp, false, 0)] && h.activated(uUp, latched: [], at: 1.4).isEmpty,
+          "slid off and back on: up, down again, up, and its action nothing")
+}
+// The key row leaves the screen with a cap held: it comes up, with its modifiers; its release after
+// sends nothing.
+do {
+    var h = HeldCap()
+    check(h.releaseAll().isEmpty, "nothing held: nothing to let go")
+    _ = h.touchDown(uDown, latched: [.shift, .control], at: 1.0)
+    check(h.releaseAll() == [key(uDown, false, shift | control), key(uLShift, false, control), key(uLCtrl, false, 0)] && h.down == nil,
+          "⌃⇧↓ held as the row goes: ↓, ⇧ and ⌃ up")
+    check(h.touchUp(uDown, at: 1.5).isEmpty, "the release after: nothing")
+}
+// Held on this Mac and on one from before 2026-09-27 (which posts each key's flags as they come): the
+// key is down on the Mac from the touch to the release, carrying what was latched, and nothing is left
+// held after; for every latch and every held cap.
+do {
+    var combos = 0, ok = true
+    for bits in 0..<16 {
+        var latched: KeyModifiers = []
+        if bits & 1 != 0 { latched.insert(.control) }
+        if bits & 2 != 0 { latched.insert(.shift) }
+        if bits & 4 != 0 { latched.insert(.option) }
+        if bits & 8 != 0 { latched.insert(.command) }
+        for u in [uEsc, uTab, uLeft, uRight, uUp, uDown] {
+            var mac = Mac(), old = OldMac(); let a = Conn()
+            var h = HeldCap()
+            let downs = h.touchDown(u, latched: latched, at: 1.0)
+            mac.send(downs, from: a); old.send(downs)
+            let k = KeyStrokes.virtualKeys[u]!
+            let heldNow = mac.down[k] == latched.rawValue && old.down[k] == latched.rawValue
+            let ups = h.touchUp(u, at: 2.0) + tap
+            mac.send(ups, from: a); old.send(ups)
+            if !(heldNow && mac.down.isEmpty && mac.table == 0 && mac.broken.isEmpty && old.down.isEmpty && old.table == 0) {
+                ok = false; print("FAIL: \(u) held with \(names(latched.rawValue)): this Mac \(mac.log), older \(old.log)")
+            }
+            combos += 1
+        }
+    }
+    check(ok && combos == 96, "96 held caps on this Mac and an older one: down while held, nothing left after")
+}
+// Random key row sessions: fingers landing on and leaving the six caps (two at once), their actions in
+// the window or not, activations with no touch, latches made and spent as the key row spends them, and
+// the row leaving the screen. Whenever no cap is down, nothing is held on this Mac or an older one;
+// while one is down its key is the one down on the Mac, with what it went down with.
+do {
+    var rng = Rng(state: 0xCA95_4E1D)
+    var broken = 0, sessions = 0, holds = 0, presses = 0
+    let caps: [UInt16] = [uEsc, uTab, uLeft, uRight, uUp, uDown]
+    for run in 0..<2000 {
+        var mac = Mac(), old = OldMac(); let a = Conn()
+        var h = HeldCap()
+        var latched: KeyModifiers = []
+        var t = 1.0
+        var fingers: [UInt16] = []
+        var problem: String?
+        func send(_ events: [InputEvent]) { mac.send(events, from: a); old.send(events) }
+        for step in 0..<(10 + rng.below(40)) {
+            t += Double(rng.below(400)) / 1000
+            switch rng.below(9) {
+            case 0, 1, 2:
+                let u = rng.pick(caps)
+                let events = h.touchDown(u, latched: latched, at: t)
+                send(events)
+                if HeldCap.spendsLatch(events) { latched = []; holds += 1 }
+                if !fingers.contains(u) { fingers.append(u) }
+            case 3, 4:
+                if let u = fingers.isEmpty ? nil : fingers[rng.below(fingers.count)] {
+                    // The release: the press's end and the Button's action, in either order, or the end alone
+                    // (the finger slid off the cap).
+                    let action = rng.chance(70), first = rng.chance(50)
+                    if action && first { send(h.activated(u, latched: latched, at: t)) }
+                    send(h.touchUp(u, at: t))
+                    fingers.removeAll { $0 == u }
+                    if action && !first { t += Double(rng.below(30)) / 1000; send(h.activated(u, latched: latched, at: t)) }
+                }
+            case 5:
+                let u = rng.pick(caps)
+                if !fingers.contains(u) {
+                    let events = h.activated(u, latched: latched, at: t + 1)
+                    t += 1
+                    send(events)
+                    if HeldCap.spendsLatch(events) { latched = []; presses += 1 }
+                }
+            case 6, 7:
+                latched.formSymmetricDifference(rng.pick([KeyModifiers.control, .shift, .option, .command]))
+            default:
+                if rng.chance(30) { send(h.releaseAll()); fingers = [] }
+            }
+            let modifierKeysDown = mac.down.keys.filter { macModifiers[$0] != nil }
+            if let held = h.down {
+                let k = KeyStrokes.virtualKeys[held.usage]!
+                let others = mac.down.keys.filter { macModifiers[$0] == nil && $0 != k }
+                if mac.down[k] != held.modifiers.rawValue || !others.isEmpty || old.down[k] != held.modifiers.rawValue {
+                    problem = "step \(step): cap \(held.usage) down with \(names(held.modifiers.rawValue)), the Mac has \(mac.down)"
+                }
+            } else if !mac.down.isEmpty || mac.table & modifierBits != 0 || !old.down.isEmpty || old.table & modifierBits != 0 || !modifierKeysDown.isEmpty {
+                problem = "step \(step): no cap down, yet this Mac has \(mac.down) (\(names(mac.table))), an older one \(old.down)"
+            }
+            if !mac.broken.isEmpty { problem = "step \(step): " + mac.broken[0] }
+            if problem != nil { break }
+        }
+        if let problem { broken += 1; if broken <= 3 { print("FAIL: key row run \(run): \(problem)") } }
+        sessions += 1
+    }
+    check(broken == 0, "key row sessions: \(broken) of \(sessions) left something held or the wrong key down")
+    check(holds > 10_000 && presses > 1_000, "the sessions hold caps and press them: \(holds) holds, \(presses) presses")
+}
+
 // MARK: The device's hardware keyboard (ForwardedKeys)
 
 /// A hardware keyboard on this device and what UIKit tells InputOverlayView: the modifiers held after
