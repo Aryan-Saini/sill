@@ -9,7 +9,7 @@ Formerly winstream; the folder still carries the old name.
 ## Current step
 
 **A Desktop after a spell with no device (2026-10-28, branch `idle-display-refresh` from main at 6c5b5d24,
-PR #PRNUM; the diagnosis is sill-handoff's `triage/2026-10-20-reports/verdicts-2026-10-27/glitch-wired-black-2026-10-28.md`,
+PR #239; the diagnosis is sill-handoff's `triage/2026-10-20-reports/verdicts-2026-10-27/glitch-wired-black-2026-10-28.md`,
 the report `verdicts-2026-10-28/idle-display-report.md`).** Noah, 2026-10-28 18:15 on the iPad mini over the cable
 with a fresh Debug build: connected, black, left after 7.4 s; the Wi‑Fi tap 25 s later "worked flawlessly". Sill.app
 had sat 36.5 hours with no device while the dock's two displays came back under new IDs through ~290 sleeps; the
