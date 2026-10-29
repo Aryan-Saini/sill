@@ -1206,11 +1206,19 @@ step 4), in this order:
 4. Then the variables, repository variables as before: `SILL_SIGN_IN_CI` (below) after a
    verify-only run has passed, and the nightlies' (Nightlies › The first run).
 
-What the environments don't do: a `v*` tag or a commit on main can still be pushed by anyone with
-write access to the repository (Noah alone today). A release waits for Noah's approval whoever
-pushed its tag; a nightly doesn't wait, so main's own protection (a ruleset requiring pull
-requests) and a ruleset keeping `v*` tags to Noah would close that too. An administrator can still
-bypass an environment's rules (GitHub's default), which is Noah.
+What the environments don't do: they don't protect main or the tags. A `v*` tag or a commit on
+main can still be pushed by anyone with write access to the repository: Noah alone today, and so
+any token of his (the `gh` signed in on this Mac has the `repo` and `workflow` scopes). A release
+waits for Noah's approval whoever pushed its tag. A nightly doesn't wait, and `nightly` holds the
+same Developer ID and notary keys as `release`, and the Admin App Store Connect key: a commit on
+main reaches all of them at the next run from main (the schedule, or nightly.yml or testflight.yml
+by hand), with no approval (the review of 2026-10-29 ran that route through the workflows' own
+steps). So the approval keeps a tag from publishing a release unseen, not the keys from main. A
+ruleset on main that requires a pull request stops a direct push but not a merged pull request,
+unless an approval is required too, and GitHub never lets a pull request's author approve it: with
+Noah alone it holds only against someone else's write access. A ruleset keeping `v*` tags to Noah
+keeps other people's tags from reaching his approval at all. An administrator can still bypass an
+environment's rules (GitHub's default), which is Noah.
 
 | Name | Kind | What it holds |
 |---|---|---|
