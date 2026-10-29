@@ -494,6 +494,38 @@ trackpad. Not a physical Magic Keyboard: which channel brings Esc there, the on-
 staying away when it is folded, an input method's candidates, VoiceOver, Full Keyboard Access and
 two windows (steps 2, 5, 8, 10 to 13) are still Noah's.
 
+## #130 and PR #217 (2026-10-28)
+
+andrewgribben's PR #217 ("Trackpad scroll sends each event's own movement", Fixes #130) read each scroll
+pan's reading as that event's own movement on a Magic Keyboard, so that §3's diff of a running total sent
+almost nothing. Checked on a private iPad Pro 11-inch simulator (iOS 27.0) with keyrig and a probe app of
+pans side by side, then Sill's own build against a loopback synthetic host with `SILL_TEST_INPUT_LOG=1`:
+- The translation is a running total, as a finger's (three notches: 3, 6, 9 pt), and Apple's guidance is
+  to give an existing finger pan a scroll mask with its handler unchanged. Main's build and #217's posted
+  the same wheel scroll, event for event (one notch 6 pt; three 5, 6, 5; ten 6, 5, 6, 5, 6, 6, 5, 6, 5, 6
+  points on the test pattern), and the same phased scroll within its timing (194 and 190 points). The
+  issue's reports were of 0.5.1, whose finger pan had no scroll mask (a pan's default is 0, read there):
+  no scroll event reached it at all.
+- What was wrong: the pan's location runs on with its translation while the pointer stays put (the
+  pointer at y 308.8, the pan at 311.8, 314.8, 317.8), and the scroll, its end and its coast were posted
+  there: ten notches walked from y 447 to 497 of the pattern's 949, a phased scroll from 459 to 636, so the
+  Mac scrolled the window under the pointer at first and then whatever the point reached. Now every event
+  goes where the pointer was as the scroll began (`PointerScroll`, in HardwareKeyboardPolicy.swift): at
+  y 442 throughout, the amounts unchanged.
+- #217's zeroing of each reading stays (it reads the movement since the last event whether UIKit adds them
+  up or not); its `minimumNumberOfTouches = 0` and its three stats keys go (`in.scrollMiss` could not count
+  for a Sill device, `in.scroll0` counts every coast's tail, `in.scrollY` watched for amounts that were
+  never lost), and the input log says where a scroll lands instead.
+- Not seen: a real trackpad's events in the continuous pan (none reached it in the simulator: keyrig's
+  mouse and its phased events go to the discrete pan, and a virtual touch pad's two-finger digitizer frames
+  came as touch events). The DEBUG console's `scroll:` line, one a scroll, says
+  on a device how far it went, where, and how far UIKit's own location for the pan had run from there.
+- Untested, for Noah (one step, the iPad with the Magic Keyboard, a Debug build from the branch): two
+  fingers on the trackpad scroll a window and the Desktop, the whole way, under the pointer: a long scroll
+  down and up in Safari and in Finder's list; a flick coasts once (note a double coast: the content running
+  on twice as far, or a second stretch after the first ends); a mouse's wheel, one notch and a spin; the
+  console's `scroll:` lines (the pan's own location running on by about the scroll, or not).
+
 ## Progress
 
 - 2026-10-14: the plan (c641950); the rule, Esc's key command, the scroll pans and their checks, with the
