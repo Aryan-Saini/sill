@@ -8,6 +8,39 @@ Formerly winstream; the folder still carries the old name.
 
 ## Current step
 
+**A device's viewport held to what a host takes (2026-10-29, branch `sec-viewport-bounds` from main at
+150479b5, PR #PRNUM; the security scan's finding 4, Low; Noah's go of 2026-10-29 for the batch).** Kind 9 carried
+the panel and Aa's scale as Doubles with no bounds and the host took any number above 0: a viewport of 1e300 points
+(or a scale of 1e-300) from any device a Mac admitted reached the window's fit (`fitToViewport`), whose "Resized …"
+line made an Int of it, which traps, so Sill died with every device's session (the scan's chain with finding 3: its
+Bonjour name then free for an impostor); with the virtual display `VirtualStage.windowSize` was unheld and the
+"insists on …" line trapped the same way (a full-screen window's crop of an infinite panel was NaN, which
+`evenPixels` traps on). No wire change.
+- `ViewportBounds` (StreamProtocol's Viewport.swift, pure, `Tests/checks/viewport-bounds`): each side 1 to 16384
+  points, a text scale 0.25 to 4 or none. The host refuses any other viewport whole at kind 9, and one that does not
+  decode (JSON carries no NaN or infinity): the last viewport stands and nothing of the message is taken, its rate
+  neither; one line naming the device, at most one a second per connection ("Viewport from sillclient refused: width
+  1e+300 (1 to 16384 points), height 1e+300 (1 to 16384 points)"), `vp.refused` in the `[1s]` lines counting every
+  one. Every device build's viewport is within them (the compatibility floor's new line), and a device holds what it
+  sends to them (`held`, in `sendViewport`). The two lines print through `ViewportBounds.whole` (Int()'s number,
+  toward zero, without its trap); no other host line prints a device's number through Int() (a click's point is held
+  to the source by InputLanding, the rest are the Mac's own).
+- The window's size on the virtual display held to 1…4096 points a side as the envelope is
+  (`VirtualDisplaySize.windowSize`, `Tests/checks/capture-scale`); every size within that is what it was.
+- `sillclient.py --raw9=JSON@T` sends a literal viewport.
+- Verified: `viewport-bounds` 79 checks and 26 of 26 mutants (18,566 of its 200,000 random viewports main's guard
+  took and its line trapped on, none taken now), `capture-scale` 172 and 48 of 48; `run-all.sh`, all 57; `swift
+  build -c release` from `git archive`, only the CaptureProbe warning; the three iOS builds, only the known
+  `StreamClient` capture warning; live, a loopback synthetic host streaming the test pattern: 1e300, -1, NaN,
+  Infinity and a scale of 1e-300 each refused with its line (NaN and Infinity: "it does not decode as a viewport"),
+  three in 0.4 s one line and `vp.refused 3`, 16384 points at 0.25 taken, the stream going throughout (47–58 frames
+  a second). main's own lines (the handler, the fit's guard, target and line, the stage's window size and line, cut
+  from 150479b5 and compiled with its Viewport.swift) trap on the scan's payload and on a scale of 1e-300 (exit
+  133); the branch's refuse and go on. Not live on main's host: only a real window resized through Accessibility
+  reaches that line, which no test host lists.
+- **Untested, for Noah:** nothing should change on a device: Aa's steps and none, a rotation and the virtual display
+  as before on the iPad and iPhone, and Sill.log without a "Viewport from … refused" line.
+
 **Pinch to zoom (2026-10-28/29, addhumal's PR #196 with maintainer edits; issue #65).** Noah's decisions of
 2026-10-19/20: pinch to zoom, not a slider; Photos-like, centred on the point between the fingers, the Mac's cursor
 not involved; a slight pinch out stays zoomed and only a pinch all the way out (or a lift within 2 % of it) gives the
@@ -5948,7 +5981,12 @@ good.
   message kinds in both directions, HEVC parameter set encoding. Shared by both
   sides. Change it in one place. `Switcher.swift` — the catalog types
   (`WindowList`, with the host's per-launch `launchID`; `WindowInfo`,
-  `AppInfo`, `StreamSource`) and image blob framing.
+  `AppInfo`, `StreamSource`) and image blob framing. `Viewport.swift` —
+  `Viewport` (kind 9: the device's panel, Aa's scale and its rate),
+  `ClientStats`, `CursorShapeBlob`, and `ViewportBounds` (what a host takes of
+  a viewport: each side 1 to 16384 points, a scale 0.25 to 4 or none, any other
+  refused; what a device sends, `held`; and `whole`, a number for a log line
+  as Int() printed it, without its trap; pure, `Tests/checks/viewport-bounds`).
   `HostSettings.swift` — the host settings a device sees and changes (kinds 16
   and 17): `StreamSettings`, `RunningStream`, `HostSettingsState`,
   `HostSettingsChange`, `SettingsChoices` (the Mac menu's values) and
@@ -6049,7 +6087,8 @@ good.
   `InputLanding`, where a device's position lands on the Mac: at most the
   source's last pixel row and column at its display's scale; and
   `VirtualDisplaySize`, the size of Sill's virtual display, no side under 800
-  points, which macOS kept at 2x (an iPhone's 754×784 came up at 1x); pure,
+  points, which macOS kept at 2x (an iPhone's 754×784 came up at 1x), and of
+  the window on it, 1 to 4096 points a side (`windowSize`); pure,
   `Tests/checks/capture-scale`), `SyntheticCapture` (test pattern for
   `--synthetic`; SILL_TEST_PATTERN=noise adds a square of noise,
   SILL_TEST_PATTERN=picture:<path> shows a still picture instead,
@@ -6326,7 +6365,8 @@ good.
   the tool and the background. Sourced, it only defines its functions.
   `Scripts/sillclient.py` is the wire-format test client
   (timed `--set=K=V[,K=V]@T` kind 17 changes with tokens 1, 2, 3…,
-  `--raw17=JSON@T`, `--pick=none|desktop|window:ID@T`, `--stats`,
+  `--raw17=JSON@T`, `--raw9=JSON@T` (a literal viewport, kind 9),
+  `--pick=none|desktop|window:ID@T`, `--stats`,
   `--expect=K=V[,…]` against the last kind 16, which it prints one per line,
   and each second's frames with their kB (the encoder's output);
   `--host`, `--device`, `--big-payload`, `--flood`, `--stop-ping@T`,
@@ -6773,8 +6813,9 @@ good.
   `pointer-watch`, `policy` (with its `home.swift`), `protocol`,
   `remote-rules` (with its `home.swift`), `settings-window` (Sill.app's
   `SettingsWindowFit`), `stream-zoom` (iOSClient's StreamZoom), `text-composition` (iOSClient's TextComposition with
-  StreamProtocol's Input.swift), `tour`, `update-policy`, `virtual-display-api`
-  (VirtualDisplay.swift whole, as VirtualDisplayProbe compiles it: its surface,
+  StreamProtocol's Input.swift), `tour`, `update-policy`, `viewport-bounds`
+  (StreamProtocol's ViewportBounds: what a host takes of a device's viewport),
+  `virtual-display-api` (VirtualDisplay.swift whole, as VirtualDisplayProbe compiles it: its surface,
   TypeEncoding and Runtime.method's decision, on classes made at run time, against
   the encodings measured on Apple silicon and reported from Intel machines),
   `window-restore` (WindowRestore's rule and sequences against a stand-in Mac,
@@ -7295,7 +7336,10 @@ device keeps working with Macs from the first public build on, or each says why
   44, a device's keyframe request after its picture was interrupted, empty, which a host from
   before skips; 29 to 31 and 33 to 42 stay free, pull request #66's, and 43 is the Mac's sound's,
   below), inside `sill/1` at both doors (19 and 20 on their own `sill-pair/1` connection, the
-  next bullet); the ping echo; a
+  next bullet); the ping echo; a viewport (kind 9) within `ViewportBounds`, each side 1 to
+  16384 points and a text scale 0.25 to 4 or none: every device build's is, a host from
+  2026-10-29 on refuses any other whole (security scan, finding 4), so a later device keeps
+  within them; a
   kind 16 within 2 s of the first window list, one per connection since Sill for Mac 0.5.1 (away
   from home, docs/remote-bundle-plan.md §4): its `settings` the pair that connection's controls
   set (the away quality for a device away), and its optional `away` (AwayQuality, from a host with

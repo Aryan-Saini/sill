@@ -529,6 +529,20 @@ sequences that fit a window and put it back (over `WindowRestore.Access`, which
 docs/restore-window-frames-plan.md has the reasons, and The restore probe
 (below) checks it against a real window.
 
+The host takes a device's viewport (kind 9, the panel's size and Aa's scale)
+only within bounds: each side 1 to 16384 points, a text scale 0.25 to 4 or
+none (`ViewportBounds` in `Sources/StreamProtocol/Viewport.swift`, checked in
+`Tests/checks/viewport-bounds`). Any other, or a payload that does not decode,
+is refused whole and the last viewport stands, with one line naming the device
+("Viewport from iPad (iPad14,1) refused: width 1e+300 (1 to 16384 points)", at
+most one a second per device; `vp.refused` in the stats line counts every
+one). Every device build sends a viewport within them, and a device holds what
+it sends to them. Until 2026-10-29 a side of 1e300 points reached the fit
+above, whose log line made an Int of it, which traps: one message from any
+device a Mac admitted ended Sill and every device's session (security scan,
+finding 4). A window on the virtual display is asked at most 4096 points a
+side, the display's own ceiling.
+
 The lights a held thumbnail shows (close, minimize, full screen; kind 15) press
 the window's own buttons through Accessibility, on the host's main actor, each
 element with a timeout: 1 s for Close's button, which is a new element every
@@ -1276,7 +1290,9 @@ python3 Scripts/sillclient.py PORT 8 desktop --set=bitrate=25000000@3 --expect=b
 Its docstring lists every flag: timed changes and picks, stats as a named
 device, the remote door with pairing, the Mac's menus (`--menus`, `--fetch`,
 `--press`), a keyframe request (`--keyframe@T`: the summary's "keyframes at"
-shows the one it brought), and more. It checks every argument
+shows the one it brought), a literal viewport (`--raw9=JSON@T`, which a host
+refuses outside its bounds, with a line: Windows sized for a device, above),
+and more. It checks every argument
 before it connects, and a bad one exits 2. The synthetic hosts do not
 advertise over Bonjour, so this client, or the simulator's `-SillConnect`, is
 how to reach them; `lsof -nP -iTCP -sTCP:LISTEN -a -p <pid>` finds the port.
