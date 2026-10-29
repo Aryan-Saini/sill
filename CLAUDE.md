@@ -14,37 +14,62 @@ Require pairing turned on, and Remote Access or internet access turned off said 
 connection once the goodbye was handed to the network, or 0.25 s later; meanwhile its input kept landing, and
 input held for it while an app came forward (up to 0.6 s) was replayed, also once it had left. Host only; no
 wire change, nothing on the device.
-- `StreamServer.closeSessions` marks each session it cuts off revoked as it says goodbye (`Client.revoked`, on
+- The coordinator marks the device as the Mac decides (`RemoteAccess.onCutOff`, on the main actor: every
+  connection whose route the change names, before any of its messages already waiting there; since the
+  review), and `StreamServer.closeSessions` marks its session revoked as it says goodbye (`Client.revoked`, on
   the network queue) and tells the coordinator in the same queue turn (`onClientRevoked`): its receive loop
   then hands on only a key's or a button's up (`RevokedInput.mayLetGo`), no pong, no stats, no pointer
   control, and counts the rest (`in.revoked`). The coordinator keeps the revoked set until the device leaves
   and posts of it only the up of a key or a button that device pressed and the Mac still has down
   (`RevokedInput.stillGoes`, KeyStrokes.swift, pure; `InputInjector.releasesWhatItHolds`, with each button's
   owner), a button's where the pointer is; nothing else it sends acts (a pick, a window's buttons, a launch,
-  settings, menus, the clipboard). The replay of held input, a switch's drop of it and gestures waiting for a
-  switch judge a revoked device, and one that left while it waited (`gone`), the same way, and drop their
-  shortcuts. Its keys still down when it leaves go up as before. TEST ONLY: with `SILL_TEST_INPUT_LOG` a
-  synthetic host prints where a revoked device's input stops landing; `sillclient.py --key=USAGE,HOLD@T`
+  settings, menus, the clipboard), and a menu choice or fetch of it still waiting for its turn is neither made
+  nor read (`MenuMirror.clientRevoked`; a departed device's choice is still made, as a move counts on it).
+  The replay of held input, a switch's drop of it and gestures waiting for a switch judge a revoked device,
+  and one that left while it waited (`gone`), the same way, and drop their shortcuts. Its keys still down
+  when it leaves go up as before, and its buttons now too (`RevokedInput.buttonsLetGo`; an unremoved device's
+  stay down as before: its session may go on over a move's connection). TEST ONLY: with `SILL_TEST_INPUT_LOG`
+  a synthetic host prints where a revoked device's input stops landing; `sillclient.py --key=USAGE,HOLD@T`
   holds a key. The pacing and sound harnesses compile KeyStrokes beside StreamServer.
-- Verified: `key-strokes` 383 checks (30 new: the rule; the glue modelled with removals, holds, switches,
-  gestures and departures, 3,000 random sessions, and as it was before, 2,600 of 3,000 landing input after
-  the removal) and 94 of 94 mutants (11 new); `run-all.sh`, all 56; `swift build -c release`, only
-  the CaptureProbe warning; both harnesses' hosts build (and not without KeyStrokes); CI's Build and check on
-  6a753e38. Live on loopback (a
-  `--synthetic` bare app with `SILL_TEST_INPUT_LOG`, a paired `sillclient` pressing a key every 25 ms, each
-  held 0.6 s, and moving, tapping, typing and pressing F-keys across the cut, not reading, so its connection
-  lasts the whole 0.25 s): between "Removed sec10-client (sillclient); closed 1 connection." and "Client left"
-  main's build posted 48 and 57 events (key downs, moves, clicks, typed text, key ups) up to +253 ms, and 56
-  after Require pairing's line; this build only 11, 10 and 10 key ups, each of a key down at the cut, then at
-  "Client left" the keys it still held (`in.revoked` 38, 37 and 39).
-- Not done: a menu choice made before the cut and still queued behind a slow menu read (one at a time, at most
-  its device's wait) is still made, as a departed device's is by design (Scripts/menu-check's "its choice
-  made"); frames, the clipboard and pointer reports still go to the device for those 0.25 s (output, not this
-  finding).
+- The review (2026-10-29, at cf230ed9; three findings, each reproduced on loopback first, then fixed in a
+  commit of its own). (1) A cut-off device's mouse button stayed down after it left (departures let go of
+  keys only): a paired client pressed the left button and was removed before its up; after "Client left"
+  another device's three moves were posted as "left mouse drag", the up only at Quit. Now
+  "left mouse up (none) at 529,332" as it leaves and the moves plain (8399498f). (2) The coordinator learned
+  of the cut only from the server's mark, which reached the main actor behind the device's messages already
+  waiting there (read while the Mac saved the change: the keychain's write, or a locked login keychain's
+  prompt): with the test store's save made to take 150 ms (a scratch build), 25 events (moves, key downs,
+  their ups) landed at +154 ms, after "Removed …", 2 runs of 2; with the decision's mark none, `in.revoked`
+  20 (9c518d13). (3) A menu choice or fetch made before the cut and waiting behind a slow menu read (up to
+  its device's 4 s wait) was still made or read, its app brought forward first; checked with a scratch
+  harness of the real MenuMirror on a stub reader (no Accessibility in that session): the branch's made B's
+  choice and read E's menu after their cut, this one neither, and a departed C's choice is still made
+  (6d7dfb89). Scripts/menu-check/mirror.swift gains the case against the fixture: it compiles, not run there.
+- Verified: `key-strokes` 395 checks (42 new on the branch: the rule, the buttons as a cut-off device leaves,
+  the glue modelled with what waits for the main actor, removals, holds, switches, gestures, departures and
+  busy spells, one ending with the decision: 3,000 random sessions; marked by the server alone 1,097 and as
+  it was before 2,789 of 3,000 landed input after the cut) and 98 of 98 mutants (15 new); `run-all.sh`, all
+  56; `swift build -c release`, only the CaptureProbe warning; the pacing and sound harnesses build; no iOS
+  file changed. Live on loopback (a `--synthetic` bare app with `SILL_TEST_INPUT_LOG`, a paired `sillclient`
+  pressing a key every 25 ms, each held 0.6 s, and moving, tapping, typing and pressing F-keys across the
+  cut, not reading, so its connection lasts the whole 0.25 s): between "Removed sec10-client (sillclient);
+  closed 1 connection." and "Client left" main's build posted 48 and 57 events (key downs, moves, clicks,
+  typed text, key ups) up to +253 ms, and 56 after Require pairing's line; the branch's builds only key ups
+  of keys down at the cut (10 to 11), then at "Client left" the keys it still held; on the final build the same
+  for Remove (11, Client left +260 ms, `in.revoked` 44), Require pairing (10, +255 ms, 37), Remote Access off
+  and internet access off through the remote door (16 ups in all each, +256 and +252 ms, 24 and 23), and a
+  device removed mid-drag lets go of the button as it leaves ("left mouse up (none) at 529,332").
+- Not done: a pick already under way, or queued behind a restart, when the cut comes still brings its window
+  forward (not input); a session admitted while the Mac was saving the change is marked by the server alone
+  (what it sent before that mark lands, for at most the save's length); frames, the clipboard and pointer
+  reports sent after the goodbye queue behind it and go with the connection.
 - **Untested, for Noah:** with this Sill.app and the iPad's Magic Keyboard streaming TextEdit, type steadily
   (or hold a key) and click Remove in Settings › Devices: nothing typed after the click lands, and no key
   stays down on the Mac (Sill.log: "Removed …", then "Client left", the `[1s]` line's `in.revoked`); pair
-  again and it works. The same with Require pairing turned on while an unpaired iPad types.
+  again and it works. The same with Require pairing turned on while an unpaired iPad types. From the review:
+  drag a window with the iPad's trackpad and click Remove mid-drag: the drag ends, and another device's
+  pointer then moves without dragging; choose a menu item from the iPad's Menus in a slow app and click
+  Remove at once: the item is not chosen (Sill.log: "Menu from … refused: …: the Mac no longer serves it").
 
 **Pinch to zoom (2026-10-28/29, addhumal's PR #196 with maintainer edits; issue #65).** Noah's decisions of
 2026-10-19/20: pinch to zoom, not a slider; Photos-like, centred on the point between the fingers, the Mac's cursor
@@ -6124,15 +6149,17 @@ good.
   `InputInjector` (CGEvents: pointer and scroll where InputLanding lands them, scroll with phases, text with modifier
   flags cleared explicitly (a ⌘Space before typing otherwise tainted the text
   events and Spotlight ignored them), HID keys as KeyStrokes gives them, each
-  device's keys let go when it leaves and every key and button at the host's
-  end, the check after each key's up, a button's up with nowhere to land where
-  the pointer is; the TEST ONLY input log), `KeyStrokes` (a device's key as the
+  device's keys let go when it leaves (and a cut-off device's buttons) and every
+  key and button at the host's end, the check after each key's up, a button's
+  up with nowhere to land where the pointer is; the TEST ONLY input log),
+  `KeyStrokes` (a device's key as the
   Mac's: its virtual key, and the flags each event carries from the modifier
   keys the devices hold down, so a key's up leaves only what is held;
   `KeyUpCheck`, whether an up took its modifiers out of the HID state table;
   `DroppedInput`, what of input with nowhere to land still goes;
   `RevokedInput`, what still goes of a device the Mac no longer serves, or of
-  one that left while its input was held: the up of what it holds down; pure,
+  one that left while its input was held: the up of what it holds down, and
+  the buttons a cut-off device holds as it leaves (`buttonsLetGo`); pure,
   `Tests/checks/key-strokes`),
   `WindowSizer` (Accessibility resize for the Aa scale, returning what it did,
   `Fit`; `placement/move/restore` for the virtual display; `AXWindows`,
@@ -6168,7 +6195,8 @@ good.
   `AddressList` (pure) and `RouterAddress` (read-only NAT-PMP/PCP),
   `RemoteAccess` (main actor; ties them together, signs kind 18; owns
   pairing for both doors: the ask, the cable's devices, Require pairing,
-  Remove at both doors). Pairing at home (docs/home-pairing-plan.md): `Door`
+  Remove at both doors; names the sessions each cut-off closes to the
+  coordinator as it decides, `onCutOff`). Pairing at home (docs/home-pairing-plan.md): `Door`
   (admission at a TLS door, one class behind both listeners: the pending
   caps, the backoff, the verify block, the device gate, one pairing request
   per `sill-pair/1` connection; `RemoteServer` keeps the remote door's
@@ -6204,7 +6232,8 @@ good.
   per element, 1.5 s a menu, and no item begun that would end past the
   request's deadline), `MenuMirror` (main actor: the target, the version, the
   subscribers (only they are served), one request at a time with its
-  deadline, the cache and the kept elements; the TEST ONLY
+  deadline, the cache and the kept elements; a cut-off device's waiting
+  requests neither read nor made, `clientRevoked`; the TEST ONLY
   SILL_TEST_MENU_PID, honoured only by a synthetic host, makes a process's
   menus the test pattern's) and `MenuSelfTest` (`--menu-selftest[=APP]`,
   read-only).

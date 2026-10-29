@@ -1066,8 +1066,10 @@ paired for Remote Access connects at home with no further step.
   Remove, Require pairing turned on and Remote Access or internet access
   turned off cut a device off at once: from then on nothing it sends reaches
   the Mac but the up of a key or a button it holds down, input held for it
-  while an app came forward included; its connection closes within a quarter
-  of a second (the `[1s]` lines count what was dropped as `in.revoked`).
+  while an app came forward included, and a menu item it chose that still
+  waits for its turn is not chosen; its connection closes within a quarter of
+  a second, and a key or a button it still holds then goes up (the `[1s]`
+  lines count what was dropped as `in.revoked`).
 - **Through Screen Sharing** (a Mac without a display, or one you use from afar
   with Screen Sharing, Apple Remote Desktop or a VNC app such as Screens): Sill
   keeps its pairing window out of what these apps show, so through them Pair
