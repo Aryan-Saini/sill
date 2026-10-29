@@ -456,6 +456,27 @@ jobs:
           chmod 600 "$key"
           echo "SILL_TESTFLIGHT_KEY_FILE=$key" >> "$GITHUB_ENV"
 
+      - name: Build Scripts/asc.swift
+        if: steps.mode.outputs.mode != 'unsigned'
+        run: xcrun swiftc -O -o "$RUNNER_TEMP/asc" Scripts/asc.swift
+
+      # Reads only, in a verify-only run too: the key works with App Store Connect's API, and the
+      # summary lists the app's TestFlight groups as App Store Connect names them (internal ones get
+      # every nightly; the external one with the public link is the public beta group).
+      - name: TestFlight's groups (Scripts/asc.swift groups, reads only)
+        if: steps.mode.outputs.mode != 'unsigned'
+        env:
+          SILL_TESTFLIGHT_KEY_ID: ${{ secrets.SILL_TESTFLIGHT_KEY_ID }}
+          SILL_TESTFLIGHT_ISSUER_ID: ${{ secrets.SILL_TESTFLIGHT_ISSUER_ID }}
+        run: |
+          "$RUNNER_TEMP/asc" groups --key-file "$SILL_TESTFLIGHT_KEY_FILE" --key-id "$SILL_TESTFLIGHT_KEY_ID" \
+            --issuer "$SILL_TESTFLIGHT_ISSUER_ID" | tee "$RUNNER_TEMP/testflight-groups.txt"
+          {
+            echo "## TestFlight's groups"
+            echo
+            sed 's/^/    /' "$RUNNER_TEMP/testflight-groups.txt"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Archive without signing and check it (Scripts/release-ios.sh --unsigned)
         if: steps.mode.outputs.mode == 'unsigned'
         run: Scripts/release-ios.sh --unsigned --build-number "$BUILD_NUMBER" -v
@@ -480,7 +501,6 @@ jobs:
           VERSION: ${{ steps.mode.outputs.version }}
         run: |
           mkdir -p .build/ios
-          xcrun swiftc -O -o "$RUNNER_TEMP/asc" Scripts/asc.swift
           state="$("$RUNNER_TEMP/asc" build-state --key-file "$SILL_TESTFLIGHT_KEY_FILE" --key-id "$SILL_TESTFLIGHT_KEY_ID" \
             --issuer "$SILL_TESTFLIGHT_ISSUER_ID" --version "$VERSION" --build "$BUILD_NUMBER")"
           if [ "$state" = missing ]; then

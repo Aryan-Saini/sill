@@ -864,9 +864,10 @@ What a nightly is:
   earlier nightlies, and end with the commit's sha in a comment. It keeps the seven newest nightlies'
   files (`SILL_NIGHTLY_KEEP`) and deletes older ones. Never "latest", never a plain release, no tag
   per night. A release with the tag `nightly` that isn't a pre-release is never touched.
-- Sill for iPhone and iPad: the same commit, `release-ios.sh --sign-at-export --upload
-  --build-number <commit count>` through the App Store Connect key (cloud signing, as TestFlight from
-  GitHub Actions above), then `Scripts/asc.swift distribute`: it waits for App Store Connect to process
+- Sill for iPhone and iPad: the same commit; `Scripts/asc.swift groups` lists the app's TestFlight
+  groups through the App Store Connect key (reads only, in a verify-only run too), then
+  `release-ios.sh --sign-at-export --upload --build-number <commit count>` through the key (cloud
+  signing, as TestFlight from GitHub Actions above), then `Scripts/asc.swift distribute`: it waits for App Store Connect to process
   the build (a look a minute, 90 minutes at most), gives it What to Test, and gives it to TestFlight's
   groups (below). A night run again by hand finds its build in App Store Connect and only gives it its
   groups again.
@@ -964,7 +965,9 @@ The first run, for Noah:
 4. `gh workflow run nightly.yml -f verify_only=true` (or Run workflow with "Verify only" ticked).
    Check decide's summary (the notes and What to Test), the Mac job's artifacts
    `Sill-nightly-<date>-<sha7>-adhoc.zip` and `.dmg`, the iOS job's `Sill-0.6.0-<count>.ipa`
-   ("Signed for App Store Connect and checked … Nothing was uploaded").
+   ("Signed for App Store Connect and checked … Nothing was uploaded") and its summary's "TestFlight's
+   groups": `Scripts/asc.swift groups` reads them through the key (nothing else), so this run already
+   shows the key works with App Store Connect's API and which groups the nightlies will go to.
 5. `gh variable set SILL_SIGN_IN_CI --body true` and `gh variable set SILL_TESTFLIGHT_IN_CI --body
    true`. Not `SILL_NIGHTLY_PUBLIC_BETA`.
 6. `gh workflow run nightly.yml`. Check the pre-release (four files, the notes, "Pre-release"), the
