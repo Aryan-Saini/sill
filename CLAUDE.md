@@ -1167,7 +1167,7 @@ first. Wire, host and device; additive.
   91 at the head, 342 and 94 of 94 after; `key-strokes` 359 and 86 of 86; `run-all.sh` all 56 after;
   the three iOS builds, `swift build -c release` (from `git archive` of the head: 46.7 s, the
   CaptureProbe warning), the PR's live runs, the race (the app at 50 ms 0 of 25, at 0 ms 15 of 25), 11
-  of the 12 photos byte for byte; the review's photos in `review/`.
+  of the 12 photos byte for byte; the review's photos in `review/`; CI's Build and check on 694d600.
   **Untested, for Noah** (the plan's ten): a paste into TextEdit, Notes and a Terminal at their
   cursor, the switch off, a paste with no text field in front, VoiceOver's words, Universal Clipboard
   on, through Tailscale, the Settings panel's Paste row, a Paste as soon as the chip shows after Sill

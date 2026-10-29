@@ -735,8 +735,9 @@ read, not against TextEdit's read); Sill.app's own main-actor stalls (the synthe
   Release for the generic simulator and Debug for a generic device, only StreamClient.swift:4113's
   warning; `swift build -c release`; the live runs on the review's build (the switch on and off,
   nothing streaming, the tour, the Mac's switch going off mid-Paste, the race at 50 ms 0 of 25). The
-  private simulator and every scratch host are gone. Left: Noah's steps 1 to 10, open question 16,
-  and the pull request's description, which predates the review.
+  private simulator and every scratch host are gone. Pushed (9bfd1ed..694d600); CI's Build and check
+  passed on 694d600 (run 40854972942, 15 min 19 s). Left: Noah's steps 1 to 10, open question 16, and
+  the pull request's description, which predates the review.
 
 ## Untested, for Noah
 
