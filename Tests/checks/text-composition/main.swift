@@ -777,12 +777,12 @@ let composes = ["zh-Hans", "zh-Hant", "zh-Hans-CN", "zh-Hant-TW", "zh-Hant-HK", 
 check("an input method's keyboard (Chinese, Cantonese, Japanese, Korean, Vietnamese, Hawaiian, transliteration): iPadOS types (\(composes.filter { typing($0) != .text }))",
       composes.allSatisfy { typing($0) == .text && !T.typesOnMac($0) })
 check("the Latin alphabet's composing keyboards are Vietnamese's and Hawaiian's", T.composingLatin == ["vi", "haw"])
-// Keyboards in the Latin alphabet whose on-screen layout composes accents (UIKeyboardComposesText, with a
-// composition map for the on-screen layout: Czech, Slovak, Faroese, Samoan, Tongan, Navajo, Guarani, Kabyle,
+// Keyboards in the Latin alphabet that compose a letter with its accents (UIKeyboardComposesText, some with a
+// composition map for their on-screen layout: Czech, Slovak, Faroese, Samoan, Tongan, Navajo, Guarani, Kabyle,
 // Mi'kmaq…) and no input manager of their own: the Mac types, as for every Latin keyboard. A hardware
-// keyboard's dead keys are its layout's, and the Mac's input source replaces that layout (DEVELOPMENT.md).
+// keyboard's dead keys make those, and the Mac's input source has its own (DEVELOPMENT.md).
 let onScreenAccents = ["cs-CZ", "sk-SK", "fo", "sm", "to", "nv", "gn", "kab-Latn", "mic", "atj", "gwi", "dgr"]
-check("a Latin keyboard whose on-screen layout composes accents: the Mac types (\(onScreenAccents.filter { typing($0) != .keys }))",
+check("a Latin keyboard that composes a letter with its accents: the Mac types (\(onScreenAccents.filter { typing($0) != .keys }))",
       onScreenAccents.allSatisfy { typing($0) == .keys })
 // Another script: iPadOS's text system, whose keyboard says which script is meant.
 let scripts = ["ru-RU", "uk-UA", "be", "bg", "sr", "sr-Cyrl", "mk", "kk", "mn", "el-GR", "he-IL", "ar", "ar-SA", "fa", "ur", "th-TH",
