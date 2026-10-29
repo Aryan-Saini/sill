@@ -8,7 +8,7 @@ Formerly winstream; the folder still carries the old name.
 
 ## Current step
 
-**Nightly builds (2026-10-29, branch `nightly-builds` from main at 35a9c47c, PR NIGHTLY_PR; issue #134;
+**Nightly builds (2026-10-29, branch `nightly-builds` from main at 35a9c47c, PR #246; issue #134;
 the brief and its Progress are in ~/Downloads/sill-handoff/nightly-plan.md, the procedure in
 docs/release-checklist.md, "Nightlies").** Noah: "Setup the nightly build strategy" (the nine secrets set
 2026-10-29), then, before the build: "hold off on giving the testflight build to public beta until I try it
