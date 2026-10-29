@@ -280,8 +280,14 @@ jobs:
           security create-keychain -p "$password" "$keychain"
           security set-keychain-settings -lut 21600 "$keychain"
           security unlock-keychain -p "$password" "$keychain"
-          printf '%s' "$SILL_DEVELOPER_ID_P12" | base64 --decode > "$p12"
-          security import "$p12" -k "$keychain" -f pkcs12 -P "$SILL_DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign > /dev/null
+          # Inside an if, so a secret that isn't a .p12 in base64, or a wrong password, ends with this
+          # step's own words naming the secrets (security's are above them), not only security's.
+          if ! printf '%s' "$SILL_DEVELOPER_ID_P12" | base64 --decode > "$p12" 2>/dev/null \
+              || ! security import "$p12" -k "$keychain" -f pkcs12 -P "$SILL_DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign > /dev/null; then
+            rm -f "$p12"
+            echo "::error::SILL_DEVELOPER_ID_P12 is not the Developer ID certificate and its key as a .p12 in base64, or SILL_DEVELOPER_ID_P12_PASSWORD is not its password (base64 -i DeveloperID.p12 | gh secret set SILL_DEVELOPER_ID_P12; docs/release-checklist.md, Releasing from GitHub Actions)."
+            exit 1
+          fi
           rm -f "$p12"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
           # codesign and release.sh look through the user's keychain list; notarytool keeps its
@@ -306,10 +312,19 @@ jobs:
         run: |
           keychain="$RUNNER_TEMP/sill-nightly.keychain-db"
           key="$RUNNER_TEMP/sill-notary-key.p8"
-          printf '%s' "$SILL_NOTARY_KEY_P8" | base64 --decode > "$key"
+          if ! printf '%s' "$SILL_NOTARY_KEY_P8" | base64 --decode > "$key" 2>/dev/null \
+              || ! grep -q -e '-----BEGIN PRIVATE KEY-----' "$key"; then
+            rm -f "$key"
+            echo "::error::SILL_NOTARY_KEY_P8 is not an App Store Connect key file in base64 (base64 -i AuthKey_<Key ID>.p8 | gh secret set SILL_NOTARY_KEY_P8)."
+            exit 1
+          fi
           # Validates the key with Apple before saving it, so a wrong key fails here.
-          xcrun notarytool store-credentials sill-notary --key "$key" --key-id "$SILL_NOTARY_KEY_ID" \
-            --issuer "$SILL_NOTARY_ISSUER_ID" --keychain "$keychain"
+          if ! xcrun notarytool store-credentials sill-notary --key "$key" --key-id "$SILL_NOTARY_KEY_ID" \
+              --issuer "$SILL_NOTARY_ISSUER_ID" --keychain "$keychain"; then
+            rm -f "$key"
+            echo "::error::Apple's notary service refused the key (notarytool's words above): SILL_NOTARY_KEY_ID and SILL_NOTARY_ISSUER_ID must be the Key ID and Issuer ID of the key in SILL_NOTARY_KEY_P8, and the key must not be revoked."
+            exit 1
+          fi
           rm -f "$key"
           echo "SILL_NOTARY_PROFILE=sill-notary" >> "$GITHUB_ENV"
 
