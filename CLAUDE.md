@@ -16,9 +16,9 @@ rule per path, and a Mac held `/Applications/Sill.app` allowed and `…/Contents
 No wire change.
 - `FirewallCheck` asks `/usr/libexec/ApplicationFirewall/socketfilterfw` `--getglobalstate`, then unless it is
   off `--getblockall`, `--getappblocked` for the running executable (`proc_pidpath`) and its bundle, and
-  `--listapps`: a process each, read-only, no privileges (macOS 27.0.1: 4–8 ms each, no prompt; asked in one run
-  the tool dies, 137 or 133, whenever `--getappblocked` is given a bundle's path and another option follows; no
-  `com.apple.alf.plist` there). At launch, when the listener comes up, when Sill.app's status menu opens (the
+  `--listapps`: a process each, read-only, no privileges (macOS 27.0.1: 4–8 ms each, no prompt, no Full Disk
+  Access needed; asked in one run the tool is killed, 137, when `--getstealthmode` or `--getallowsigned` follows
+  `--getappblocked`, or `--listapps` follows it with a bundle's path; no `com.apple.alf.plist` there). At launch, when the listener comes up, when Sill.app's status menu opens (the
   glyph at once, its item from the next opening), when its General opens or Sill becomes active over it, and
   when a device gets in from the network while the verdict says none can (`asksAgain`); never on a timer.
 - `FirewallRule` (pure, `Tests/checks/firewall`, 340 checks, 67 mutants): off, allows (only once `--listapps`
@@ -45,8 +45,8 @@ No wire change.
   (bd18d96b); with `--listapps` unread the verdict took the executable's own "permitted" for allowed and dropped
   why: unknown, with why, unless an answer blocks (3d10ea95); the check's usage stand-in had no "apps", so a
   reading that took any mention of apps for a list passed (56d3f3a3); the docs had the tool die whenever
-  `--listapps` followed `--getappblocked` in one run: it dies when `--getappblocked` is given a bundle's path
-  and another option follows, 8 of 8 (the docs commit). Re-run: the check 340 and 67 of 67 mutants (64 of 64
+  `--listapps` followed `--getappblocked` in one run (the docs commit, af3283d1; the second review measured
+  which options do, below). Re-run: the check 340 and 67 of 67 mutants (64 of 64
   before; two extra mutants had survived); `run-all.sh`, all 57; the release build, the CaptureProbe warning
   only; main's CLI masked and sorted, idle (8 lines) and with a client (three passes, as main against main);
   previews 162 files; on loopback a device in from a VPN re-asking without clearing a block that holds, and

@@ -1726,11 +1726,13 @@ AirDrop, Sidecar and Universal Control can hold AWDL on too.
   devices on the network cannot connect. In Terminal: sudo …", and once more
   when it no longer does. Sill never runs the command itself: it needs an
   administrator.
-- Measured on macOS 27.0.1 as an ordinary user: each question answers in 4–8
-  ms with no prompt. Asked in one run, the tool dies (SIGKILL or SIGTRAP,
-  nothing printed) whenever `--getappblocked` is given an app bundle's path and
-  another option follows; never with an executable's path, and the bundle's
-  question alone answers every time: hence a process each. An option it does
+- Measured on macOS 27.0.1 as an ordinary user, without Full Disk Access (as
+  Sill.app runs): each question answers in 4–8 ms with no prompt. Asked in one
+  run, the tool is killed (status 137, nothing printed) when `--getstealthmode`
+  or `--getallowsigned` follows `--getappblocked`, or `--listapps` follows it
+  with an app bundle's path; `--getglobalstate`, `--getblockall` and another
+  `--getappblocked` after it, `--listapps` after an executable's path, and each
+  question alone answer every time: hence a process each. An option it does
   not know ends with status 255.
   `/Library/Preferences/com.apple.alf.plist`, which older Macs kept, does not
   exist there. Answers that don't read put "Firewall: couldn’t read the macOS

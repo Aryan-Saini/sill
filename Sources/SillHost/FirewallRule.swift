@@ -283,8 +283,10 @@ package enum FirewallRule {
         static let blockAllPlace = "Turn off Block all incoming connections in System Settings › Network › Firewall › Options."
 
         /// The Terminal command that unblocks what the verdict says is blocked, one `--unblockapp` a
-        /// path (the executable's first; the tool takes several options in one run, in order). Nil
-        /// unless rules block: Block all incoming connections is turned off in System Settings.
+        /// path (the tool takes several options in one run, in order). The executable's first and the
+        /// bundle's last: asked in one run, the tool was killed when some options followed a bundle's
+        /// path (FirewallCheck), and nothing follows it here. Nil unless rules block: Block all
+        /// incoming connections is turned off in System Settings.
         package static func command(_ verdict: Verdict) -> String? {
             guard let paths = unblocked(verdict) else { return nil }
             return (["sudo", tool] + paths.flatMap { ["--unblockapp", shellQuoted($0)] }).joined(separator: " ")
