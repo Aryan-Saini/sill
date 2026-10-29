@@ -24,8 +24,9 @@ import StreamProtocol
 /// `StreamClient.largerPictureKey`,
 /// on an iPhone without a hinge whose picture it makes larger, `largerPictureOffered`; Share Clipboard,
 /// `StreamClient.clipboardKey`, while the Mac shares its clipboard, with the system's Paste for this
-/// device's text; Reverse Scrolling, `StreamClient.reverseScrollKey`; Three-Finger Gestures,
-/// `StreamClient.gesturesKey`), and whose gesture rows, as accessibility actions, do their gestures
+/// device's text; Reverse Scrolling, `StreamClient.reverseScrollKey`; Hold to Show Window Controls, a
+/// stepper, `ThumbnailHold.key`; Three-Finger Gestures, `StreamClient.gesturesKey`), and whose gesture
+/// rows, as accessibility actions, do their gestures
 /// (`client.sendGesture`), since VoiceOver keeps three fingers for itself; then Take the Tour.
 struct HostSettingsPanel: View {
     @ObservedObject var client: StreamClient
@@ -58,6 +59,14 @@ struct HostSettingsPanel: View {
     /// This device's switch for the clipboard (docs/clipboard-plan.md): on unless turned off, read by
     /// StreamClient+Clipboard at each decision; a change subscribes or stops at once.
     @AppStorage(StreamClient.clipboardKey) private var clipboardOn = true
+    /// This device's hold before a thumbnail's lights (issue #113, ThumbnailHold): 0.5 s unless changed,
+    /// read by every bar's thumbnails at once, never sent. Read for its changes; the length through
+    /// `ThumbnailHold.seconds(stored:)`, which takes `-Sill.thumbnailHold 0.3`'s string too.
+    @AppStorage(ThumbnailHold.key) private var storedThumbnailHold = ThumbnailHold.standard
+    private var thumbnailHold: Double {
+        _ = storedThumbnailHold
+        return ThumbnailHold.seconds(stored: UserDefaults.standard.object(forKey: ThumbnailHold.key))
+    }
     /// VoiceOver is on: it keeps three-finger swipes and taps for itself, so the This iPad group says
     /// its rows do the gestures instead.
     @State private var voiceOver = HostSettingsPanel.voiceOverRunning
@@ -77,7 +86,8 @@ struct HostSettingsPanel: View {
     /// photo of a short screen shows its switches and rows, which the footnote under them pushes out
     /// of `-SillSettingsEnd`'s view; `sound`, to the Send Audio row; `mute`, to the Mute row
     /// under it; `reverse`, to Reverse Scrolling's switch, so a photo of the panel in the lower half shows
-    /// it and its footnote, which the clipboard's rows above it push out of `gestures`' view there.
+    /// it and its footnote, which the clipboard's rows above it push out of `gestures`' view there;
+    /// `hold`, to Hold to Show Window Controls, the same for its row and footnote.
     private static var startsAt: String? {
         #if DEBUG
         switch UserDefaults.standard.string(forKey: "SillSettingsScroll") {
@@ -85,6 +95,7 @@ struct HostSettingsPanel: View {
         case "sound"?: return sendAudioID
         case "mute"?: return muteID
         case "reverse"?: return reverseScrollRowID
+        case "hold"?: return thumbnailHoldRowID
         default: return nil
         }
         #else
@@ -95,6 +106,7 @@ struct HostSettingsPanel: View {
     private static let sendAudioID = "sendAudio"
     private static let muteID = "mute"
     private static let reverseScrollRowID = "reverseScroll"
+    private static let thumbnailHoldRowID = "thumbnailHold"
     /// `UIAccessibility.isVoiceOverRunning`; DEBUG `-SillVoiceOver 1` says it is, for the harness's
     /// photos of the group's VoiceOver footnote.
     static var voiceOverRunning: Bool {
@@ -525,7 +537,8 @@ struct HostSettingsPanel: View {
 
     /// This device's own group, after the Mac's: on an iPhone its switch for Larger Picture, then Share Clipboard while the Mac shares its clipboard,
     /// with Paste on ‹Mac› (the system's Paste control) under it while on, then Reverse Scrolling (for
-    /// every Mac: it only turns this device's own deltas around), then its switch for three-finger
+    /// every Mac: it only turns this device's own deltas around), then how long a thumbnail is held for
+    /// its window's lights (for every Mac: the thumbnails are this device's), then its switch for three-finger
     /// gestures, and what each does when the Mac takes them (Take the Tour follows it). After the Mac's
     /// rows because it is the least changed, and the compact halves' 259 pt show the Mac's rows first.
     /// The switches reach nothing on the Mac but the clipboard's, which subscribes or stops; a gesture
@@ -578,6 +591,13 @@ struct HostSettingsPanel: View {
         }
         .id(Self.reverseScrollRowID)
         Footnote(text: Self.reverseScrollFooter(device: device))
+        // How long a thumbnail is held before its window's lights show and it can be dragged (issue #113;
+        // Noah, 2026-10-29).
+        Rows {
+            ThumbnailHoldRow(seconds: thumbnailHold) { storedThumbnailHold = $0 }
+        }
+        .id(Self.thumbnailHoldRowID)
+        Footnote(text: ThumbnailHold.footnote)
         Rows {
             Toggle(isOn: $gesturesOn) {
                 Text("Three-Finger Gestures").foregroundStyle(Palette.text)
@@ -866,6 +886,36 @@ private struct GestureRow: View {
             .foregroundStyle(Palette.muted)
             .frame(width: 24)
             .accessibilityHidden(true)
+    }
+}
+
+/// Hold to Show Window Controls (issue #113; ThumbnailHold): the title, the length beside it ("0.5 s")
+/// and the system's stepper, − and + a tenth of a second a press from 0.2 to 3 s (the capsule on iOS 26
+/// and later), counting whole tenths so no sum of presses drifts off the grid. One VoiceOver element, as
+/// a stepper is: "Hold to show window controls, 0.5 seconds", adjustable, a swipe up or down a tenth. The
+/// title wraps beside the stepper, as a switch's does, rather than the row stacking: in a panel 340 or
+/// 360 pt wide it never fits on one line beside the value and the stepper.
+private struct ThumbnailHoldRow: View {
+    let seconds: Double
+    let set: (Double) -> Void
+    var body: some View {
+        Stepper(value: Binding(get: { ThumbnailHold.tenths(seconds) }, set: { set(ThumbnailHold.seconds(tenths: $0)) }),
+                in: ThumbnailHold.tenthsRange) {
+            HStack(spacing: 8) {
+                Text(ThumbnailHold.title)
+                    .foregroundStyle(Palette.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Text(ThumbnailHold.valueText(seconds))
+                    .monospacedDigit()
+                    .foregroundStyle(Palette.muted)
+                    .fixedSize()
+            }
+        }
+        .accessibilityLabel(ThumbnailHold.spokenTitle)
+        .accessibilityValue(ThumbnailHold.spokenValue(seconds))
+        .padding(.vertical, 4)
+        .rowFrame()
     }
 }
 
