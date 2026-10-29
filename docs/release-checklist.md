@@ -366,7 +366,9 @@ comes later, when the cask qualifies (below).
       configurations, keeps counting across versions (0.5 had builds 1 to 3, 0.5.1 starts at
       4), so a build number names one upload whatever its version. Put the device build's number
       in the same pull request as the version, so the tag below names the commit that both come
-      from; `release-ios.sh --upload` then needs no `--bump`. Before 0.5.1 the two counted
+      from; `release-ios.sh --upload` then needs no `--bump` (while the nightlies run, the device
+      build's number is the commit count instead, never committed: the iOS item below, and
+      Nightlies). Before 0.5.1 the two counted
       apart (Sill for Mac 0.3.0, 0.3.1 and 0.4.0 beside Sill for iPhone and iPad 0.5; there was
       never a Sill for Mac 0.4.1). A release that changes only one app is Noah's call: both at
       the new number, or the other left at its last (nothing in the code compares the two).
@@ -465,7 +467,11 @@ comes later, when the cask qualifies (below).
       `Scripts/release-ios.sh --upload` from the tagged commit. Or in Xcode: Any iOS Device, Product
       › Archive, then the Organizer's Validate App and Distribute App › App Store Connect › Upload.
       The privacy report: `Scripts/release-ios.sh --privacy-report`, and the Organizer's Generate
-      Privacy Report for the PDF; both should list the privacy manifest's API categories.
+      Privacy Report for the PDF; both should list the privacy manifest's API categories. While
+      the nightlies run (Nightlies, below), App Store Connect already has builds of the version
+      numbered by commit count, far above the committed number: submit the nightly build of the
+      tagged commit itself, or upload from the tag with `--build-number "$(git rev-list --count
+      HEAD)"`, not `--bump`.
 - [ ] TestFlight: internal testers get the build without review. An external group sends the
       first build through Beta App Review with the same notes and video: a cheap rehearsal
       (TestFlight §5 to §7 below). Every build has its own What to Test (TestFlight › the build ›
@@ -865,8 +871,8 @@ What a nightly is:
   `make-app.sh --release` (Developer ID, the hardened runtime, the Developer ID provisioning profile
   embedded), notarized and stapled, checked as Gatekeeper will check it, in a zip and a disk image
   named `Sill-nightly-<yyyymmdd>-<sha7>.dmg` and `.zip`, each with its `.sha256`, on the pre-release
-  [`nightly`](https://github.com/Saffsanity/sill/releases/tag/nightly). One pre-release for every
-  night: its tag `nightly` moves to each night's commit, its notes say what a nightly is, list the
+  [`nightly`](https://github.com/Saffsanity/sill/releases/tag/nightly). One pre-release for all
+  the nights: its tag `nightly` moves to each night's commit, its notes say what a nightly is, list the
   newest files with their SHA-256, the pull requests merged since the last release tag and the
   earlier nightlies, and end with the commit's sha in a comment. It keeps the seven newest nightlies'
   files (`SILL_NIGHTLY_KEEP`) and deletes older ones. Never "latest", never a plain release, no tag
@@ -957,10 +963,15 @@ A release after nightlies: the version is already on main (part 2's first item),
 Sill for Mac: with `SILL_SIGN_IN_CI` on, as the nightlies need it, pushing the tag starts release.yml's
 publish job, which builds, notarizes and publishes the release itself, the profile embedded; don't also
 run `release.sh --publish` from this Mac (it would find the release there and stop). The pre-release
-stays beside the release, never "latest". Sill for iPhone and iPad: App Store Connect already has builds of the version numbered by commit count (987 and up), and
-the committed CURRENT_PROJECT_VERSION (4) is far below them, so either submit the nightly build of
-the tagged commit itself (that commit, App Store-signed, processed and tested), or upload from the
-tag with `--build-number "$(git rev-list --count HEAD)"`, above every nightly before it.
+stays beside the release, never "latest". Sill for iPhone and iPad: App Store Connect already has
+builds of the version numbered by commit count (987 and up), and the committed
+CURRENT_PROJECT_VERSION (4) is far below them, so either submit the nightly build of the tagged
+commit itself (that commit, App Store-signed, processed and tested), or upload from the tag with
+`--build-number "$(git rev-list --count HEAD)"`, above every nightly before it. Then, before the
+next night, move main to the next version (part 2's first item, a pull request like PR #244): once
+the version is released, App Store Connect takes no new build of it (its train is closed), so until
+main says the next number every nightly's upload is refused and the iOS job fails, while Sill for
+Mac's nightlies keep the released number.
 
 The first run, for Noah:
 
