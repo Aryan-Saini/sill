@@ -306,6 +306,7 @@ func endOracle(_ t: T?, _ g: String?, _ s: Int32?) -> E {
     if g != nil { return .other }                             // quit, busy…: the words as before
     guard let s else { return .other }
     if case .saved = t { return s == -9825 || s == -9829 ? .removed : (s == -9808 ? .wrongKey : .other) }
+    if t != .open(seen: nil), s == -9808 { return .otherKey }   // the reconnect pinned to the key its lost session saw
     return s == -9825 || s == -9829 ? .pairingRequired : .other
 }
 var he = 0, heOK = 0
@@ -513,6 +514,60 @@ for d in doors { for bits in 0..<16 {
 check("reconnectEnd: over all \(endsAll) reconnects, it ends exactly at a row that waits for a tap, with the words of why", endsExactlyWhenWaiting)
 check("reconnectEnd's words: the goodbye's own", C.pairingRequired(mac: mini, device: "iPad") == "Mac mini now asks devices to pair. Tap it to pair this iPad."
       && C.removed(mac: mini, device: "iPad") == "Mac mini removed this iPad. Tap it to pair again.")
+
+// MARK: The reconnect of an unsaved Mac on an open door pins the key its lost session saw (the security
+// scan's finding 3, 2026-10-29: it took any key, so whatever advertised the lost Mac's Bonjour name with
+// p=0 got the session, what this device typed and its clipboard, with no tap)
+
+let kA = Data(repeating: 0x41, count: 32), kB = Data(repeating: 0x42, count: 32)
+check("reconnectKey: an open session's key once its first connection was ready", P.reconnectKey(lost: P.trust(.open(seen: nil), readyWith: kA)) == kA)
+check("reconnectKey: none from an open session that saw none, a saved Mac's, a plain door's, a remote session's (no home trust)",
+      P.reconnectKey(lost: .open(seen: nil)) == nil && P.reconnectKey(lost: .saved(pin: kA)) == nil
+      && P.reconnectKey(lost: .plain) == nil && P.reconnectKey(lost: nil) == nil)
+// Every reconnect: each homeDial answer, each saved pin, no key seen or one of two.
+func reconnectOracle(_ d: H, _ pin: Data?, _ seen: Data?) -> T? {
+    if d == .anyKey, let seen { return .open(seen: seen) }       // pinned to the key the lost session saw
+    return trustOracle(d, pin)                                     // everything else as before
+}
+var rt = 0, rtOK = 0, neverAnyKey = true, savedAsBefore = true, unseenAsBefore = true
+for d in doors { for bits in 0..<32 { for pin in [nil, kA] as [Data?] { for seen in [nil, kA, kB] as [Data?] {
+    let b = { (i: Int) in bits & (1 << i) != 0 }
+    let dial = P.homeDial(door: d, saved: b(0), revoked: b(1), homeTLS: b(2), debug: b(3), tap: b(4))
+    let t = P.reconnectTrust(dial, savedPin: pin, seen: seen)
+    rt += 1
+    if t == reconnectOracle(dial, pin, seen) { rtOK += 1 }
+    else { print("  reconnectTrust \(dial) \(String(describing: pin)) \(String(describing: seen)): \(String(describing: t))") }
+    if seen != nil, let t, P.pin(t) == .anyKey { neverAnyKey = false }
+    if b(0), t != P.sessionTrust(dial, savedPin: pin) { savedAsBefore = false }
+    if seen == nil, t != P.sessionTrust(dial, savedPin: pin) { unseenAsBefore = false }
+} } } }
+check("reconnectTrust: \(rtOK) of \(rt) combinations (an open door's row pinned to the key the lost session saw, the rest as before)", rt == rtOK)
+check("reconnectTrust: once the lost session saw a key, the reconnect never dials with any key", neverAnyKey)
+check("reconnectTrust: a saved Mac's reconnect as before, pinned to its saved key whatever the lost session saw", savedAsBefore)
+check("reconnectTrust: a lost session that never saw a key reconnects as its tap dialed (any key at an open door)", unseenAsBefore)
+check("reconnectTrust: an open door's row pinned to that key exactly", P.reconnectTrust(.anyKey, savedPin: nil, seen: kA) == .open(seen: kA)
+      && P.reconnectTrust(.anyKey, savedPin: nil, seen: kA).map(P.pin) == .key(kA))
+check("a tap on that row still takes any key, as a tap on an open door always has", P.sessionTrust(.anyKey, savedPin: nil).map(P.pin) == .anyKey)
+check("otherKey: another key at that pinned reconnect (-9808) ends it", P.homeEnd(trust: .open(seen: kA), goodbye: nil, tls: P.pinRefused) == .otherKey)
+check("otherKey: never from a tap's open dial (any key: no pin to refuse), nor a saved Mac's pin (wrongKey)",
+      P.homeEnd(trust: .open(seen: nil), goodbye: nil, tls: P.pinRefused) == .other && P.homeEnd(trust: .saved(pin: kA), goodbye: nil, tls: P.pinRefused) == .wrongKey)
+check("otherKey: the Mac refusing this device's key, and a goodbye, read as before",
+      P.homeEnd(trust: .open(seen: kA), goodbye: nil, tls: -9825) == .pairingRequired && P.homeEnd(trust: .open(seen: kA), goodbye: "quit", tls: P.pinRefused) == .other
+      && P.homeEnd(trust: .open(seen: kA), goodbye: "pairingRequired", tls: nil) == .pairingRequired)
+check("otherKey's words", C.otherKey(mac: mini, device: "iPad") == "Mac mini answered with another key, so this iPad didn\u{2019}t reconnect. Tap it to connect."
+      && C.otherKey(mac: mini, device: "iPhone") == "Mac mini answered with another key, so this iPhone didn\u{2019}t reconnect. Tap it to connect.")
+// Walked through the rules as StreamClient chains them: a tap on the open door's row, the session's first
+// connection ready with A's key, the session lost, the reconnect's dial of a row under the same name.
+let openTap = P.sessionTrust(P.homeDial(door: .open, saved: false, revoked: false, homeTLS: false, debug: false, tap: true), savedPin: nil)!
+let openSession = P.trust(openTap, readyWith: kA)
+let openAgain = P.reconnectTrust(P.homeDial(door: .open, saved: false, revoked: false, homeTLS: false, debug: false, tap: false), savedPin: nil,
+                                 seen: P.reconnectKey(lost: openSession))
+check("walk: the tap with any key; A's key for the rest of the session; the reconnect pinned to A",
+      P.pin(openTap) == .anyKey && P.pin(openSession) == .key(kA) && openAgain.map(P.pin) == .key(kA))
+check("walk: B answering under A's name is refused (-9808) and ends the reconnect; A answering keeps it, and its session keeps A",
+      openAgain.map { P.homeEnd(trust: $0, goodbye: nil, tls: P.pinRefused) } == .otherKey && openAgain.map { P.trust($0, readyWith: kA) } == .open(seen: kA))
+check("walk: the reconnect's own session, lost too, pins A again", openAgain.map { P.reconnectKey(lost: P.trust($0, readyWith: kA)) } == kA)
+check("walk: that session's moves (to the cable, to Wi-Fi) were pinned to A already", P.pin(openSession) == .key(kA))
 
 // MARK: Kind 18 and a goodbye "removed" speak for the Mac whose key the session has (the security
 // review, 2026-09-27)

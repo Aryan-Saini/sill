@@ -47,5 +47,9 @@ M = [
     ("rowRecords: a record kept across browsers (a browser made again no break, as #232 first had it)", F,
      "            next[item.key] = item.record ?? previous[item.key]",
      "            next[item.key] = item.record ?? previous.first(where: { $0.key.name == item.key.name && $0.key.domain == item.key.domain })?.value"),
+    # 14: the reconnect of a Mac this device was connected to without pairing (the security scan's finding 3, 2026-10-29).
+    ("reconnectTrust: any key again (as before the fix)", F, "        if dial == .anyKey, let seen { return .open(seen: seen) }\n", ""),
+    ("reconnectKey: the lost session's key forgotten", F, "        if case .open(let seen?) = trust { return seen }\n        return nil", "        return nil"),
+    ("homeEnd: another key at the pinned reconnect read as the ordinary end", F, "            if seen != nil, tls == pinRefused { return .otherKey }\n", ""),
 ]
 sys.exit(0 if module.mutate("home-model", M, sys.argv[1]) else 1)

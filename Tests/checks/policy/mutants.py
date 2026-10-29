@@ -244,6 +244,18 @@ MUTANTS = {
     "S4 copy: over the cable dropped": ("            cable ? \"Pairing with \\(mac) over the cable\\u{2026}\" : \"Pairing with \\(mac)\\u{2026}\"", "            \"Pairing with \\(mac)\\u{2026}\""),
     "S4 copy: removed says the old remote words": ("        static func removed(mac: String, device: String) -> String { \"\\(mac) removed this \\(device). Tap it to pair again.\" }", "        static func removed(mac: String, device: String) -> String { \"\\(mac) removed this \\(device). To use it again, pair it again.\" }"),
     "S4 copy: openOnMac names no menu": ("\"\\(mac) didn\\u{2019}t show a code. On the Mac, choose Pair iPhone or iPad\\u{2026} in the Sill menu, then tap \\(mac) again.\"", "\"\\(mac) didn\\u{2019}t show a code.\""),
+    # The reconnect of an unsaved Mac on an open door pinned to the key its lost session saw (home.swift: the
+    # security scan's finding 3, 2026-10-29), with the model of the glue.
+    "F3a reconnectTrust: any key again (as before the fix)": ("        if dial == .anyKey, let seen { return .open(seen: seen) }\n", ""),
+    "F3b reconnectTrust: a saved Mac's reconnect pinned to the seen key": (
+        "        if dial == .anyKey, let seen { return .open(seen: seen) }", "        if dial == .anyKey || dial == .pinned, let seen { return .open(seen: seen) }"),
+    "F3c reconnectKey: the lost session's key forgotten": ("        if case .open(let seen?) = trust { return seen }\n        return nil", "        return nil"),
+    "F3d homeEnd: another key at the pinned reconnect read as the ordinary end (dialed on)": (
+        "            if seen != nil, tls == pinRefused { return .otherKey }\n", ""),
+    "F3e homeEnd: an open session that saw no key ends otherKey too": (
+        "            if seen != nil, tls == pinRefused { return .otherKey }", "            if tls == pinRefused { return .otherKey }"),
+    "F3f homeEnd: otherKey read as pairingRequired": (
+        "            if seen != nil, tls == pinRefused { return .otherKey }", "            if seen != nil, tls == pinRefused { return .pairingRequired }"),
     # A row keeps its TXT record while its result stays listed (records.swift: the cable pulled, 2026-10-27);
     # a browser made again starts afresh (the review of #232); each result of a name keeps its own.
     "T1 rowRecords: a result without a record reads as none (the rule undone, as before the fix)": (
