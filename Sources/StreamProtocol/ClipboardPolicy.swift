@@ -354,10 +354,16 @@ public enum ClipboardPolicy {
     /// (a password copied an hour ago, say). Only for a receipt that came in time (`receiptWait`): one
     /// that comes after "Didn’t reach…" still counts as sent, but a ⌘V seconds after the tap could
     /// land where the person has gone since. Only while something streams: the Mac drops input with
-    /// nowhere to land (StreamCoordinator), so the note would promise a paste that never came. Without
-    /// it, today's Paste: the text on the Mac's clipboard and "Press ⌘V there".
-    public static func pastesOnReceipt(rightAway: Bool, late: Bool, streaming: Bool) -> Bool {
-        rightAway && !late && streaming
+    /// nowhere to land (StreamCoordinator), so the note would promise a paste that never came. Only
+    /// while the Mac still shares its clipboard (its last list's `clipboard`): a Mac whose Share
+    /// clipboard with devices went off while the text was on its way reads the text and drops it
+    /// (HostClipboard), yet echoes the ping after it all the same, so the receipt comes for a text it
+    /// never wrote, and ⌘V would paste what its clipboard held before; the list that says it stopped
+    /// sharing comes before that receipt whenever the switch went off before the Mac read the ping
+    /// (found in review: the switch turned off while a Paste was on its way, and ⌘V went). Without
+    /// all of these, today's Paste: the text on the Mac's clipboard and "Press ⌘V there".
+    public static func pastesOnReceipt(rightAway: Bool, late: Bool, streaming: Bool, hostClipboard: Int?) -> Bool {
+        rightAway && !late && streaming && hostTakes(hostClipboard)
     }
 
     /// The key ⌘V presses: V's HID usage (the keyboard page's 0x19), virtual key 9 on the Mac.

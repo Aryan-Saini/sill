@@ -339,14 +339,17 @@ extension StreamClient {
     }
 
     /// Whether ⌘V goes now (ClipboardPolicy.pastesOnReceipt: the switch, a receipt in time, something
-    /// streaming), and never while the tour shows, which keeps every input from the Mac.
+    /// streaming, the Mac still sharing its clipboard), and never while the tour shows, which keeps
+    /// every input from the Mac.
     private func pastesNow(late: Bool) -> Bool {
-        let pastes = ClipboardPolicy.pastesOnReceipt(rightAway: Self.pasteRightAwayOn, late: late, streaming: active != .none)
+        let pastes = ClipboardPolicy.pastesOnReceipt(rightAway: Self.pasteRightAwayOn, late: late, streaming: active != .none,
+                                                     hostClipboard: hostClipboard)
             && !inputPaused
         #if DEBUG
         if !pastes {
             print("clipboard: no ⌘V: " + (!Self.pasteRightAwayOn ? "Paste on the Mac Right Away is off"
-                : late ? "the receipt came after its time ran out" : active == .none ? "nothing streams" : "the tour shows"))
+                : late ? "the receipt came after its time ran out" : active == .none ? "nothing streams"
+                : !ClipboardPolicy.hostTakes(hostClipboard) ? "the Mac no longer shares its clipboard" : "the tour shows"))
         }
         #endif
         return pastes

@@ -328,12 +328,17 @@ check(C.notSent(mac: "Mac mini") == "Didn’t reach Mac mini. Try Paste again.",
 
 // Paste right away (2026-10-29; Noah: "still doesn't automatically Cmd+V"): with the device's switch on, a
 // Paste's receipt also presses ⌘V on the Mac. Only on a receipt that came in time, only while something
-// streams (the Mac drops input with nowhere to land), never with the switch off; no receipt, no ⌘V.
+// streams (the Mac drops input with nowhere to land), only while the Mac's last list still says it shares
+// its clipboard (the review: a Mac whose switch went off while the text was on its way dropped the text
+// and echoed the receipt's ping all the same), never with the switch off; no receipt, no ⌘V.
 for rightAway in [false, true] {
     for late in [false, true] {
         for streaming in [false, true] {
-            check(P.pastesOnReceipt(rightAway: rightAway, late: late, streaming: streaming) == (rightAway && !late && streaming),
-                  "⌘V on a receipt: switch \(rightAway), late \(late), streaming \(streaming)")
+            for hostClipboard in [nil, 0, 1, 2] as [Int?] {
+                check(P.pastesOnReceipt(rightAway: rightAway, late: late, streaming: streaming, hostClipboard: hostClipboard)
+                      == (rightAway && !late && streaming && (hostClipboard ?? 0) >= 1),
+                      "⌘V on a receipt: switch \(rightAway), late \(late), streaming \(streaming), the Mac's clipboard \(hostClipboard.map(String.init) ?? "nil")")
+            }
         }
     }
 }
@@ -578,49 +583,62 @@ check(accessWaits > 0, "…and macOS asked or denied in some (\(accessWaits) loo
 // MARK: - Model 3: paste right away
 
 // Random Pastes: the switch on or off at the tap and moved while the receipt is on its way, the receipt in
-// time, late (after "Didn’t reach…") or never, something streaming or not when it comes. The device
-// follows the glue of StreamClient+Clipboard: deviceSends at the tap, then at the receipt
-// pastesOnReceipt, ⌘V and receiptNote. ⌘V goes once for each Paste whose receipt came in time with the
-// switch on and something streaming, never for a Paste without a receipt, never with the switch off,
-// never twice; its note says "Pasted" exactly when it went, and the text it pastes always reached the
-// Mac before it (the Mac read the text before it echoed the ping that is the receipt).
-var pasteFailures = 0, chords = 0, noChords = 0
+// time, late (after "Didn’t reach…") or never, something streaming or not when it comes, and the Mac's
+// Share clipboard with devices going off while a text is on its way (the review's finding: the Mac reads
+// the text and drops it, HostClipboard, but echoes the ping all the same, and the list without
+// `clipboard` it sends as the switch goes off reaches the device before that receipt) and coming back on.
+// At the tap the device asks deviceSends, at the receipt pastesOnReceipt and receiptNote, as
+// StreamClient+Clipboard does. ⌘V goes once for each Paste whose receipt came in time with the switch on,
+// something streaming and the Mac still sharing, never for a Paste without a receipt, never with the
+// switch off, never twice; its note says "Pasted" exactly when it went, and what it pastes is always the
+// text that Paste sent (the Mac wrote it before it echoed the ping that is the receipt). The PR's rule,
+// without the Mac's word, failed the last: ⌘V pasted the text the Mac held before.
+var pasteFailures = 0, chords = 0, noChords = 0, dropped = 0
 for _ in 0..<5_000 {
-    var switchOn = Bool.random(using: &rng), streaming = true
-    var macHas: [String] = []          // the texts the Mac has read, in order
+    var switchOn = Bool.random(using: &rng), streaming = true, macShares = true
+    var macHas: [String] = []          // the texts the Mac has written, in order
     var pasted: [String] = []          // what each ⌘V pasted: the Mac's latest text at that moment
     for n in 0..<Int.random(in: 1...12, using: &rng) {
         if Int.random(in: 0..<4, using: &rng) == 0 { switchOn.toggle() }
+        if !macShares, Int.random(in: 0..<3, using: &rng) == 0 { macShares = true }   // the Mac's switch on again
         streaming = Int.random(in: 0..<5, using: &rng) != 0
         let text = "paste \(n)"
-        guard case .send(let payload) = P.deviceSends([text], connected: true, hostClipboard: P.generation, switchOn: true) else {
-            pasteFailures += 1; continue
+        // The tap: nothing goes while the Mac's last list does not say it shares its clipboard.
+        guard case .send(let payload) = P.deviceSends([text], connected: true, hostClipboard: macShares ? P.generation : nil,
+                                                       switchOn: true) else {
+            if macShares { pasteFailures += 1 }
+            continue
         }
         if Bool.random(using: &rng) { switchOn.toggle() }     // moved while the receipt is on its way
+        // The Mac's switch going off while the text is on its way: the text read and dropped, the list
+        // without `clipboard` before the receipt.
+        let dropsIt = Int.random(in: 0..<6, using: &rng) == 0
+        if dropsIt { macShares = false; dropped += 1 }
+        guard case .set(let got) = P.fromDevice(payload) else { pasteFailures += 1; continue }
         switch Int.random(in: 0..<3, using: &rng) {
         case 0:   // no receipt: the text may or may not have reached the Mac; no ⌘V, "Didn’t reach…"
-            if Bool.random(using: &rng), case .set(let got) = P.fromDevice(payload) { macHas.append(got) }
+            if !dropsIt, Bool.random(using: &rng) { macHas.append(got) }
             noChords += 1
         case let kind:   // 1: in time, 2: late
-            guard case .set(let got) = P.fromDevice(payload) else { pasteFailures += 1; continue }
-            macHas.append(got)               // read before the ping is echoed
-            let goes = P.pastesOnReceipt(rightAway: switchOn, late: kind == 2, streaming: streaming)
+            if !dropsIt { macHas.append(got) }   // written before the ping is echoed, unless dropped
+            let goes = P.pastesOnReceipt(rightAway: switchOn, late: kind == 2, streaming: streaming,
+                                         hostClipboard: macShares ? P.generation : nil)
             let note = P.receiptNote(pasted: goes, mac: "M")
             if goes {
                 chords += 1
-                pasted.append(macHas.last!)
-                if macHas.last != text || !(switchOn && kind == 1 && streaming) { pasteFailures += 1 }
+                pasted.append(macHas.last ?? "")
+                if macHas.last != text || !(switchOn && kind == 1 && streaming && !dropsIt) { pasteFailures += 1 }
             } else {
                 noChords += 1
-                if switchOn && kind == 1 && streaming { pasteFailures += 1 }
+                if switchOn && kind == 1 && streaming && !dropsIt { pasteFailures += 1 }
             }
             if (note.text == C.pasted(mac: "M")) != goes || (note.text == C.sent(mac: "M")) == goes { pasteFailures += 1 }
         }
     }
     if Set(pasted).count != pasted.count { pasteFailures += 1 }      // never twice
 }
-check(pasteFailures == 0, "5,000 random runs of Pastes: ⌘V once for each receipt in time with the switch on and something streaming, after the Mac had that text, and only then (\(pasteFailures) wrong)")
-check(chords > 0 && noChords > 0, "…and the model reached both (\(chords) ⌘V, \(noChords) without)")
+check(pasteFailures == 0, "5,000 random runs of Pastes: ⌘V once for each receipt in time with the switch on, something streaming and the Mac still sharing, pasting that Paste's own text, and only then (\(pasteFailures) wrong)")
+check(chords > 0 && noChords > 0 && dropped > 0, "…and the model reached each case (\(chords) ⌘V, \(noChords) without, \(dropped) texts the Mac dropped)")
 
 print("\(checks) checks, \(failures) failed")
 exit(failures == 0 ? 0 : 1)
