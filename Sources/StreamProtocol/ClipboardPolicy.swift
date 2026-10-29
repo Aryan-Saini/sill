@@ -3,7 +3,7 @@ import Foundation
 /// The clipboard's rules, both ends (kind 32, docs/clipboard-plan.md): what a device's message asks
 /// of the host, which change of the Mac's pasteboard the host sends and to whom, when a device
 /// subscribes and stops, which text from the Mac a device writes, when the device offers its own
-/// clipboard to the Mac (the chip), and every word. Pure (Foundation only): the host (HostClipboard)
+/// clipboard to the Mac (the chip), when a Paste also presses ⌘V there, and every word. Pure (Foundation only): the host (HostClipboard)
 /// and the device (StreamClient+Clipboard) do only what reads and writes a pasteboard, and
 /// Tests/checks/clipboard checks this file with StreamProtocol's sources.
 public enum ClipboardPolicy {
@@ -344,6 +344,37 @@ public enum ClipboardPolicy {
     /// the worst recent round trip, and at least 4 s, as a settings pick waits.
     public static func receiptWait(worstRttMs: Int?) -> Double { max(4, 4 * Double(worstRttMs ?? 0) / 1000) }
 
+    /// Paste right away (2026-10-29; Noah, with the clipboard on his iPad: "still doesn't automatically
+    /// Cmd+V"): with this device's switch on (Paste on ‹Mac› Right Away, on unless turned off), a
+    /// Paste's receipt also presses ⌘V on the Mac, ⌘'s own key around V (the device's KeyChord.paste),
+    /// so the text lands where the Mac's cursor is: in the streamed window's app, which the Mac brings
+    /// forward for a key as for any input, or on the Desktop in the app in front. Only on the receipt:
+    /// before it the Mac may not have the text yet, and ⌘V would paste what its clipboard held before
+    /// (a password copied an hour ago, say). Only for a receipt that came in time (`receiptWait`): one
+    /// that comes after "Didn’t reach…" still counts as sent, but a ⌘V seconds after the tap could
+    /// land where the person has gone since. Only while something streams: the Mac drops input with
+    /// nowhere to land (StreamCoordinator), so the note would promise a paste that never came. Without
+    /// it, today's Paste: the text on the Mac's clipboard and "Press ⌘V there".
+    public static func pastesOnReceipt(rightAway: Bool, late: Bool, streaming: Bool) -> Bool {
+        rightAway && !late && streaming
+    }
+
+    /// The key ⌘V presses: V's HID usage (the keyboard page's 0x19), virtual key 9 on the Mac.
+    public static let pasteKey: UInt16 = 0x19
+
+    /// How long after the receipt ⌘V goes. The host writes a device's text to its pasteboard on a
+    /// queue of its own (HostClipboard's Board), after it has read the message, while it echoes the
+    /// ping that brings the receipt from the network queue at once: a ⌘V right behind the receipt can
+    /// reach the Mac before the write has finished and paste the clipboard's old contents
+    /// (docs/clipboard-plan.md, "Paste right away": measured on loopback).
+    public static let pasteDelay = 0.05
+
+    /// The note a receipt brings, written and spoken: "Pasted on ‹Mac›." when ⌘V went with it
+    /// (`pastesOnReceipt`), else today's "Sent to ‹Mac›’s clipboard. Press ⌘V there."
+    public static func receiptNote(pasted: Bool, mac: String) -> (text: String, spoken: String) {
+        pasted ? (Copy.pasted(mac: mac), Copy.pasted(mac: mac)) : (Copy.sent(mac: mac), Copy.sentSpoken(mac: mac))
+    }
+
     /// Where the chip goes on the stream panel: under the bar at its top trailing corner sideways, and
     /// at its bottom corner while the link's line holds the top; held upright, at the picture's bottom
     /// trailing corner, just above the window bar or row 1 (the bar is under the picture there).
@@ -379,9 +410,34 @@ public enum ClipboardPolicy {
         /// it again.
         public static func notSent(mac: String) -> String { "Didn’t reach \(mac). Try Paste again." }
 
+        // Paste right away (`pastesOnReceipt`): with the switch on, the words say where the text goes;
+        // with it off, the words above (the chip's subtitle, its spoken label and the Paste button's
+        // hint as they were).
+        /// The chip's subtitle.
+        public static func chipSubtitle(rightAway: Bool) -> String { rightAway ? "It goes where the cursor is." : chipSubtitle }
+        /// The chip's words for VoiceOver.
+        public static func chipSpoken(mac: String, device: String, rightAway: Bool) -> String {
+            rightAway ? "Paste on \(mac). Pastes the text you copied on this \(device) where \(mac)’s cursor is."
+                      : chipSpoken(mac: mac, device: device)
+        }
+        /// The Paste button's hint, on the chip and in Settings.
+        public static func pasteHint(mac: String, device: String, rightAway: Bool) -> String {
+            rightAway ? "Pastes the text you copied on this \(device) where \(mac)’s cursor is." : pasteHint(mac: mac, device: device)
+        }
+        /// A receipt with ⌘V (`receiptNote`), written and spoken alike.
+        public static func pasted(mac: String) -> String { "Pasted on \(mac)." }
+
         // The Settings panel's This iPad group.
         public static let switchTitle = "Share Clipboard"
         public static func rowTitle(mac: String) -> String { "Paste on \(mac)" }
+        /// The switch under Share Clipboard, shown while it is on.
+        public static func rightAwayTitle(mac: String) -> String { "Paste on \(mac) Right Away" }
+        /// The group's footnote with that switch: on, where Paste's text goes and what turning the switch
+        /// off leaves; off (or Share Clipboard off), the footnote as it was.
+        public static func footnote(on: Bool, rightAway: Bool, mac: String, device: String) -> String {
+            guard on, rightAway else { return footnote(on: on, mac: mac, device: device) }
+            return "Text you copy on \(mac) is ready to paste on this \(device). To paste on \(mac), copy text here and tap Paste: it goes where \(mac)’s cursor is. With Paste on \(mac) Right Away off, Paste only puts it on \(mac)’s clipboard."
+        }
         public static func footnote(on: Bool, mac: String, device: String) -> String {
             on ? "Text you copy on \(mac) is ready to paste on this \(device). To paste on \(mac), copy text here, tap Paste, then press ⌘V there."
                : "Nothing you copy goes between this \(device) and \(mac) while this is off."
