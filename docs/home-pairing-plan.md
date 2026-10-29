@@ -689,6 +689,13 @@ enum CableLink {
   NO` and `-SillSetAfter`: the line, every hook "ignored" and "Home door: TLS, pairing required (0
   paired)."; the same signed ad hoc as a bundle, and through a symlink, the same with "signed
   me.saffer.sill.mac"; origin/main's build in that bundle took every hook.
+  This holds for Sill.app built from this change on. A build from before it keeps the rule it was
+  built with: 0.4.0, 0.5.1 and the nightly 0.5.5 (987) of 2026-10-29 take every hook from a
+  renamed copy or a link to their executable (the review, 2026-10-29: the nightly's own Developer
+  ID build, its signature valid, in a folder named Sill.bin under the same sandbox: "Test listener:
+  loopback only", "Home door: TLS, pairing not required.", "Settings: require pairing off → on",
+  its identity written into `SILL_TEST_REMOTE_DIR`). What that leaves open, and the choices, are
+  Noah's (the review's report).
 
 #### 4.4 `Door.swift` (new, from RemoteServer.swift) and `RemoteServer.swift`
 

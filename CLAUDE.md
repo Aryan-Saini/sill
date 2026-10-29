@@ -8,23 +8,24 @@ Formerly winstream; the folder still carries the old name.
 
 ## Current step
 
-**A copy of Sill.app takes no test hook (2026-10-29, branch `sec-test-host-identity` from main at 150479b5,
-PR #249; the security scan of 2026-10-18, finding 1, Medium; the security batch of 2026-10-29; the report in
-sill-handoff's `triage/2026-10-29-security/f1-test-host-report.md`).** `AppModel.bundled`, the one gate on
-every TEST ONLY hook that bears on who gets in (`SILL_TEST_REMOTE_DIR`'s trust list, `-requirePairing`, the
+**A copy of Sill.app takes no test hook, from this build on (2026-10-29, branch `sec-test-host-identity` from main
+at 150479b5, PR #249; the security scan of 2026-10-18, finding 1, Medium; the security batch of 2026-10-29; the
+report in sill-handoff's `triage/2026-10-29-security/f1-test-host-report.md`).** `AppModel.bundled`, the one gate
+on every TEST ONLY hook that bears on who gets in (`SILL_TEST_REMOTE_DIR`'s trust list, `-requirePairing`, the
 `-Sill…After` hooks, the doors' `SILL_TEST_*`: docs/home-pairing-plan.md §4.3), was
-`Bundle.main.bundleURL.pathExtension == "app"`, the folder's name: Sill.app copied to a folder named Sill.bin,
-or its executable started through a symlink or a hard link (Foundation then finds no bundle), read as the bare
-binary and took them all, keeping Sill's grants (TCC keys them to the bundle ID and designated requirement;
-the scan's premise, not tried). Now `bundled` is `AppIdentity.isSillApp` (Sources/SillMenuBar/AppIdentity.swift,
-pure but for its reader) of four facts read once at launch: Sill.app when the running code's signing
-identifier is `me.saffer.sill.mac` (the kernel's, SecTaskCopySigningIdentifier: every copy that can hold
-Sill's grants carries it, and a file replaced after launch does not change it), when it is signed with any
-certificate or its signature can't be read (fail closed), when its bundle's CFBundleIdentifier is Sill's, or,
-as before, in a `.app`. The one test host is the bare binary as `swift build` makes it (identifier
-`SillMenuBar`, `adhoc,linker-signed`, no Info.plist). Sill.app's code outside a `.app` says why first:
-"Running from …, which is not a .app, as Sill.app itself (signed me.saffer.sill.mac): it takes no test hook."
-No wire change; the CLI unchanged.
+`Bundle.main.bundleURL.pathExtension == "app"`, the folder's name: Sill.app copied to a folder named Sill.bin, or
+its executable started through a symlink or a hard link (Foundation then finds no bundle), read as the bare binary
+and took them all, keeping Sill's grants (TCC keys them to the bundle ID and designated requirement; the scan's
+premise, not tried). Now `bundled` is `AppIdentity.isSillApp` (Sources/SillMenuBar/AppIdentity.swift, pure but for
+its reader) of four facts read once at launch: Sill.app when the running code's signing identifier is
+`me.saffer.sill.mac` (the kernel's, SecTaskCopySigningIdentifier: every copy that can hold Sill's grants carries
+it, and a file replaced after launch does not change it), when it is signed with any certificate or its signature
+can't be read (fail closed), when its bundle's CFBundleIdentifier is Sill's, or, as before, in a `.app`. The one
+test host is the bare binary as `swift build` makes it (identifier `SillMenuBar`, `adhoc,linker-signed`, no
+Info.plist). Sill.app's code outside a `.app` says why first: "Running from …, which is not a .app, as Sill.app
+itself (signed me.saffer.sill.mac): it takes no test hook." No wire change; the CLI unchanged. Builds from before
+keep the old rule: 0.4.0, 0.5.1 and the nightly 0.5.5 (987) take every hook from a renamed copy or a link
+(SECURITY.md names them; what that leaves open is the review's R1, for Noah, in the report).
 - Verified: `swift build -c release`, only the CaptureProbe warning; `Tests/checks/test-host` (new, in CI's
   mutants matrix) 133 checks (1,344 combinations against an oracle; the reader for real on ad hoc copies of
   its own binary under `sandbox-exec`: signed again as Sill, a Sill.bin bundle, a hard link, a symlink, a file
