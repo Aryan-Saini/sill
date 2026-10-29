@@ -8,7 +8,7 @@ Formerly winstream; the folder still carries the old name.
 
 ## Current step
 
-**Held keys repeat, as on the Mac (2026-10-28, branch `key-repeat` from main at 6c5b5d2; issue #162).**
+**Held keys repeat, as on the Mac (2026-10-28, branch `key-repeat` from main at 6c5b5d2; issue #162; PR #240).**
 Noah, 2026-10-27: "#162 should expand to make holding down keys work on all keys when held, same as a
 regular keyboard, wait times and all, where non-command keys wait a second before starting their
 repeating. Same as desktop." An event posted from a CGEventSource never repeats (the HID system repeats
