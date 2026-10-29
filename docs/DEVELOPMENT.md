@@ -1897,8 +1897,8 @@ own line (another branch's count can be a later nightly's). docs/release-checkli
 Nightlies (`.github/workflows/nightly.yml`; docs/release-checklist.md,
 "Nightlies"): every night main moved (03:17 UTC, while the repository variable
 `SILL_NIGHTLY` is `true`) and by hand. `Scripts/release.sh --nightly --publish`
-builds main's head exactly as a release (make-app.sh takes
-`SILL_RELEASE_NIGHTLY=1` for an untagged HEAD), as
+builds main's head as a release, but universal (`SILL_UNIVERSAL=1`; make-app.sh
+takes `SILL_RELEASE_NIGHTLY=1` for an untagged HEAD), as
 `Sill-nightly-<yyyymmdd>-<sha7>.dmg` and `.zip` on the rolling pre-release
 `nightly` (the seven newest kept, never "latest"); `release-ios.sh
 --build-number <commit count>` uploads the iOS build, and `Scripts/asc.swift`

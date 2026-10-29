@@ -867,9 +867,11 @@ lists a workflow, and runs it by hand or on a schedule, only once its file is on
 
 What a nightly is:
 
-- Sill for Mac: main's head built exactly as a release is, by `Scripts/release.sh --nightly`:
+- Sill for Mac: main's head built as a release is, by `Scripts/release.sh --nightly`:
   `make-app.sh --release` (Developer ID, the hardened runtime, the Developer ID provisioning profile
-  embedded), notarized and stapled, checked as Gatekeeper will check it, in a zip and a disk image
+  embedded), but universal (`SILL_UNIVERSAL=1`: Apple silicon and Intel, #62 and #88), as the first
+  nightly was (by hand, 2026-10-29) and as Noah told #62 the next version's download will be, where
+  a release so far is Apple silicon only; notarized and stapled, checked as Gatekeeper will check it, in a zip and a disk image
   named `Sill-nightly-<yyyymmdd>-<sha7>.dmg` and `.zip`, each with its `.sha256`, on the pre-release
   [`nightly`](https://github.com/Saffsanity/sill/releases/tag/nightly). One pre-release for all
   the nights: its tag `nightly` moves to each night's commit, its notes say what a nightly is, list the

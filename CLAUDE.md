@@ -19,7 +19,8 @@ out in Insiders first tomorrow". Merge "Version 0.6.0 for both apps" (PR #244, b
   (`Scripts/nightly-notes.sh`: the pull requests merged since the newest `v<version>` tag) and fixes the
   date and build number (the commit count). Sill for Mac: the pure checks, then with `SILL_SIGN_IN_CI`
   release.yml's keychain and notary steps, the profile decoded from `SILL_PROVISION_PROFILE`, and
-  `release.sh --nightly --publish` (built and checked as a release, no tag rule, the profile required) as
+  `release.sh --nightly --publish` (built and checked as a release, but universal: `SILL_UNIVERSAL=1`, as the
+  first nightly by hand and #62's word on the next version; no tag rule, the profile required) as
   `Sill-nightly-<yyyymmdd>-<sha7>.dmg` and `.zip` with their `.sha256` on the rolling pre-release
   `nightly` (never latest; its tag moved to the commit; the seven newest kept; the commit's sha last in its
   notes); else ad hoc artifacts. Sill for iPhone and iPad: `release-ios.sh --build-number <commit count>`

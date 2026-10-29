@@ -10,8 +10,9 @@
 #   - with the repository variable SILL_SIGN_IN_CI true, from main, not "verify only": the Developer
 #     ID certificate into a temporary keychain, the notary key into a profile in it, the Developer ID
 #     provisioning profile into Packaging/embedded.provisionprofile (so the identity keychain is the
-#     data-protection one, as in a release), and Scripts/release.sh --nightly --publish: built,
-#     notarized, stapled and checked as a release is, as Sill-nightly-<yyyymmdd>-<sha7>.dmg and .zip
+#     data-protection one, as in a release), and Scripts/release.sh --nightly --publish: built
+#     universal (SILL_UNIVERSAL=1: Apple silicon and Intel), notarized, stapled and checked as a
+#     release is, as Sill-nightly-<yyyymmdd>-<sha7>.dmg and .zip
 #     with their .sha256, on the rolling pre-release "nightly" (never "latest", which the update check
 #     reads; the seven newest nightlies kept). The keychain and the key files are deleted at the end
 #     whatever happened.
@@ -169,6 +170,10 @@ jobs:
       contents: write # the pre-release "nightly", with this repository's own token
     env:
       SILL_NIGHTLY_DATE: ${{ needs.decide.outputs.date }}
+      # Universal (Apple silicon and Intel, #62, #88), as the first nightly was (by hand, 2026-10-29) and as
+      # Noah told #62 the next version's download will be: make-app.sh builds both slices with lipo, and
+      # release.sh's check_signature checks each one. A release so far is Apple silicon only.
+      SILL_UNIVERSAL: '1'
     steps:
       - name: Check out tonight's commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
