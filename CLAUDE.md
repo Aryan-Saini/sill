@@ -120,6 +120,24 @@ repeating at its own 0.4 s and 20 a second), which this branch leaves alone.
   TextEdit, a held E shows the Mac's accent menu, as the Mac's own keyboard does; a Chinese keyboard on the
   iPad (composes as before; ⌃Space switches); a keyboard layout on the iPad other than the Mac's (the Mac's
   wins).
+- The review of the held letters (2026-10-29, after 79ace754; the report's "The review", sill-handoff's
+  `triage/2026-10-20-reports/verdicts-2026-10-29/key-repeat-letters-report.md`). A letter typed or a Delete
+  (a key held a tenth of a second) whose up a stalled link held back more than 0.4 s was typed again one to
+  three times when a ping had come during the press, the host repeating while the device was heard in the
+  last half second: on loopback against a synthetic host with a stand-in device (letters at nine phases of
+  the pings, the up and what followed it held back), 12 of 27 at 0.45, 0.6 and 1 s, the four phases with a
+  ping in the press. Now a key's first repeat waits for a word heard after the press and no earlier than
+  `KeyRepeat.firstWord` (0.3 s) before it is due (0288e6cb): none of 45, a key held still first repeated at
+  0.50 s; key-repeat 114 checks (8 new) and 42 of 42 mutants (5 new). Kept from an earlier attempt at the
+  review, stopped at the usage limit: iPadOS's ⌃Space switch (two languages) let the keys held on the Mac go
+  on repeating, as ⌃P, so they now come up at the Space (fbcf4b69, `ForwardedKeys.keyboardSwitch`; key-strokes
+  450 and 118 of 118), and the Mac's `keyRepeat` is read in one checked place (a66a7fbc, `KeyTyping.macRepeats`;
+  text-composition 194 and 105 of 105). The switch's DEBUG note is made only in Debug (f7374b10). For Noah: a
+  key held and let go during a stall repeats on for up to half a second (measured: 3, 6, 8 and 11 more for an
+  up held back 0.1, 0.2, 0.3 and 0.6 s), as the arrows always did, now Delete too; with two Latin keyboards
+  ⌃Space stays the iPad's though the Mac types; a hardware letter ends what dictation can revise. run-all.sh
+  57 of 57 (55 one at a time on 0288e6cb, key-strokes and text-composition with their mutants); CI green on
+  0288e6cb and f7374b10. The simulator runs waited for disk (the report says what they found).
 - sillclient.py: `--key=USAGE,HOLD@T` (a key held, pinging four a second meanwhile, as a device) and
   `--ping=S`.
 - Defaults taken (docs/hardware-keyboard-plan.md, open question 12): modifiers mid-hold change the
