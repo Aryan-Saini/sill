@@ -224,8 +224,9 @@ package final class StreamCoordinator {
     private lazy var keyframeRequestDrops = RefusalSummary(queue: .main, categories: ["keyframes"]) { counts in
         "Keyframe requests ignored: \(counts["keyframes"] ?? 0) in a minute, from devices asking more than once a second."
     }
-    /// Gestures waiting for a switch in flight to finish, in arrival order, and the task posting them.
-    private var pendingGestures: [(gesture: TrackpadGesture, device: String)] = []
+    /// Gestures waiting for a switch in flight to finish, in arrival order, with the connection that
+    /// sent each, and the task posting them.
+    private var pendingGestures: [(gesture: TrackpadGesture, device: String, id: ObjectIdentifier)] = []
     private var gestureDrain: Task<Void, Never>?
     /// A host that does not advertise (the synthetic test hosts, which tests reach by port) posts no
     /// gesture's chord: it logs the one it would post, "(not posted: a test host)", and counts
@@ -261,6 +262,12 @@ package final class StreamCoordinator {
     package let remote: RemoteAccess?
     /// Each admitted connection's route (home and its origin, or the remote door's), from the server.
     private var routes: [ObjectIdentifier: ClientRoute] = [:]
+    /// Connections the Mac no longer serves (StreamServer.closeSessions: a pairing removed, Remote
+    /// Access or internet access off, Require pairing on), from the moment the server marks them until
+    /// they leave: nothing they send lands but the up of a key or a button they hold down on the Mac
+    /// (RevokedInput), whether it comes now, waits in the input held for an activation or waits for a
+    /// switch (a gesture). Security scan finding 10.
+    private var revoked: Set<ObjectIdentifier> = []
     /// Away from home (docs/remote-bundle-plan.md §5; AwayPolicy): every connected device is away,
     /// so the away quality is the target. Kept while no device is connected; the next to register
     /// decides (`routesChanged`). What the Mac's card, menu and every device are told.
@@ -438,6 +445,11 @@ package final class StreamCoordinator {
                 self.encoder?.requestKeyframe()
             }
         }
+        // A device the Mac no longer serves: from now on nothing of it lands but what lets go of what it
+        // holds (RevokedInput), in the same order as its messages, which the server hands on after this.
+        server.onClientRevoked = { [weak self] connection in
+            Task { @MainActor in self?.clientRevoked(connection) }
+        }
         // Each device's link (LinkJudge): the report its kind 16 carries, the card's row, one line.
         server.onClientLinkChanged = { [weak self] connection, verdict in
             let id = ObjectIdentifier(connection)
@@ -466,6 +478,9 @@ package final class StreamCoordinator {
                 self.menus.clientLeft(connection)
                 self.clipboard.clientLeft(connection)
                 self.releaseKeys(of: id)
+                // Its input still held for an activation is judged as a departed device's from here on
+                // (`gone`: `leftWhileHeld`), and an identifier a later connection takes is never revoked.
+                self.revoked.remove(id)
                 self.status.update { $0.devices.removeAll { $0.id == id } }
                 // The last device at home left devices away behind: the away quality, at once.
                 let flipped = self.routesChanged(joined: nil, endpoint: nil)
@@ -951,6 +966,18 @@ package final class StreamCoordinator {
     private func handle(_ message: StreamMessage, from connection: NWConnection) async {
         // Input decoded once, for the display's rule and for its case below.
         let input = message.kind == .input ? Wire.decode(InputEvent.self, from: message.payload) : nil
+        // A device the Mac no longer serves (`revoked`): only the up of a key or a button it holds down
+        // on the Mac still goes, where the pointer is; nothing else of it acts, wakes the display or
+        // raises a window. Its connection closes within 0.25 s.
+        let sender = ObjectIdentifier(connection)
+        if revoked.contains(sender) {
+            if let input, injector.releasesWhatItHolds(input, from: sender) {
+                deliver(input, in: .null, from: sender)
+            } else if message.kind == .input || message.kind == .gesture {
+                Stats.shared.bump("in.revoked")
+            }
+            return
+        }
         // Every message goes to DisplayWake, which alone says which of them is a person at the device
         // (a pick never is: the device asks for the Desktop by itself), issue #134.
         deviceActive(.message(message.kind, input), connection)
@@ -1026,7 +1053,7 @@ package final class StreamCoordinator {
             }
             recent.append(now)
             gestureArrivals[id] = recent
-            queueGesture(gesture, from: deviceName(connection))
+            queueGesture(gesture, from: deviceName(connection), id: id)
         case .keyframeRequest:
             // A device's picture was interrupted (its display layer failed, or iOS stopped it while
             // Sill was away) and waits for a keyframe, which a still window never sends. The encoder
@@ -1375,13 +1402,18 @@ package final class StreamCoordinator {
         // the Mac has down (DroppedInput: a modifier left down makes the next click a ⌘-click, a
         // button every move a drag), a button's where the pointer is (`.null`), not where the old
         // source would have put it. The keys of devices that left meanwhile go up after them.
+        // A device the Mac no longer serves, or one that left meanwhile, gets only the up of what it
+        // holds down itself (RevokedInput), and none of its gestures.
         let dropped = heldInput
         heldInput = []; holdUntil = 0
         for item in dropped {
             switch item {
             case .input(let event, _, let device):
-                if injector.isUpOfSomethingDown(event) { injector.apply(event, in: .null, from: device) }
-            case .chord(let keyCode, let flags):
+                if gone(device) ? injector.releasesWhatItHolds(event, from: device) : injector.isUpOfSomethingDown(event) {
+                    injector.apply(event, in: .null, from: device)
+                }
+            case .chord(let keyCode, let flags, let device):
+                if gone(device) { Stats.shared.bump("in.revoked"); continue }
                 injector.chord(keyCode: keyCode, flags: flags)
             }
         }
@@ -1673,8 +1705,10 @@ package final class StreamCoordinator {
     private var lastActivationAt: CFAbsoluteTime = 0
     /// Input held for an activation, replayed in order once the app is up, each with the device that
     /// sent it (its keys are its own, KeyStrokes); a gesture's chord that arrives meanwhile waits
-    /// behind it, so a click just before the gesture lands first.
-    private enum Held { case input(InputEvent, CGRect, KeyStrokes.Device), chord(keyCode: UInt16, flags: UInt64) }
+    /// behind it, so a click just before the gesture lands first. A device the Mac no longer serves, or
+    /// one that left while it waited (`gone`), gets only the up of what it holds down (RevokedInput)
+    /// and none of its chords.
+    private enum Held { case input(InputEvent, CGRect, KeyStrokes.Device), chord(keyCode: UInt16, flags: UInt64, device: KeyStrokes.Device) }
     private var heldInput: [Held] = []
     private var holdUntil: CFAbsoluteTime = 0
     /// Devices that left while input was held: their keys go up after it (`releaseKeys`).
@@ -1695,11 +1729,38 @@ package final class StreamCoordinator {
         heldInput = []
         for item in held {
             switch item {
-            case .input(let event, let rect, let device): logClick(event, in: rect); injector.apply(event, in: rect, from: device)
-            case .chord(let keyCode, let flags): injector.chord(keyCode: keyCode, flags: flags)
+            case .input(let event, let rect, let device):
+                if gone(device) {
+                    if injector.releasesWhatItHolds(event, from: device) { injector.apply(event, in: .null, from: device) }
+                    else { Stats.shared.bump("in.revoked") }
+                    continue
+                }
+                logClick(event, in: rect); injector.apply(event, in: rect, from: device)
+            case .chord(let keyCode, let flags, let device):
+                if gone(device) { Stats.shared.bump("in.revoked"); continue }
+                injector.chord(keyCode: keyCode, flags: flags)
             }
         }
         releaseKeysOfDevicesThatLeft()
+    }
+
+    /// A device the Mac no longer serves (`revoked`), or one that left while input was held
+    /// (`leftWhileHeld`): of what it sent, only the up of a key or a button it holds down still goes.
+    private func gone(_ device: KeyStrokes.Device) -> Bool {
+        revoked.contains(device) || leftWhileHeld.contains(device)
+    }
+
+    /// StreamServer marked this device revoked (`closeSessions`). Ignored once it has left (no route):
+    /// its identifier may be a later connection's by then.
+    private func clientRevoked(_ connection: NWConnection) {
+        let id = ObjectIdentifier(connection)
+        guard routes[id] != nil else { return }
+        revoked.insert(id)
+        // TEST ONLY (SILL_TEST_INPUT_LOG, a synthetic host): where its input stops landing, so a test
+        // reads what was posted for it after this line.
+        if injector.testLog {
+            print("Test input: \(deviceName(connection)) is no longer served: only the up of a key or a button it holds down goes from here on.")
+        }
     }
 
     /// A device left: the keys it still holds down on the Mac go up (InputInjector.releaseKeys),
@@ -2558,8 +2619,8 @@ package final class StreamCoordinator {
     /// gesture made while a window streamed comes right after the device's Desktop pick, the
     /// window may be on its way home from the virtual display, and the view should open over the
     /// Desktop, which is the only source that shows it.
-    private func queueGesture(_ gesture: TrackpadGesture, from device: String) {
-        pendingGestures.append((gesture, device))
+    private func queueGesture(_ gesture: TrackpadGesture, from device: String, id: ObjectIdentifier) {
+        pendingGestures.append((gesture, device, id))
         guard gestureDrain == nil else { return }
         gestureDrain = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -2569,7 +2630,9 @@ package final class StreamCoordinator {
             }
             while !self.pendingGestures.isEmpty {
                 let next = self.pendingGestures.removeFirst()
-                self.performGesture(next.gesture, from: next.device)
+                // Its device revoked or gone while the gesture waited for the switch: it acts no more.
+                if self.revoked.contains(next.id) || self.routes[next.id] == nil { Stats.shared.bump("in.revoked"); continue }
+                self.performGesture(next.gesture, from: next.device, id: next.id)
             }
             self.gestureDrain = nil
         }
@@ -2579,7 +2642,7 @@ package final class StreamCoordinator {
     /// one line saying what it did, and the chord posted, behind input held for an activation; on
     /// a host that does not advertise, only counted. Nothing is raised or activated first: these
     /// views act on the whole Mac (App Exposé on the app in front), as they do from its keyboard.
-    private func performGesture(_ gesture: TrackpadGesture, from device: String) {
+    private func performGesture(_ gesture: TrackpadGesture, from device: String, id: ObjectIdentifier) {
         guard !shuttingDown else { return }
         let outcome = gestureChords.resolve(gesture.gesture, table: hotKeyTable())
         print(GestureChords.line(device: device, gesture: gesture.gesture, fingers: gesture.fingers,
@@ -2590,7 +2653,7 @@ package final class StreamCoordinator {
             return
         }
         if !heldInput.isEmpty || CFAbsoluteTimeGetCurrent() < holdUntil {
-            heldInput.append(.chord(keyCode: keyCode, flags: flags))
+            heldInput.append(.chord(keyCode: keyCode, flags: flags, device: id))
             return
         }
         injector.chord(keyCode: keyCode, flags: flags)

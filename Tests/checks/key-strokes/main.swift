@@ -830,6 +830,439 @@ do {
     check(bad == 0, "input with nowhere to land: \(bad) of 2000 runs left something down")
 }
 
+// MARK: A device the Mac no longer serves (RevokedInput: StreamServer, StreamCoordinator)
+//
+// Security scan finding 10: when the Mac's user removed a paired device (or turned Remote Access or
+// internet access off, or Require pairing on), its input kept landing until its connection closed (the
+// goodbye handed to the network, or 0.25 s), and the input held for it while an app came forward (up to
+// 0.6 s) was replayed, even once it had left. Now StreamServer marks its session revoked as it says
+// goodbye: the receive loop hands on only a key's or a button's up (`mayLetGo`), and the coordinator,
+// told in the same queue turn, posts only the up of a key or a button that device pressed and the Mac
+// still has down (`stillGoes`), a button's where the pointer is; the replay of the held input and a
+// switch's drop of it judge a revoked device, and one that left while it waited, the same way, and
+// neither posts their gestures' shortcuts. The model is that glue (a copy: StreamServer and
+// StreamCoordinator are not compiled here), over InputInjector's keys and buttons with their owners; the
+// oracle reads who holds what off the events posted, not off RevokedInput.
+
+/// A device: a new connection's identifier, the connection kept for the whole run, so no two devices
+/// ever share one (a connection let go of at once can hand its address to the next one made).
+var devicesMade: [Conn] = []
+func newDevice() -> ObjectIdentifier { let c = Conn(); devicesMade.append(c); return ObjectIdentifier(c) }
+
+/// One event posted (or a gesture's shortcut) for a device: whether it lets go of something, and what
+/// (a key by its Mac keycode, a button; else "pointer", "text", "scroll" or "chord").
+struct Posted { let what: String; let device: ObjectIdentifier; let up: Bool; let thing: String }
+
+/// InputInjector as the coordinator reaches it: its keys (KeyStrokes) and its buttons with the device
+/// whose down of each went last, and every event posted.
+struct Board {
+    var keys = KeyStrokes()
+    var leftOwner: ObjectIdentifier?, rightOwner: ObjectIdentifier?     // while the button is down
+    var posted: [Posted] = []
+    /// InputInjector.releasesWhatItHolds.
+    func letsGo(_ e: InputEvent, from d: ObjectIdentifier) -> Bool {
+        RevokedInput.stillGoes(e, from: d, keyOwner: { keys.down[$0] }, leftOwner: leftOwner, rightOwner: rightOwner)
+    }
+    /// InputInjector.isUpOfSomethingDown.
+    func upOfSomethingDown(_ e: InputEvent) -> Bool {
+        DroppedInput.stillGoes(e, keyDown: keys.isDown, leftDown: leftOwner != nil, rightDown: rightOwner != nil)
+    }
+    /// The ups of what `d` holds down: its keys, its buttons.
+    func ups(of d: ObjectIdentifier) -> [InputEvent] {
+        keys.down.filter { $0.value == d }.keys.sorted().map { key($0, false, 0) }
+            + (leftOwner == d ? [.pointer(.leftUp, x: 0.4, y: 0.4)] : []) + (rightOwner == d ? [.pointer(.rightUp, x: 0.4, y: 0.4)] : [])
+    }
+    mutating func post(_ s: KeyStroke, for d: ObjectIdentifier) {
+        posted.append(Posted(what: "key \(s.virtualKey) \(s.down ? "down" : "up") (\(names(s.flags)))", device: d, up: !s.down,
+                             thing: "key \(s.virtualKey)"))
+    }
+    mutating func apply(_ e: InputEvent, from d: ObjectIdentifier, placed: Bool = true) {
+        let at = placed ? "" : " where the pointer is"
+        switch e {
+        case .pointer(.move, _, _):
+            posted.append(Posted(what: leftOwner != nil ? "left drag" : rightOwner != nil ? "right drag" : "move", device: d, up: false, thing: "pointer"))
+        case .pointer(.leftDown, _, _): leftOwner = d; posted.append(Posted(what: "left down", device: d, up: false, thing: "left"))
+        case .pointer(.leftUp, _, _): leftOwner = nil; posted.append(Posted(what: "left up" + at, device: d, up: true, thing: "left"))
+        case .pointer(.rightDown, _, _): rightOwner = d; posted.append(Posted(what: "right down", device: d, up: false, thing: "right"))
+        case .pointer(.rightUp, _, _): rightOwner = nil; posted.append(Posted(what: "right up" + at, device: d, up: true, thing: "right"))
+        case .key(let u, let down, let m):
+            for s in keys.key(usage: u, down: down, modifiers: m, from: d) ?? [] { post(s, for: d) }
+        case .text:
+            for s in keys.text(from: d) { post(s, for: d) }
+            posted.append(Posted(what: "text", device: d, up: false, thing: "text"))
+        case .scroll, .scrollGesture: posted.append(Posted(what: "scroll", device: d, up: false, thing: "scroll"))
+        }
+    }
+    /// A gesture's shortcut (InputInjector.chord): none of a device's keys, down and up at once.
+    mutating func chord(for d: ObjectIdentifier) { posted.append(Posted(what: "chord", device: d, up: false, thing: "chord")) }
+    /// A device left (the coordinator's onClientDisconnected): its keys go up (InputInjector.releaseKeys).
+    mutating func leave(_ d: ObjectIdentifier) { for s in keys.release(d) { post(s, for: d) } }
+}
+
+/// What waits in the coordinator's hold for an activation: a device's input, or a gesture's shortcut.
+enum HeldItem { case input(InputEvent, ObjectIdentifier), chord(ObjectIdentifier) }
+
+/// StreamServer's receive loop and StreamCoordinator's handling, hold, replay and a switch's drop, around
+/// RevokedInput (`fixed`), or as they were before it.
+struct Host {
+    let fixed: Bool
+    var board = Board()
+    var connected: Set<ObjectIdentifier> = []
+    var marked: Set<ObjectIdentifier> = []        // StreamServer: Client.revoked
+    var revoked: Set<ObjectIdentifier> = []       // StreamCoordinator.revoked
+    var holding = false                            // an activation's hold (holdUntil not passed yet)
+    var held: [HeldItem] = []
+    var leftWhileHeld: [ObjectIdentifier] = []
+    var dropped: [ObjectIdentifier: Int] = [:]     // in.revoked, by device
+    init(fixed: Bool) { self.fixed = fixed }
+
+    mutating func drop(_ d: ObjectIdentifier) { dropped[d, default: 0] += 1 }
+    /// A device's input read off its connection (the receive loop), then handled (the coordinator).
+    mutating func receive(_ e: InputEvent, from d: ObjectIdentifier) {
+        guard connected.contains(d) else { return }                      // its connection has closed
+        if fixed, marked.contains(d), !RevokedInput.mayLetGo(e) { drop(d); return }
+        if fixed, revoked.contains(d) {
+            if board.letsGo(e, from: d) { deliver(.input(e, d), placed: false) } else { drop(d) }
+            return
+        }
+        deliver(.input(e, d))
+    }
+    /// A device's gesture (kind 28): its shortcut, behind what is held.
+    mutating func gesture(from d: ObjectIdentifier) {
+        guard connected.contains(d) else { return }
+        if fixed, marked.contains(d) { drop(d); return }
+        deliver(.chord(d))
+    }
+    mutating func deliver(_ item: HeldItem, placed: Bool = true) {
+        if holding || !held.isEmpty { held.append(item); return }
+        switch item {
+        case .input(let e, let d): board.apply(e, from: d, placed: placed)
+        case .chord(let d): board.chord(for: d)
+        }
+    }
+    func gone(_ d: ObjectIdentifier) -> Bool { fixed && (revoked.contains(d) || leftWhileHeld.contains(d)) }
+    /// The app came up, or the 0.6 s ran out (releaseHeldInput): what was held goes in order, a gone
+    /// device's only as the up of what it holds and none of its shortcuts; then the keys of the devices
+    /// that left meanwhile.
+    mutating func replay() {
+        holding = false
+        let h = held; held = []
+        for item in h {
+            switch item {
+            case .input(let e, let d):
+                if !gone(d) { board.apply(e, from: d) }
+                else if board.letsGo(e, from: d) { board.apply(e, from: d, placed: false) }
+                else { drop(d) }
+            case .chord(let d):
+                if gone(d) { drop(d) } else { board.chord(for: d) }
+            }
+        }
+        releaseLeft()
+    }
+    /// A switch drops what was held (StreamCoordinator.select): only the up of a key or a button the Mac
+    /// has down goes (DroppedInput), a gone device's only if it holds it (RevokedInput), where the
+    /// pointer is; a shortcut unless its device is gone; then the keys of the devices that left meanwhile.
+    mutating func switchDrop() {
+        holding = false
+        let h = held; held = []
+        for item in h {
+            switch item {
+            case .input(let e, let d):
+                if gone(d) ? board.letsGo(e, from: d) : board.upOfSomethingDown(e) { board.apply(e, from: d, placed: false) }
+            case .chord(let d):
+                if gone(d) { drop(d) } else { board.chord(for: d) }
+            }
+        }
+        releaseLeft()
+    }
+    mutating func releaseLeft() { let left = leftWhileHeld; leftWhileHeld = []; for d in left { board.leave(d) } }
+    /// closeSessions: the server marks the session, and the coordinator learns it before any message the
+    /// receive loop reads after the mark.
+    mutating func revoke(_ d: ObjectIdentifier) {
+        guard connected.contains(d) else { return }
+        marked.insert(d); revoked.insert(d)
+    }
+    /// Its connection closes (the goodbye handed to the network, or 0.25 s): onClientDisconnected.
+    mutating func leave(_ d: ObjectIdentifier) {
+        guard connected.remove(d) != nil else { return }
+        marked.remove(d)
+        if holding || !held.isEmpty { leftWhileHeld.append(d) } else { board.leave(d) }
+        revoked.remove(d)
+    }
+}
+
+/// Who holds each key (by its keycode) and each button down, by the events posted alone: the device
+/// whose down of it was posted last, until its up.
+func owners(_ posted: ArraySlice<Posted>) -> [String: ObjectIdentifier] {
+    var owner: [String: ObjectIdentifier] = [:]
+    for p in posted where p.thing.hasPrefix("key") || p.thing == "left" || p.thing == "right" { owner[p.thing] = p.up ? nil : p.device }
+    return owner
+}
+/// What was posted for `d` from `from` on: each must let go of something `d` held down then, by the
+/// posted events alone. Nil when each does; else the first that does not.
+func onlyLetsGo(_ posted: [Posted], of d: ObjectIdentifier, from: Int) -> String? {
+    var owner: [String: ObjectIdentifier] = [:]
+    for (i, p) in posted.enumerated() {
+        if i >= from, p.device == d, !(p.up && owner[p.thing] == d) {
+            return "\(p.what) at \(i), " + (p.up ? "which it did not hold down" : "not an up")
+        }
+        if p.thing.hasPrefix("key") || p.thing == "left" || p.thing == "right" { owner[p.thing] = p.up ? nil : p.device }
+    }
+    return nil
+}
+/// What a device's key or button up lets go of, as `owners` names it; nil for any other input.
+func thing(_ e: InputEvent) -> String? {
+    switch e {
+    case .key(let u, false, _): return KeyStrokes.virtualKeys[u].map { "key \($0)" }
+    case .pointer(.leftUp, _, _): return "left"
+    case .pointer(.rightUp, _, _): return "right"
+    default: return nil
+    }
+}
+func whats(_ posted: [Posted], from: Int, of d: ObjectIdentifier? = nil) -> [String] {
+    posted[from...].filter { d == nil || $0.device == d! }.map(\.what)
+}
+
+// What the receive loop hands on: a key's or a button's up, nothing else.
+check(RevokedInput.mayLetGo(key(uC, false, 0)) && RevokedInput.mayLetGo(key(uLCmd, false, command))
+      && RevokedInput.mayLetGo(.pointer(.leftUp, x: 0.5, y: 0.5)) && RevokedInput.mayLetGo(.pointer(.rightUp, x: 0.5, y: 0.5)),
+      "a key's up and a button's up go on to the coordinator")
+check(!RevokedInput.mayLetGo(key(uC, true, 0)) && !RevokedInput.mayLetGo(key(uLCmd, true, command))
+      && !RevokedInput.mayLetGo(.pointer(.leftDown, x: 0.5, y: 0.5)) && !RevokedInput.mayLetGo(.pointer(.rightDown, x: 0.5, y: 0.5))
+      && !RevokedInput.mayLetGo(.pointer(.move, x: 0.5, y: 0.5)) && !RevokedInput.mayLetGo(.text("x"))
+      && !RevokedInput.mayLetGo(scroll) && !RevokedInput.mayLetGo(.scrollGesture(.began, x: 0.5, y: 0.5))
+      && !RevokedInput.mayLetGo(.scrollGesture(.ended, x: 0.5, y: 0.5)) && !RevokedInput.mayLetGo(.scrollGesture(.momentumEnded, x: 0.5, y: 0.5)),
+      "downs, moves, text, scrolls and a scroll gesture's phases go no further")
+// What the coordinator posts of it: the up of what that device pressed and the Mac has down.
+do {
+    let a = newDevice(), b = newDevice()
+    check(a != b, "two devices, two identifiers")
+    let holders: [UInt16: ObjectIdentifier] = [uC: a, uLShift: b]
+    let goes = { (e: InputEvent, l: ObjectIdentifier?, r: ObjectIdentifier?) in
+        RevokedInput.stillGoes(e, from: a, keyOwner: { holders[$0] }, leftOwner: l, rightOwner: r)
+    }
+    check(goes(key(uC, false, 0), nil, nil) && goes(key(uC, false, command), nil, nil), "the up of a key it pressed goes")
+    check(!goes(key(uLShift, false, 0), nil, nil), "the up of a key another device pressed last does not")
+    check(!goes(key(uS, false, 0), nil, nil), "the up of a key that is not down does not")
+    check(!goes(key(uC, true, 0), nil, nil) && !goes(key(uS, true, 0), nil, nil), "a key's down never goes")
+    check(goes(.pointer(.leftUp, x: 0, y: 0), a, nil) && !goes(.pointer(.leftUp, x: 0, y: 0), b, nil)
+          && !goes(.pointer(.leftUp, x: 0, y: 0), nil, a), "the left button's up: only while it pressed it, the right's owner says nothing")
+    check(goes(.pointer(.rightUp, x: 0, y: 0), nil, a) && !goes(.pointer(.rightUp, x: 0, y: 0), nil, b)
+          && !goes(.pointer(.rightUp, x: 0, y: 0), a, nil), "the right button's up likewise")
+    check(!goes(.pointer(.leftDown, x: 0, y: 0), a, a) && !goes(.pointer(.move, x: 0, y: 0), a, a) && !goes(.text("x"), a, a)
+          && !goes(scroll, a, a) && !goes(.scrollGesture(.ended, x: 0, y: 0), a, a),
+          "downs, moves, text and scrolls never go, whatever it holds")
+}
+// Removed while it holds C, beside a device holding shift: what it sends until its connection closes
+// lands not at all, but C's up (with B's shift, which it leaves down), and its leaving lets go of
+// nothing more.
+do {
+    var h = Host(fixed: true); let A = newDevice(), B = newDevice()
+    h.connected = [A, B]
+    h.receive(key(uLShift, true, shift), from: B)
+    h.receive(key(uC, true, 0), from: A)
+    h.receive(move, from: A)
+    let mark = h.board.posted.count
+    h.revoke(A)
+    for e in [move, .pointer(.leftDown, x: 0.2, y: 0.2), .pointer(.move, x: 0.3, y: 0.3), .pointer(.leftUp, x: 0.3, y: 0.3), .text("rm -rf"),
+              key(uS, true, command), key(uS, false, command), scroll, key(uLShift, false, 0), key(uC, false, 0), key(uC, false, 0)] as [InputEvent] {
+        h.receive(e, from: A)
+    }
+    h.gesture(from: A)
+    h.leave(A)
+    check(whats(h.board.posted, from: mark) == ["key 8 up (shift)"], "a removed device's input until it left: \(whats(h.board.posted, from: mark))")
+    check(h.board.keys.down == [uLShift: B], "the other device still holds shift: \(h.board.keys.down)")
+    check(h.dropped[A] == 11, "the rest dropped and counted: \(h.dropped[A] ?? 0)")
+    // As it was before (no mark, no revoked set): all of it landed, the other's shift let go of by it.
+    var old = Host(fixed: false); old.connected = [A, B]
+    old.receive(key(uLShift, true, shift), from: B); old.receive(key(uC, true, 0), from: A)
+    let oldMark = old.board.posted.count
+    old.revoke(A)
+    for e in [move, .pointer(.leftDown, x: 0.2, y: 0.2), .text("rm -rf"), key(uLShift, false, 0)] as [InputEvent] { old.receive(e, from: A) }
+    old.gesture(from: A)
+    check(whats(old.board.posted, from: oldMark) == ["move", "left down", "text", "key 56 up (none)", "chord"],
+          "before the fix all of it landed: \(whats(old.board.posted, from: oldMark))")
+}
+// Its button: the up of a drag it began goes, where the pointer is; once another device pressed the
+// button, its up does not (that device lets go of it); a down after the removal never went, so its up
+// has nothing to let go of.
+do {
+    var h = Host(fixed: true); let A = newDevice(), B = newDevice()
+    h.connected = [A, B]
+    h.receive(.pointer(.leftDown, x: 0.5, y: 0.5), from: A)
+    var mark = h.board.posted.count
+    h.revoke(A)
+    h.receive(.pointer(.move, x: 0.6, y: 0.6), from: A)
+    h.receive(.pointer(.leftUp, x: 0.6, y: 0.6), from: A)
+    check(whats(h.board.posted, from: mark) == ["left up where the pointer is"], "a removed device's drag: \(whats(h.board.posted, from: mark))")
+    h.leave(A)
+    let C = newDevice(); h.connected.insert(C)
+    h.receive(.pointer(.rightDown, x: 0.5, y: 0.5), from: C)
+    h.receive(.pointer(.rightDown, x: 0.5, y: 0.5), from: B)
+    mark = h.board.posted.count
+    h.revoke(C)
+    h.receive(.pointer(.rightUp, x: 0.5, y: 0.5), from: C)
+    h.receive(.pointer(.leftDown, x: 0.5, y: 0.5), from: C)
+    h.receive(.pointer(.leftUp, x: 0.5, y: 0.5), from: C)
+    check(whats(h.board.posted, from: mark).isEmpty && h.board.rightOwner == B,
+          "its up of a button another device pressed since, and of one it pressed after the removal: \(whats(h.board.posted, from: mark))")
+    h.receive(.pointer(.rightUp, x: 0.5, y: 0.5), from: B)
+    check(h.board.rightOwner == nil, "the other device lets go of it")
+}
+// Input held for an activation: removed while it waited, the device's held input and its gesture go no
+// further but the up of a key it pressed before; another device's held input goes as it would.
+do {
+    var h = Host(fixed: true); let A = newDevice(), B = newDevice()
+    h.connected = [A, B]
+    h.receive(key(uLCmd, true, command), from: A)
+    h.holding = true
+    for e in [.pointer(.leftDown, x: 0.5, y: 0.5), .pointer(.leftUp, x: 0.5, y: 0.5), key(uS, true, command), key(uS, false, command),
+              key(uLCmd, false, 0), .text("x")] as [InputEvent] {
+        h.receive(e, from: A)
+    }
+    h.gesture(from: A)
+    h.receive(move, from: B); h.receive(key(uC, true, 0), from: B); h.receive(key(uC, false, 0), from: B); h.gesture(from: B)
+    let mark = h.board.posted.count
+    h.revoke(A)
+    h.receive(move, from: A)
+    h.replay()
+    check(whats(h.board.posted, from: mark, of: A) == ["key 55 up (none)"], "a removed device's held input: \(whats(h.board.posted, from: mark, of: A))")
+    check(whats(h.board.posted, from: mark, of: B) == ["move", "key 8 down (none)", "key 8 up (none)", "chord"],
+          "the other device's held input: \(whats(h.board.posted, from: mark, of: B))")
+    h.leave(A)
+    check(h.board.keys.down.isEmpty, "nothing down after it left: \(h.board.keys.down)")
+}
+// The same hold dropped by a switch (the stream moved to another source meanwhile): a removed device's
+// own ups still go, where the pointer is (its command with B's shift, which B lets go of after it in the
+// hold), and nothing else of it; another device's up of a key the Mac has down goes as before, its
+// gesture too.
+do {
+    var h = Host(fixed: true); let A = newDevice(), B = newDevice()
+    h.connected = [A, B]
+    h.receive(key(uLCmd, true, command), from: A); h.receive(.pointer(.leftDown, x: 0.5, y: 0.5), from: A)
+    h.receive(key(uLShift, true, shift), from: B)
+    h.holding = true
+    for e in [.pointer(.move, x: 0.6, y: 0.6), .pointer(.leftUp, x: 0.6, y: 0.6), key(uS, true, command), key(uLCmd, false, 0)] as [InputEvent] {
+        h.receive(e, from: A)
+    }
+    h.gesture(from: A)
+    h.receive(key(uLShift, false, 0), from: B); h.gesture(from: B)
+    let mark = h.board.posted.count
+    h.revoke(A)
+    h.switchDrop()
+    check(whats(h.board.posted, from: mark, of: A) == ["left up where the pointer is", "key 55 up (shift)"],
+          "a removed device's held input at a switch: \(whats(h.board.posted, from: mark, of: A))")
+    check(whats(h.board.posted, from: mark, of: B) == ["key 56 up (none)", "chord"], "the other device's at the switch: \(whats(h.board.posted, from: mark, of: B))")
+    check(h.board.keys.down.isEmpty && h.board.leftOwner == nil, "nothing down after the switch")
+}
+// A device that left while its input was held (its pairing never removed: a lost connection, Direct
+// Wireless turned off): its held downs and clicks never land after it left; the up of a key it pressed
+// before goes, then its other keys are let go, as before.
+do {
+    var h = Host(fixed: true); let A = newDevice()
+    h.connected = [A]
+    h.receive(key(uLShift, true, shift), from: A)
+    h.receive(key(uC, true, shift), from: A)
+    h.holding = true
+    for e in [.pointer(.leftDown, x: 0.5, y: 0.5), key(uS, true, shift), key(uC, false, shift)] as [InputEvent] { h.receive(e, from: A) }
+    let mark = h.board.posted.count
+    h.leave(A)
+    h.replay()
+    check(whats(h.board.posted, from: mark) == ["key 8 up (shift)", "key 56 up (none)"], "a departed device's held input: \(whats(h.board.posted, from: mark))")
+    check(h.board.leftOwner == nil && h.board.keys.down.isEmpty, "nothing of it down")
+    var old = Host(fixed: false); old.connected = [A]
+    old.holding = true
+    old.receive(.pointer(.leftDown, x: 0.5, y: 0.5), from: A)
+    old.leave(A); old.replay()
+    check(old.board.leftOwner == A, "before the fix its held click's down landed after it left, and the button stayed down")
+}
+// Random sessions: A, removed at a random moment and gone a few events later (its connection closed),
+// B alongside, C leaving at a random moment, holds for activations coming and going, each ended by the
+// app coming up or by a switch; each sends downs, ups (its own, strays, and another's), moves, text,
+// scrolls and gestures, and A, once removed, often the up of something it holds. From the removal on
+// nothing lands for A but the up of something it holds down by the posted events; the same for C's
+// held input once it has left; A's own up of what it holds goes at once while nothing is held; nothing
+// of B's is dropped; once A and C have left, no key of theirs is down. As the glue was before, most
+// sessions land A's input after its removal.
+do {
+    var rng = Rng(state: 0x0010_EE0E)
+    var bad = 0, oldLanded = 0, ownUps = 0, removed = 0
+    let things: [UInt16] = [uLCmd, uLShift, uLCtrl, uC, uS, uEsc]
+    for fixed in [true, false] {
+        for run in 0..<3000 {
+            var h = Host(fixed: fixed)
+            let A = newDevice(), B = newDevice(), C = newDevice()
+            h.connected = [A, B, C]
+            let revokeAt = 3 + rng.below(30), goneAfter = 1 + rng.below(12), cLeavesAt = 2 + rng.below(50)
+            var mark: Int? = nil, cMark: Int? = nil
+            var problem: String? = nil
+            for step in 0..<60 {
+                if step == revokeAt { mark = h.board.posted.count; h.revoke(A) }
+                if step == revokeAt + goneAfter { h.leave(A) }
+                if step == cLeavesAt { cMark = h.board.posted.count; h.leave(C) }
+                if rng.chance(12) {
+                    if !h.holding { h.holding = true } else if rng.chance(70) { h.replay() } else { h.switchDrop() }
+                }
+                let d = rng.pick([A, A, A, B, C])
+                if rng.chance(5) { h.gesture(from: d); continue }
+                var e: InputEvent
+                let mine = h.board.ups(of: d)
+                if d == A, h.marked.contains(A), !mine.isEmpty, rng.chance(50) {
+                    e = rng.pick(mine)                                              // removed, it lets go of what it holds
+                } else {
+                    switch rng.below(9) {
+                    case 0, 1:
+                        let u = rng.pick(things)
+                        let down = h.board.keys.down[u] != d || rng.chance(15)
+                        e = key(u, down, rng.chance(30) ? command : 0)
+                        if rng.chance(20) { e = key(u, false, 0) }                     // a stray or another's up
+                    case 2:
+                        let left = rng.chance(70)
+                        let owner = left ? h.board.leftOwner : h.board.rightOwner
+                        let down = owner != d || rng.chance(15)
+                        e = .pointer(left ? (down ? .leftDown : .leftUp) : (down ? .rightDown : .rightUp), x: 0.4, y: 0.4)
+                    case 3: e = .pointer(rng.chance(50) ? .leftUp : .rightUp, x: 0.4, y: 0.4)
+                    case 4, 5: e = move
+                    case 6: e = .text("z")
+                    case 7: e = scroll
+                    default: e = .scrollGesture(rng.pick([.began, .ended, .momentumBegan, .momentumEnded]), x: 0.4, y: 0.4)
+                    }
+                }
+                // A's own up of what it holds (by what was posted), after its removal and while nothing
+                // waits: it goes at once.
+                let before = h.board.posted.count
+                let lets = thing(e)
+                let expectNow = fixed && d == A && h.marked.contains(A) && !h.holding && h.held.isEmpty
+                    && lets != nil && owners(h.board.posted[...])[lets!] == A
+                h.receive(e, from: d)
+                if expectNow {
+                    ownUps += 1
+                    if !h.board.posted[before...].contains(where: { $0.device == A && $0.up && $0.thing == lets! }), problem == nil {
+                        problem = "step \(step): A's own up \(e) did not go"
+                    }
+                }
+            }
+            if h.holding || !h.held.isEmpty { if rng.chance(70) { h.replay() } else { h.switchDrop() } }
+            h.leave(A); h.leave(C)
+            if mark != nil { removed += 1 }
+            if let mark, let p = onlyLetsGo(h.board.posted, of: A, from: mark) {
+                if fixed { problem = problem ?? "A after its removal: \(p)" } else { oldLanded += 1 }
+            }
+            if fixed, let cMark, let p = onlyLetsGo(h.board.posted, of: C, from: cMark), problem == nil { problem = "C after it left: \(p)" }
+            if fixed, h.board.keys.down.values.contains(A) || h.board.keys.down.values.contains(C), problem == nil {
+                problem = "a key of a device that left is still down: \(h.board.keys.down)"
+            }
+            if fixed, let n = h.dropped[B], problem == nil { problem = "\(n) of B's events dropped, though the Mac still served it" }
+            if fixed, let problem { bad += 1; if bad <= 3 { print("FAIL: revoked run \(run): \(problem)") } }
+        }
+    }
+    check(removed == 6000, "every session removed A: \(removed) of 6000")
+    check(bad == 0, "random sessions with a removal: \(bad) of 3000 landed input of a device the Mac no longer served")
+    check(ownUps > 500, "its own ups were tried at once in many sessions: \(ownUps)")
+    check(oldLanded > 2000, "as the glue was before, most sessions landed its input after its removal: \(oldLanded) of 3000")
+    print("revoked: 3000 sessions with a removal and a departure; its own ups at once \(ownUps) times; before the fix \(oldLanded) of 3000 landed its input after the removal")
+}
+
 // MARK: Random sessions
 //
 // Two devices sending what devices from before this fix send: shortcuts as one key down and up with

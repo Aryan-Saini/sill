@@ -3,8 +3,9 @@ import StreamProtocol
 
 // A device's key (kind 8's `.key`: a USB HID usage going down or up, with UIKeyModifierFlags bits) as
 // the keyboard events InputInjector posts for it: the Mac's virtual key, and the flags each carries.
-// Beside it, the check a quarter of a second after each key's up (`KeyUpCheck`) and what of the input
-// with nowhere to land still goes (`DroppedInput`).
+// Beside it, the check a quarter of a second after each key's up (`KeyUpCheck`), what of the input
+// with nowhere to land still goes (`DroppedInput`), and what still goes of a device the Mac no longer
+// serves (`RevokedInput`).
 //
 // The flags are what a keyboard would give (2026-09-27, the stuck command after Spotlight). The Mac
 // keeps the modifier state of the source InputInjector posts from in the HID system's state table:
@@ -307,6 +308,44 @@ package enum DroppedInput {
         case .key(let usage, false, _): return keyDown(usage)
         case .pointer(.leftUp, _, _): return leftDown
         case .pointer(.rightUp, _, _): return rightDown
+        default: return false
+        }
+    }
+}
+
+/// Input from a device the Mac no longer serves (security scan finding 10): its pairing removed, Remote
+/// Access or internet access turned off, Require pairing turned on (StreamServer.closeSessions, which
+/// marks its session revoked as it says goodbye), or one that left while its input was held for an
+/// activation (StreamCoordinator). None of it lands, but the up of a key or a button that device
+/// pressed and the Mac still has down, a button's where the pointer is: nothing new reaches the Mac
+/// from it in the quarter of a second until its connection closes, or from the input held for it (up
+/// to 0.6 s), and nothing it pressed stays down there for want of its up (a modifier would make every
+/// later click a ⌘-click, a button every later move a drag). The keys it still holds when it leaves go
+/// up as any leaving device's do (KeyStrokes.release).
+package enum RevokedInput {
+    /// What a revoked session's receive loop still hands on (StreamServer, on its network queue): a
+    /// key's up, or a button's, which may let go of something the device holds. Its downs, moves,
+    /// scrolls, scroll gestures and text, and every other message it sends, go no further.
+    package static func mayLetGo(_ event: InputEvent) -> Bool {
+        switch event {
+        case .key(_, false, _), .pointer(.leftUp, _, _), .pointer(.rightUp, _, _): return true
+        default: return false
+        }
+    }
+
+    /// Whether the coordinator still posts it (as it comes, as the input held for an activation is
+    /// replayed, or as a switch drops what was held): the up of a key or a button that `device`
+    /// pressed and the Mac still has down. `keyOwner`: the device whose down of that key went last
+    /// (KeyStrokes.down), nil while it is up; `leftOwner` and `rightOwner` likewise for the buttons
+    /// (InputInjector). A key or a button another device pressed since stays down: that device lets go
+    /// of it. Downs, moves, scrolls and text never go.
+    package static func stillGoes(_ event: InputEvent, from device: KeyStrokes.Device,
+                                  keyOwner: (UInt16) -> KeyStrokes.Device?,
+                                  leftOwner: KeyStrokes.Device?, rightOwner: KeyStrokes.Device?) -> Bool {
+        switch event {
+        case .key(let usage, false, _): return keyOwner(usage) == device
+        case .pointer(.leftUp, _, _): return leftOwner == device
+        case .pointer(.rightUp, _, _): return rightOwner == device
         default: return false
         }
     }
