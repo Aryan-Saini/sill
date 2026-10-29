@@ -583,24 +583,41 @@ _ = f4.arrive("p", v4("10.0.0.4"), now: 5); f4.leave("p", .admitted(paired: true
 check("backoff: an address that proves a paired key starts clean, as before", near(f4.failures("10.0.0.4", now: 6), 0))
 
 // Leaving a place: what each end costs.
-func cost(_ end: Places.End, held: Double, known: Bool = false) -> Double {
+func cost(_ end: Places.End, held: Double, known: Bool = false, readyAfter: Double? = nil) -> Double {
     var p = Places()
     if known { _ = p.arrive("k", v4("s"), now: 0); p.leave("k", .admitted(paired: true), now: 0) }
     _ = p.arrive("c", v4("s"), now: 10)
+    if let readyAfter { p.ready("c", now: 10 + readyAfter) }
     p.leave("c", end, now: 10 + held)
     return p.failures("s", now: 10 + held)
 }
 check("leave: admitted, paired or not, costs nothing", cost(.admitted(paired: true), held: 9) == 0 && cost(.admitted(paired: false), held: 9) == 0)
 check("leave: let go by the Mac (Direct Wireless off) costs nothing", cost(.dropped, held: 9) == 0)
-check("leave: ended by itself costs charge(held:)", near(cost(.ended, held: 1), 0.1) && near(cost(.ended, held: 9.9), 4.05))
+check("leave: ended by itself costs charge(held:)", near(cost(.ended, held: 1), 0.1) && near(cost(.ended, held: 3.9), 1.05)
+      && near(cost(.ended, held: 7.9, readyAfter: 3.9), 3.05))
 check("leave: a pairing connection's kind 19 costs as one that ended then, never a refusal (the review of 2026-10-29: it cost nothing)",
-      near(cost(.request, held: 0.1), 0.1) && near(cost(.request, held: 1.9), 0.1) && near(cost(.request, held: 7.9), 3.05))
+      near(cost(.request, held: 0.1, readyAfter: 0.05), 0.1) && near(cost(.request, held: 1.9, readyAfter: 0.05), 0.1)
+      && near(cost(.request, held: 7.9, readyAfter: 3.9), 3.05))
 check("leave: refused costs at least one", near(cost(.refused, held: 0.2), 1) && near(cost(.refused, held: 4), 1.1))
 check("leave: a known address costs the same", near(cost(.ended, held: 9.9, known: true), 4.05) && near(cost(.refused, held: 0.2, known: true), 1))
 check("leave: an IPv6 address's end costs it and its /64 alike", { var p = Places()
     _ = p.arrive("c", src("2601:600:1:2::5"), now: 0); p.leave("c", .ended, now: 3)
     return near(p.failures("2601:600:1:2::5", now: 3), 0.6) && near(p.failures("2601:600:1:2::/64", now: 3), 0.6) }())
 check("leave: an id that holds no place changes nothing", { var p = Places(); return p.leave("none", .refused, now: 1).isEmpty && p.failures("x", now: 1) == 0 }())
+// The review of 2026-10-29: a wait counts up to its place's deadline at most. The door's clock runs
+// on through the Mac's sleep and its deadline timer does not, so a connection waiting as the Mac
+// slept ended at the wake, an hour "held": it backed its address off, and an IPv6 address's /64.
+check("leave: a wait counts to its deadline at most (the Mac asleep an hour with it waiting: what the cut at 4 s costs, 1.1, refused or ended; a kind 19 read at the wake, ready at 1 s: 1.6)",
+      near(cost(.refused, held: 3600), 1.1) && near(cost(.ended, held: 3600), 1.1) && near(cost(.request, held: 3600, readyAfter: 1), 1.6))
+check("leave: a pairing connection ready at 3 s, an hour on: what its cut at 7 s costs (2.6)", { var p = Places()
+    _ = p.arrive("c", v4("s"), now: 10); p.ready("c", now: 13); p.leave("c", .ended, now: 3610)
+    return near(p.failures("s", now: 3610), 2.6) }())
+check("leave: a known address's wait to its 10 s at most (an hour: 4.1)", near(cost(.ended, held: 3600, known: true), 4.1))
+var slept = Places()
+_ = slept.arrive("a", src("2601:600:1:2::5"), now: 0); _ = slept.arrive("b", src("2601:600:1:2::6"), now: 0)
+let sleptBacked = slept.leave("a", .refused, now: 3600) + slept.leave("b", .ended, now: 3600)
+check("leave: two connections of one /64 waiting through an hour's sleep back off nothing (2.2 each address and its /64)",
+      sleptBacked.isEmpty && near(slept.failures("2601:600:1:2::/64", now: 3600), 2.2) && !slept.backedOff(src("2601:600:1:2::7"), now: 3600))
 
 // Deadlines of one place.
 var dl = Places()

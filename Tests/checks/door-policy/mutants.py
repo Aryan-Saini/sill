@@ -144,6 +144,13 @@ M = [
      ["            case .dropped, .request:\n                return []\n", "            case .refused, .ended:"]),
     ("places: a pairing connection's kind 19 costs as a refusal (one at least: a later generation's device backed off)", F,
      "refused: end == .refused), now: now)", "refused: end != .ended), now: now)"),
+    # The review of 2026-10-29: the Mac's sleep (or a held-up queue) counted as a place held.
+    ("places: a wait counted past its deadline (the Mac asleep counted as waiting)", F,
+     "            min(now - e.acceptedAt, DoorPolicy.deadline(known: e.known, readyAfter: e.readyAt.map { $0 - e.acceptedAt }))",
+     "            now - e.acceptedAt"),
+    ("places: a wait counted to the handshake's deadline even once ready", F,
+     "            min(now - e.acceptedAt, DoorPolicy.deadline(known: e.known, readyAfter: e.readyAt.map { $0 - e.acceptedAt }))",
+     "            min(now - e.acceptedAt, DoorPolicy.deadline(known: e.known, readyAfter: nil))"),
     ("places: a proof forgives nothing", F, "            charges[address] = nil\n            backedOffUntil[address] = nil\n", ""),
     ("places: known for ever", F, "            provenAt[address].map { now - $0 < DoorPolicy.knownFor } ?? false", "            provenAt[address] != nil"),
     ("places: the /64 never charged", F,

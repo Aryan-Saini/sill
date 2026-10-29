@@ -425,8 +425,18 @@ enum DoorPolicy {
             case .dropped:
                 return []
             case .refused, .ended, .request:
-                return charge(e.source, DoorPolicy.charge(held: now - e.acceptedAt, refused: end == .refused), now: now)
+                return charge(e.source, DoorPolicy.charge(held: Self.held(e, now: now), refused: end == .refused), now: now)
             }
+        }
+
+        /// What `e` held its place for: up to its deadline at most, since the door refuses it there.
+        /// Any longer is time the door did not run, not time a source held a place against anyone:
+        /// the Mac asleep (the monotonic clock runs on through a sleep, the deadline's timer does
+        /// not, so a connection waiting as the Mac slept ended at the wake, hours "held"), or its
+        /// queue held up (the review of 2026-10-29: one connection across a 20 s stop of the host
+        /// cost 9.25 and backed its address off).
+        private static func held(_ e: Entry, now: Double) -> Double {
+            min(now - e.acceptedAt, DoorPolicy.deadline(known: e.known, readyAfter: e.readyAt.map { $0 - e.acceptedAt }))
         }
 
         /// One failure for a connection refused before it took a place (its origin). Returns what
