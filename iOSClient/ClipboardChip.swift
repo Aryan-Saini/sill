@@ -2,7 +2,7 @@ import SwiftUI
 import StreamProtocol
 
 /// The clipboard's chip over the stream (docs/clipboard-plan.md): "Paste on ‹Mac›", where the text goes
-/// with Paste on ‹Mac› Right Away on ("It goes where the cursor is.": the Paste presses ⌘V there too),
+/// with Paste on ‹Mac› Right Away on ("Where the cursor is.": the Paste presses ⌘V there too),
 /// else "Then press ⌘V there.", with the system's Paste button and Dismiss; for a moment after a Paste,
 /// its note in the same place. Offered by StreamClient (`clipboardChip`, ClipboardPolicy.offersChip);
 /// placed and hidden by StreamScreen. Takes no touch outside itself.

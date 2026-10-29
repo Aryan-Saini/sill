@@ -455,7 +455,8 @@ on the Mac changes.
 
 ### The words
 
-With the switch on: the chip "Paste on ‹Mac›" over "It goes where the cursor is."; its VoiceOver label
+With the switch on: the chip "Paste on ‹Mac›" over "Where the cursor is." ("It goes where the cursor is."
+until the review: cut short on iPhones at xLarge text); its VoiceOver label
 "Paste on ‹Mac›. Pastes the text you copied on this iPad where ‹Mac›’s cursor is."; the Paste button's
 hint "Pastes the text you copied on this iPad where ‹Mac›’s cursor is."; the note "Pasted on ‹Mac›.";
 the group's footnote "Text you copy on ‹Mac› is ready to paste on this iPad. To paste on ‹Mac›, copy
@@ -546,7 +547,7 @@ still loses, and ⌘V then pastes what the Mac's clipboard held before; nothing 
 On the iPad (and the iPhone) with this branch's build, against Sill.app from main (nothing on the Mac
 changed; any Sill for Mac with the clipboard, #78 on):
 1. Copy a sentence in Notes on the iPad, come back to Sill streaming TextEdit with the cursor in a
-   document: the chip says "It goes where the cursor is."; tap Paste: the sentence appears in TextEdit
+   document: the chip says "Where the cursor is."; tap Paste: the sentence appears in TextEdit
    at the cursor, the chip's place says "Pasted on ‹Mac›.", and nothing stays held on the Mac (a click
    after it is a plain click, no ⌘-click).
 2. The same into Notes on the Mac, into a Terminal window (the shell's line), and on the Desktop with

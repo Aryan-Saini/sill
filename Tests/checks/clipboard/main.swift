@@ -373,7 +373,9 @@ check(C.footnote(on: true, mac: "Mac mini", device: "iPad") == "Text you copy on
       "the footnote, on")
 check(C.footnote(on: false, mac: "Mac mini", device: "iPhone") == "Nothing you copy goes between this iPhone and Mac mini while this is off.", "the footnote, off")
 // Paste right away's words: with the switch on they say where the text goes; with it off, today's.
-check(C.chipSubtitle(rightAway: true) == "It goes where the cursor is.", "the chip's subtitle with the switch on")
+check(C.chipSubtitle(rightAway: true) == "Where the cursor is.", "the chip's subtitle with the switch on")
+check(C.chipSubtitle(rightAway: true).count <= C.chipSubtitle.count,
+      "…no longer than today's, which the chip holds on a 375 pt iPhone at xLarge text (the review: \"It goes where the cursor is.\" was cut short there)")
 check(C.chipSubtitle(rightAway: false) == C.chipSubtitle && C.chipSubtitle == "Then press ⌘V there.", "…off: today's")
 check(C.chipSpoken(mac: "Mac mini", device: "iPad", rightAway: true) == "Paste on Mac mini. Pastes the text you copied on this iPad where Mac mini’s cursor is.",
       "the chip's spoken label with the switch on: no Command-V to press")

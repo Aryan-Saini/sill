@@ -1139,8 +1139,8 @@ first. Wire, host and device; additive.
   `sendFromKeyRow`), 50 ms after the receipt (`pasteDelay`: the host writes the text on its Board
   queue while it echoes the ping at once; on loopback a ⌘V right behind the receipt came before the
   write in 99 of 100 of a test client's pastes and 21 of 25 of the app's, up to 14 ms early, and with
-  50 ms in none of 125); then "Pasted on ‹Mac›.", without ⌘V today's words; the chip "It goes where
-  the cursor is.". The other way stays the person's (no iOS app pastes into another). Harness:
+  50 ms in none of 125); then "Pasted on ‹Mac›.", without ⌘V today's words; the chip "Where the cursor
+  is.". The other way stays the person's (no iOS app pastes into another). Harness:
   `-SillClipboardNote pasted`, `-Sill.pasteRightAway 0`, DEBUG `-SillPasteDelay <s>`. Verified:
   `Tests/checks/clipboard` 285 checks and 91 of 91 mutants, `key-strokes` 359 (`KeyChord.paste` leaves
   nothing held) and 86 of 86; `run-all.sh` all 56; the three iOS builds and `swift build -c

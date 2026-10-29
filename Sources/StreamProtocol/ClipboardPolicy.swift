@@ -422,8 +422,10 @@ public enum ClipboardPolicy {
         // Paste right away (`pastesOnReceipt`): with the switch on, the words say where the text goes;
         // with it off, the words above (the chip's subtitle, its spoken label and the Paste button's
         // hint as they were).
-        /// The chip's subtitle.
-        public static func chipSubtitle(rightAway: Bool) -> String { rightAway ? "It goes where the cursor is." : chipSubtitle }
+        /// The chip's subtitle: under "Paste on ‹Mac›", where it goes. No longer than today's "Then press
+        /// ⌘V there.", which the chip holds on a 375 pt iPhone at xLarge text, where "It goes where the
+        /// cursor is." was cut short ("It goes where the cur…", found in review; at 393 pt "…the curso…").
+        public static func chipSubtitle(rightAway: Bool) -> String { rightAway ? "Where the cursor is." : chipSubtitle }
         /// The chip's words for VoiceOver.
         public static func chipSpoken(mac: String, device: String, rightAway: Bool) -> String {
             rightAway ? "Paste on \(mac). Pastes the text you copied on this \(device) where \(mac)’s cursor is."
