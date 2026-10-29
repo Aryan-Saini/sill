@@ -156,17 +156,8 @@ if let keyM = RemoteKey.generate(), let mac = HostIdentity(privateKey: keyM, rec
     check("require pairing: two P-256 keys and their identities", false)
 }
 
-// MARK: Issue #140: surviving force-quit and preserving QR link addresses on home pairing
+// MARK: Issue #140: preserving QR link addresses on home pairing
 
-check("restored: uses UserDefaults when non-empty and key is present (#140)",
-      SavedMacs.restored(defaults: oldText, keychain: nil, keyKnownMissing: false) == macs)
-check("restored: falls back to Keychain backup when UserDefaults is nil or empty after force-quit (#140)",
-      SavedMacs.restored(defaults: nil, keychain: oldText, keyKnownMissing: false) == macs
-      && SavedMacs.restored(defaults: "[]", keychain: oldText, keyKnownMissing: false) == macs)
-check("restored: prefers Keychain when a second Mac was paired before UserDefaults flushed (#140)",
-      SavedMacs.restored(defaults: oldText, keychain: SavedMacs.encode(listTwo), keyKnownMissing: false) == listTwo)
-check("restored: clears saved Macs when the device key is known missing (restore from backup) (#140)",
-      SavedMacs.restored(defaults: oldText, keychain: oldText, keyKnownMissing: true).isEmpty)
 var homeOnly = macs[0]
 homeOnly.addresses = []
 homeOnly.remotePort = 7455

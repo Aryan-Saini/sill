@@ -173,12 +173,7 @@ extension StreamClient {
 
     /// Writes the list only (`recomputeMacs` itself writes what it learns of a Mac's door).
     func storeSavedMacs() {
-        if !savedMacsSeeded {
-            let encoded = SavedMacs.encode(savedMacs)
-            UserDefaults.standard.set(encoded, forKey: SavedMacs.defaultsKey)
-            CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
-            DeviceIdentity.writeSavedMacs(encoded)
-        }
+        if !savedMacsSeeded { UserDefaults.standard.set(SavedMacs.encode(savedMacs), forKey: SavedMacs.defaultsKey) }
         pruneSavedPreviews()
         guard !savedMacsSeeded else { return }
         let kept = Set(savedMacs.map(\.macID))
@@ -337,15 +332,9 @@ extension StreamClient {
             print("home: homeTLS forgotten on every saved Mac")
         }
         #endif
-        let currentDefaults = UserDefaults.standard.string(forKey: SavedMacs.defaultsKey)
-        let restored = SavedMacs.restored(defaults: currentDefaults ?? SavedMacs.encode(savedMacs),
-                                          keychain: savedMacsSeeded ? nil : DeviceIdentity.readSavedMacs(),
-                                          keyKnownMissing: !savedMacs.isEmpty && DeviceIdentity.knownMissing())
-        if restored != savedMacs {
-            savedMacs = restored
+        if !savedMacs.isEmpty, DeviceIdentity.knownMissing() {
+            savedMacs = []
             persistSavedMacs()
-        } else if !savedMacsSeeded, !savedMacs.isEmpty, currentDefaults != SavedMacs.encode(savedMacs) {
-            storeSavedMacs()
         }
         #if DEBUG
         let d = UserDefaults.standard

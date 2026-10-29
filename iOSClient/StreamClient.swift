@@ -978,8 +978,7 @@ final class StreamClient: ObservableObject {
             savedMacs = SavedMacs.decode(arguments[i + 1])
             savedMacsSeeded = true
         } else {
-            savedMacs = SavedMacs.restored(defaults: UserDefaults.standard.string(forKey: SavedMacs.defaultsKey),
-                                           keychain: DeviceIdentity.readSavedMacs(), keyKnownMissing: false)
+            savedMacs = SavedMacs.decode(UserDefaults.standard.string(forKey: SavedMacs.defaultsKey))
         }
         if let i = arguments.firstIndex(of: "-" + ConnectionList.groupsKey), i + 1 < arguments.count {
             macGroups = ConnectionList.decodeGroups(arguments[i + 1])
@@ -997,8 +996,7 @@ final class StreamClient: ObservableObject {
             UserDefaults.standard.register(defaults: [key: arguments[i + 1]])
         }
         #else
-        savedMacs = SavedMacs.restored(defaults: UserDefaults.standard.string(forKey: SavedMacs.defaultsKey),
-                                       keychain: DeviceIdentity.readSavedMacs(), keyKnownMissing: false)
+        savedMacs = SavedMacs.decode(UserDefaults.standard.string(forKey: SavedMacs.defaultsKey))
         macGroups = ConnectionList.decodeGroups(UserDefaults.standard.string(forKey: ConnectionList.groupsKey))
         #endif
         syncPreviews(to: connectionStyle)
