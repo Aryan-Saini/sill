@@ -540,8 +540,16 @@ one). Every device build sends a viewport within them, and a device holds what
 it sends to them. Until 2026-10-29 a side of 1e300 points reached the fit
 above, whose log line made an Int of it, which traps: one message from any
 device a Mac admitted ended Sill and every device's session (security scan,
-finding 4). A window on the virtual display is asked at most 4096 points a
-side, the display's own ceiling.
+finding 4). A window on the virtual display is asked at most 65536 points a
+side, the most a host takes (16384 points at 0.25), so every viewport is asked
+for as before: the placement fits the window to the display, and a full-screen
+window's crop keeps the panel's shape, which a hold at the display's own 4096
+would lose for a panel larger than the display at Aa's smaller steps (an iPad's
+Stage Manager window on a large display). A device's stats report is its own
+numbers too: the host adds up the sound's late packets it reports for its
+`client …` line without trapping, the sum stopping at Int.max
+(`ClientStats.lateSince`; until 2026-10-29 two reports of Int.max within the
+line's 1.5 s ended Sill, found in the review of finding 4).
 
 The lights a held thumbnail shows (close, minimize, full screen; kind 15) press
 the window's own buttons through Accessibility, on the host's main actor, each

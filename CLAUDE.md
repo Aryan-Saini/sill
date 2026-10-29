@@ -25,8 +25,10 @@ Bonjour name then free for an impostor); with the virtual display `VirtualStage.
   sends to them (`held`, in `sendViewport`). The two lines print through `ViewportBounds.whole` (Int()'s number,
   toward zero, without its trap); no other host line prints a device's number through Int() (a click's point is held
   to the source by InputLanding, the rest are the Mac's own).
-- The window's size on the virtual display held to 1…4096 points a side as the envelope is
-  (`VirtualDisplaySize.windowSize`, `Tests/checks/capture-scale`); every size within that is what it was.
+- The window's size on the virtual display held to 1…65536 points a side, the most a host takes (16384 points at
+  0.25; `VirtualDisplaySize.windowSize`, `Tests/checks/capture-scale`): every viewport a host takes is asked as before
+  (a side under half a point 1, not 0), the placement fits it to the display, and a full-screen window's crop keeps
+  the panel's shape (the review's second finding: held at the display's 4096 it did not).
 - `sillclient.py --raw9=JSON@T` sends a literal viewport.
 - Verified: `viewport-bounds` 79 checks and 26 of 26 mutants (18,566 of its 200,000 random viewports main's guard
   took and its line trapped on, none taken now), `capture-scale` 172 and 48 of 48; `run-all.sh`, all 57; `swift
@@ -38,8 +40,25 @@ Bonjour name then free for an impostor); with the virtual display `VirtualStage.
   from 150479b5 and compiled with its Viewport.swift) trap on the scan's payload and on a scale of 1e-300 (exit
   133); the branch's refuse and go on. Not live on main's host: only a real window resized through Accessibility
   reaches that line, which no test host lists.
+- The review (2026-10-29, after a02c1afe; the report's "The review"): two findings, each reproduced first and fixed in
+  a commit of its own. (1) f664a04d: a device's ClientStats `audioLate` was added to the stats line's count with a
+  plain `+` (StreamServer, from the audio work, after the scanned commit), so two reports of Int.max within the line's
+  1.5 s trapped: a loopback host built from a02c1afe died at the third report (exit 133), and lived with 1000; now
+  `ClientStats.lateSince` (Viewport.swift, pure: nothing for a missing or negative count, the sum stopping at
+  Int.max), and the rebuilt host took ten reports of Int.max and printed "9223372036854775807 late". (2) 972e2b87: the
+  window's size on the virtual display held at 4096 changed a full-screen window's crop for a panel past the display
+  (from the commits' own lines, a 2560×1400 panel at 0.5x: main 4096×2240, 1.829:1, the panel's shape; a02c1afe
+  4096×2800, 1.463:1, black bars on the device); now 65536, every row as main's. Re-verified: `viewport-bounds` 87
+  checks and 30 of 30 mutants, `capture-scale` 175 and 50 of 50; `run-all.sh`, all 57 (8 min 16 s); `swift build -c
+  release` from `git archive`, only the CaptureProbe warning; the three iOS builds, only the known `StreamClient`
+  capture warning; live on one loopback host, every kind 9 above refused again with its line, and the review's tries
+  (1.7976931348623157e308 refused, as -0 and 5e-324 were in a run on a02c1afe; 1e999 and a rate of 1e300 "does not
+  decode"; a duplicate key and a rate of Int.max taken, the rate held by `wantedFPS`; a rate of Int.min, on a02c1afe,
+  a restart at 24 fps), beside them a second client's ten stats reports of Int.max: the host alive throughout.
 - **Untested, for Noah:** nothing should change on a device: Aa's steps and none, a rotation and the virtual display
-  as before on the iPad and iPhone, and Sill.log without a "Viewport from … refused" line.
+  as before on the iPad and iPhone, and Sill.log without a "Viewport from … refused" line; if an iPad with Stage
+  Manager on a large external display is at hand, a full-screen window (a video) on the virtual display at Aa 0.5x
+  fills the panel as on main.
 
 **Pinch to zoom (2026-10-28/29, addhumal's PR #196 with maintainer edits; issue #65).** Noah's decisions of
 2026-10-19/20: pinch to zoom, not a slider; Photos-like, centred on the point between the fingers, the Mac's cursor
@@ -5983,10 +6002,12 @@ good.
   (`WindowList`, with the host's per-launch `launchID`; `WindowInfo`,
   `AppInfo`, `StreamSource`) and image blob framing. `Viewport.swift` —
   `Viewport` (kind 9: the device's panel, Aa's scale and its rate),
-  `ClientStats`, `CursorShapeBlob`, and `ViewportBounds` (what a host takes of
-  a viewport: each side 1 to 16384 points, a scale 0.25 to 4 or none, any other
-  refused; what a device sends, `held`; and `whole`, a number for a log line
-  as Int() printed it, without its trap; pure, `Tests/checks/viewport-bounds`).
+  `ClientStats` (with `lateSince`, a host's count of a device's late sound
+  packets, which never traps), `CursorShapeBlob`, and `ViewportBounds` (what a
+  host takes of a viewport: each side 1 to 16384 points, a scale 0.25 to 4 or
+  none, any other refused; what a device sends, `held`; and `whole`, a number
+  for a log line as Int() printed it, without its trap; pure,
+  `Tests/checks/viewport-bounds`).
   `HostSettings.swift` — the host settings a device sees and changes (kinds 16
   and 17): `StreamSettings`, `RunningStream`, `HostSettingsState`,
   `HostSettingsChange`, `SettingsChoices` (the Mac menu's values) and
@@ -6088,7 +6109,8 @@ good.
   source's last pixel row and column at its display's scale; and
   `VirtualDisplaySize`, the size of Sill's virtual display, no side under 800
   points, which macOS kept at 2x (an iPhone's 754×784 came up at 1x), and of
-  the window on it, 1 to 4096 points a side (`windowSize`); pure,
+  the window on it, 1 to 65536 points a side, the most a host takes, so a
+  full-screen window's crop keeps the panel's shape (`windowSize`); pure,
   `Tests/checks/capture-scale`), `SyntheticCapture` (test pattern for
   `--synthetic`; SILL_TEST_PATTERN=noise adds a square of noise,
   SILL_TEST_PATTERN=picture:<path> shows a still picture instead,
@@ -6814,7 +6836,8 @@ good.
   `remote-rules` (with its `home.swift`), `settings-window` (Sill.app's
   `SettingsWindowFit`), `stream-zoom` (iOSClient's StreamZoom), `text-composition` (iOSClient's TextComposition with
   StreamProtocol's Input.swift), `tour`, `update-policy`, `viewport-bounds`
-  (StreamProtocol's ViewportBounds: what a host takes of a device's viewport),
+  (StreamProtocol's ViewportBounds: what a host takes of a device's viewport; and
+  ClientStats.lateSince),
   `virtual-display-api` (VirtualDisplay.swift whole, as VirtualDisplayProbe compiles it: its surface,
   TypeEncoding and Runtime.method's decision, on classes made at run time, against
   the encodings measured on Apple silicon and reported from Intel machines),
