@@ -105,9 +105,10 @@ out in Insiders first tomorrow". Merge "Version 0.5.5 for both apps" (PR #244, b
   don't do" understated the route through main: `nightly` holds the same Developer ID and notary keys
   as `release`, and the Admin key, so a commit on main reaches them at the next run from main with no
   approval, and a ruleset requiring pull requests closes that only with a required approval, and then
-  only against someone else's write access (78248187; a loopback run of the workflows' own steps on main, GitHub's rule emulated with Ruby's
-  File.fnmatch, handed an attacker's release.sh the signing identity and notary profile and
-  release-ios.sh the key file); any `v*` tag waits on the approval alone, so What a tag does says to
+  only against someone else's write access (78248187; a loopback run of the workflows' own steps on
+  main, GitHub's rule emulated with Ruby's File.fnmatch, handed an attacker's release.sh the signing
+  identity and notary profile and release-ios.sh the key file); any `v*` tag waits on the approval
+  alone, so What a tag does says to
   approve only the tag you pushed, on the commit you tagged (a7c6787e); testflight.yml no longer
   "exports other branches" (732c374f); steps 2 and 3 and the two variable lines lost their inline
   comments, which zsh as it starts hands to `gh` as arguments (39b9ecfd: pasted into `zsh -f -i`, 7 of
