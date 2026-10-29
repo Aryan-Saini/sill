@@ -243,9 +243,23 @@ Each such pairing is logged, listed as "over the USB cable" and shown in a notic
     telling;
   - a stranger on the network can hold up pairing and the door without getting in: three asks in
     10 minutes use up the device-opened windows (the real device is then sent to the Mac's menu,
-    whose "‹name› Wants to Pair" it can keep lit), five wrong codes stop any open window, and eight
-    half-open connections (10 s each, two per address, and IPv6 gives it any number of addresses)
-    fill the door's pending places, as they can at the remote door;
+    whose "‹name› Wants to Pair" it can keep lit), and five wrong codes stop any open window. Its
+    half-open connections no longer hold the door's pending places for good (the security scan of
+    2026-10-18, finding 9; branch `sec-door-pending`, `DoorPolicy.Places`): waiting costs (a tenth
+    of a failure for each connection that ends unadmitted, one more for every 2 s beyond the first
+    2, at least one for a refusal; 5 within a minute back an address off for 5 minutes, as before),
+    the TLS handshake has 4 s, an IPv6 address answers for its /64 too (12 failures in 5 minutes
+    from its addresses not known back the /64 off, which no single address can reach), and 2
+    places beyond the 8 are kept for addresses that proved a paired key in the last day, at either
+    door. What stays: with many IPv4 addresses on the network (a /24's free ones), taking a new one
+    as each is backed off, it can keep the shared places full for new devices as long as it has
+    addresses (each holds two for about 50 s at most per 5 minutes), and a paired device whose
+    address has not proved its key that day waits as a new one does; a device not yet paired in
+    its own IPv6 /64 is refused while that /64 is backed off; someone at a paired device's own
+    address (its NAT, or its address while it is away) takes the two kept places and is backed off
+    with it, since nothing tells them apart before TLS; and an asker's quiet now covers its IPv6
+    /64, so for 10 minutes after the Mac's Cancel another new device of that /64 opens the window
+    on the Mac;
   - Remote Access's own switches (remote access, internet access, the port) and Direct Wireless
     stay in UserDefaults, where any process of this user can flip them: that widens who reaches a
     door, never lets an unpaired key in. Require pairing is the one switch that would, so it is

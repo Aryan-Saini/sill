@@ -8,6 +8,37 @@ Formerly winstream; the folder still carries the old name.
 
 ## Current step
 
+**The door's waiting places (2026-10-29, branch `sec-door-pending` from main at 150479b5, PR #252; finding 9 of the
+security scan of 2026-10-18, Low; Noah's go of 2026-10-29).** A TLS door (the remote one, and the home one of
+Sill.app and `SillHost --pairing`) held 8 connections waiting for admission, 2 per address, 10 s each, and backed an
+address off only for its own refusals: four addresses closing each connection at 9.9 s kept every place full for good
+and a paired device got "limit". Host only, no wire change. `DoorPolicy.Places` (pure) owns the places, `Door` runs
+it on a monotonic clock: a connection that ends unadmitted costs its address a tenth of a failure, one more for every
+2 s it waited beyond the first 2, at least one when refused (5 in 60 s: 300 s, as before; a paired key at `.ready`
+clears its address); the TLS handshake has 4 s (Network.framework does not say when a ClientHello arrives, so the
+whole handshake rather than its first bytes; 10 s from a known address), a pairing connection's kind 19 4 s after
+`.ready`, 10 s in all; an IPv6 address answers for its /64 too (a link-local one's on its interface): 2 waiting
+places per /64 for addresses not known, and 12 failures in 300 s from those back the /64 off, which no single address
+reaches (its own backoff stops it at 5, 11.1 at most with its last waits); 2 places beyond the 8 for addresses that
+proved a paired key within a day (known: never refused for nor charged to their /64, but they pay for what they hold,
+so someone at a paired device's address is backed off with it: nothing tells them apart before TLS). One line a
+minute per door, "Home door backed off 10.128.0.34 for 300 s: its connections waited without being admitted, or were
+refused." `AskLimits.quietKey`: the quiet after the Mac's Cancel or a stop covers the asker's IPv6 /64. Checks:
+`door-policy` 227 (the scan's attack modelled against the rule before and this one: before, every place held and the
+paired device refused at all 60 tries in 2 minutes; now the four backed off 12 s in, the paired device admitted at
+every try, one not yet known in at 13 s; closing at 1.9 s, 47.5 s; IPv6 churn in a /64, the /64 at 114 s, holding one
+place at 240 s) and 98 of 98 mutants; `ask-limits` 43 and 24 of 24. Live on loopback synthetic `--pairing` hosts
+(sources 127.0.0.1, en0's 10.128.0.34, en13's 10.128.0.148 and en14's 169.254.219.184, whose connections to 127.0.0.1
+stay on lo0; 127.0.0.2–5 cannot be bound without a root alias): main's build refused the paired client at all 30
+tries in 90 s ("… 27 over the limit."), backing nobody off; this one cut the four at 4.2 s and backed them off at
+12.6 s ("Home door backed off 10.128.0.34 for 300 s: …", the client at 127.0.0.1 with them); a scratch build with 6
+shared places (three addresses filling them as four fill 8) served a known client at all 20 tries and an unknown one
+from 13 s; one address cycling at 1.9 s held 2 places for good on main and was backed off at 47.9 s here. Plan's
+"What stays open" updated (IPv4 churn, the co-located address, a device not yet paired in a backed-off /64).
+**Untested, for Noah:** a week of ordinary use at home and away (Wi-Fi, cable, Tailscale, the hotspot) with no
+"backed off" line in Sill.log (note any, with what the device did); a new pairing over the hotspot through Tailscale
+(its handshake inside 4 s); an iPad back after a night asleep.
+
 **Pinch to zoom (2026-10-28/29, addhumal's PR #196 with maintainer edits; issue #65).** Noah's decisions of
 2026-10-19/20: pinch to zoom, not a slider; Photos-like, centred on the point between the fingers, the Mac's cursor
 not involved; a slight pinch out stays zoomed and only a pinch all the way out (or a lift within 2 % of it) gives the
@@ -6127,19 +6158,22 @@ good.
   `RemoteAccess` (main actor; ties them together, signs kind 18; owns
   pairing for both doors: the ask, the cable's devices, Require pairing,
   Remove at both doors). Pairing at home (docs/home-pairing-plan.md): `Door`
-  (admission at a TLS door, one class behind both listeners: the pending
-  caps, the backoff, the verify block, the device gate, one pairing request
-  per `sill-pair/1` connection; `RemoteServer` keeps the remote door's
-  listener), `DoorPolicy` (who each door admits, the ask rule's six steps,
-  `afterGate`, `isTestHost`: a host that does not advertise and is not
-  Sill.app's own executable; pure, `Tests/checks/door-policy`), `CableLink`
+  (admission at a TLS door, one class behind both listeners: the places
+  waiting for admission and their deadlines, the backoff and its line, the
+  verify block, the device gate, one pairing request per `sill-pair/1`
+  connection; `RemoteServer` keeps the remote door's listener), `DoorPolicy`
+  (who each door admits, the ask rule's six steps, `afterGate`,
+  `isTestHost`: a host that does not advertise and is not Sill.app's own
+  executable; `Places`, what waiting for admission costs an address and its
+  IPv6 /64, and the places kept for addresses that proved a paired key; pure,
+  `Tests/checks/door-policy`), `CableLink`
   (whether a connection came over the USB cable to an iPhone or iPad, from
   InterfaceSnapshot's IOKit reading, and the device's ID; pure,
   `Tests/checks/cable-link`), `CableReport` (`--print-cable`), `SessionLock`
   (an unlocked console), `TestHooks` (the door and pairing hooks a host that
   is not a test host ignores, one line each), `AskLimits` (PairingWindow.swift:
   one device-opened window at a time, three in 10 minutes, the quiet after
-  the Mac's Cancel or a stop; `Tests/checks/ask-limits`) and
+  the Mac's Cancel or a stop, an IPv6 asker's by its /64; `Tests/checks/ask-limits`) and
   `RequirePairingValue` (HostIdentity.swift: Require pairing's record, off
   only with the Mac's own signature). StreamServer's home door is plain (the
   CLI without --pairing), TLS (`Door(.home)`, `p` in its TXT record) or
@@ -6929,8 +6963,11 @@ Remote access, headless: TEST ONLY variables, honoured only by a host that
 does not advertise: `SILL_TEST_REMOTE_DIR=<dir>` (the identity and trust list
 in a 0700 directory instead of memory or the keychain; the bare app's
 `-SillPairAfter <s>` leaves `pairing.url` and `pairing.code` there, 0600, never
-printed), `SILL_TEST_PAIRING_TTL=<s>`, `SILL_TEST_BACKOFF_SECONDS=<s>`,
-`SILL_TEST_ORIGIN=vpn|internet` (loopback counts as that origin),
+printed), `SILL_TEST_PAIRING_TTL=<s>`, `SILL_TEST_BACKOFF_SECONDS=<s>` (the backoff a TLS door
+gives an address whose connections waited unadmitted or were refused, five failures in a minute:
+a test client's `--pair-hold`s, refused handshakes or connections it keeps closing, from 127.0.0.1,
+meet it, "Home door backed off 127.0.0.1 for 300 s: …"), `SILL_TEST_ORIGIN=vpn|internet` (loopback
+counts as that origin),
 `SILL_TEST_REMOTE_ORIGIN=vpn|internet` (the same at the remote door alone, so
 one loopback host serves a device away and one at home: away from home's
 H8 and S4) and `SILL_TEST_NO_ROUTER=1` (never ask the router; set it on every
