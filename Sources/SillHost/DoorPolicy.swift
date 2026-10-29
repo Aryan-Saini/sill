@@ -230,20 +230,28 @@ enum DoorPolicy {
     static let requestDeadline: Double = 4
     /// From accept to admission, at the latest, as before.
     static let admissionDeadline: Double = 10
-    /// How long a place is held for `endCost` alone: a device cancels the losers of its own
-    /// staggered dial (1 s apart) once one is ready, within this.
+    /// How long a place is held for `endCost`, or `waitCost` a second, alone: a device cancels the
+    /// losers of its own staggered dial (1 s apart) once one is ready, within this.
     static let freeHold: Double = 2
     /// What a connection that ends unadmitted costs its source at the least, in failures: cycling
     /// connections inside `freeHold` still adds up (50 in a minute back an address off), while an
     /// older Sill's plain try every 2 to 10 s never does (3 a minute at most).
     static let endCost = 0.1
+    /// What each second a place is held costs at the least, in failures: a place held without a
+    /// break costs 6 a minute however its connections are cut, so its address is backed off within
+    /// 50 s, and an address keeps at most 5/6 of a place for as long as it likes. With `endCost`
+    /// alone a connection closed at 2 s cost a twentieth a second, 3 a minute: eight addresses, one
+    /// connection each, held every shared place for good and none was backed off (the review of
+    /// 2026-10-29, its second pass). A connection ended within a second (a plain try, a dial's loser
+    /// cancelled at once) still costs `endCost`.
+    static let waitCost = 0.1
     /// `failuresForBackoff` within `failureWindow` back an address off for `backoffSeconds`, as
     /// before. `groupFailuresForBackoff` within `groupFailureWindow` back an IPv6 /64 off, counting
     /// only its addresses that are not known: more than one address adds before it is backed off
     /// itself (at most about 11: 4.9, then its two places' waits for a kind 19, cut at 8 s), after
     /// which it adds nothing, so no single address backs its /64 off; and over the longer window,
     /// which a host taking a new address for every connection fills even holding one place at the
-    /// cheapest (a tenth every 2 s: 15 in 300 s; two places, within 120 s).
+    /// cheapest (`waitCost` a second: 30 in 300 s, the /64 at 120 s; two places, at 60 s).
     static let failureWindow: Double = 60
     static let failuresForBackoff: Double = 5
     static let groupFailureWindow: Double = 300
@@ -253,11 +261,12 @@ enum DoorPolicy {
     static let knownFor: Double = 86_400
 
     /// What one connection that waited `held` seconds and ended without admission costs its source,
-    /// in failures: `endCost`, and one more for every `freeHold` it waited beyond the first. At least
-    /// one when the door refused it (a key it does not trust, a handshake it failed, a deadline), as
-    /// every refusal cost before.
+    /// in failures: `endCost`, and one more for every `freeHold` it waited beyond the first, and
+    /// never less than `waitCost` for each second it waited (which counts between 1 and 2.25 s). At
+    /// least one when the door refused it (a key it does not trust, a handshake it failed, a
+    /// deadline), as every refusal cost before.
     static func charge(held: Double, refused: Bool) -> Double {
-        let cost = endCost + max(0, held - freeHold) / freeHold
+        let cost = max(endCost + max(0, held - freeHold) / freeHold, held * waitCost)
         return refused ? max(1, cost) : cost
     }
 

@@ -358,13 +358,21 @@ check("places: 8 for anyone, 2 more for known addresses, 2 per source",
       D.sharedPlaces == 8 && D.reservedPlaces == 2 && D.placesPerSource == 2)
 check("places: 4 s to be ready (10 s from a known address), then 4 s for the kind 19, 10 s at most from accept",
       D.handshakeDeadline == 4 && D.requestDeadline == 4 && D.admissionDeadline == 10)
-check("places: 2 s waited for a tenth of a failure; 5 failures in 60 s → an address refused for 300 s, 12 in 300 s → its /64; known for a day",
-      D.freeHold == 2 && D.endCost == 0.1 && D.failureWindow == 60 && D.failuresForBackoff == 5 && D.groupFailureWindow == 300
+check("places: 2 s waited for a tenth of a failure, a tenth a second at least; 5 failures in 60 s → an address refused for 300 s, 12 in 300 s → its /64; known for a day",
+      D.freeHold == 2 && D.endCost == 0.1 && D.waitCost == 0.1 && D.failureWindow == 60 && D.failuresForBackoff == 5 && D.groupFailureWindow == 300
       && D.groupFailuresForBackoff == 12 && D.backoffSeconds == 300 && D.knownFor == 86_400)
 
 // What a connection that ends unadmitted costs.
-check("charge: ended within 2 s → a tenth (0 s, 1.99 s, 2 s)",
-      near(D.charge(held: 0, refused: false), 0.1) && near(D.charge(held: 1.99, refused: false), 0.1) && near(D.charge(held: 2, refused: false), 0.1))
+check("charge: ended within a second → a tenth (0 s, 0.5 s, 1 s)",
+      near(D.charge(held: 0, refused: false), 0.1) && near(D.charge(held: 0.5, refused: false), 0.1) && near(D.charge(held: 1, refused: false), 0.1))
+// The review of 2026-10-29, its second pass: a tenth for each second waited at least. With the tenth
+// alone, a connection closed at 2 s cost a twentieth a second, 3 a minute, under an address's 5: one
+// connection at a time from each of eight addresses held every shared place for good.
+check("charge: a tenth a second at least between 1 and 2.25 s (1.5 s 0.15, 1.99 s 0.199, 2 s 0.2, 2.25 s 0.225; 2.5 s 0.35 as before)",
+      near(D.charge(held: 1.5, refused: false), 0.15) && near(D.charge(held: 1.99, refused: false), 0.199) && near(D.charge(held: 2, refused: false), 0.2)
+      && near(D.charge(held: 2.25, refused: false), 0.225) && near(D.charge(held: 2.5, refused: false), 0.35))
+check("charge: a place held costs a tenth a second at least, however long its connections (every 0.05 s up to 10 s)",
+      stride(from: 0.05, through: 10, by: 0.05).allSatisfy { D.charge(held: $0, refused: false) + 1e-12 >= $0 * D.waitCost })
 check("charge: one failure for every 2 s beyond the first 2: 3 s 0.6, 4 s 1.1, 9.9 s 4.05",
       near(D.charge(held: 3, refused: false), 0.6) && near(D.charge(held: 4, refused: false), 1.1) && near(D.charge(held: 9.9, refused: false), 4.05))
 check("charge: a refusal costs at least one failure, as before, and more for a place held long (3.9 s 1.05, 9.9 s 4.05)",
@@ -613,7 +621,7 @@ check("leave: let go by the Mac (Direct Wireless off) costs nothing", cost(.drop
 check("leave: ended by itself costs charge(held:)", near(cost(.ended, held: 1), 0.1) && near(cost(.ended, held: 3.9), 1.05)
       && near(cost(.ended, held: 7.9, readyAfter: 3.9), 3.05))
 check("leave: a pairing connection's kind 19 costs as one that ended then, never a refusal (the review of 2026-10-29: it cost nothing)",
-      near(cost(.request, held: 0.1, readyAfter: 0.05), 0.1) && near(cost(.request, held: 1.9, readyAfter: 0.05), 0.1)
+      near(cost(.request, held: 0.1, readyAfter: 0.05), 0.1) && near(cost(.request, held: 1.9, readyAfter: 0.05), 0.19)
       && near(cost(.request, held: 7.9, readyAfter: 3.9), 3.05))
 check("leave: refused costs at least one", near(cost(.refused, held: 0.2), 1) && near(cost(.refused, held: 4), 1.1))
 check("leave: a known address pays as one not known at most (9.9 s: 1.1; 3 s: 0.6; refused at once: 1)",
@@ -827,7 +835,7 @@ check("new rule, the scan's attack: a device not yet known gets in once the hold
 check("new rule, the scan's attack: 3 rounds of 2 from each address, then no place again within the 300 s (\(scan.holderConnections) connections in all)",
       scan.holderConnections == 4 * 6)
 // Variants: closing just before a charge or a deadline, and the pairing ALPN's handshake.
-for (hold, within) in [(1.9, 50.0), (3.9, 13.0), (0.5, 15.0), (0.05, 5.0)] {
+for (hold, within) in [(1.9, 27.0), (3.9, 13.0), (0.5, 15.0), (0.05, 5.0)] {
     let o = simulate(Places(), holders: holdersOn(four, hold: hold), device: paired, known: true, seconds: 70)
     let last = o.backedOffAt.values.max() ?? .infinity
     check("new rule, holders closing at \(hold) s: all 4 backed off within \(within) s (last at \(last) s); the paired device admitted at every try",
@@ -856,8 +864,33 @@ let askLate = simulate(Places(), holders: holdersOn(four, hold: 30, readyAfter: 
 check("new rule, a kind 19 at the last moment (ready at 3.9 s, the kind 19 3.9 s later, 3.0 each): all 4 backed off at their first two (last at \(askLate.backedOffAt.values.max() ?? -1) s)",
       askLate.backedOffAt.count == 4 && (askLate.backedOffAt.values.max() ?? .infinity) <= 8 && askLate.deviceIn == askLate.deviceTries)
 let askCheap = simulate(Places(), holders: holdersOn(four, hold: 30, readyAfter: 0.05, request: 1.85), device: paired, known: true, seconds: 70)
-check("new rule, the cheapest kind 19 (1.9 s in, a tenth each): all 4 backed off within 50 s (last at \(askCheap.backedOffAt.values.max() ?? -1) s), as closing at 1.9 s",
-      askCheap.backedOffAt.count == 4 && (askCheap.backedOffAt.values.max() ?? .infinity) <= 50 && askCheap.deviceIn == askCheap.deviceTries)
+check("new rule, the cheapest kind 19 (1.9 s in, 0.19 each): all 4 backed off within 27 s (last at \(askCheap.backedOffAt.values.max() ?? -1) s), as closing at 1.9 s",
+      askCheap.backedOffAt.count == 4 && (askCheap.backedOffAt.values.max() ?? .infinity) <= 27 && askCheap.deviceIn == askCheap.deviceTries)
+// The review of 2026-10-29, its second pass: one connection at a time from each of eight addresses,
+// each closed at 2 s and made again at once. With a tenth for each end alone (a twentieth a second,
+// 3 a minute, under an address's 5) they held every shared place for 10 minutes, none was backed off,
+// and a device not yet known was refused at all 300 tries; the rule before held them for good too.
+// Now each second held costs a tenth at least (`waitCost`): 6 a minute for a place held without a break.
+let eight = (1...8).map { "10.0.5.\($0)" }
+for hold in [2.0, 1.9] {
+    let o = simulate(Places(), holders: eight.map { Holder(addresses: [v4($0)], hold: hold, per: 1) }, device: Device(source: v4("10.0.0.20")), seconds: 120)
+    let last = o.backedOffAt.values.max() ?? .infinity
+    check("new rule, eight addresses holding one place each, closing at \(hold) s: all 8 backed off within 52 s (last at \(last) s); a device not yet known in from then on (first at \(o.firstIn ?? -1) s, \(o.deviceIn) of \(o.deviceTries))",
+          o.backedOffAt.count == 8 && last <= 52 && (o.firstIn ?? .infinity) <= last + 2.1 && o.deviceIn >= o.deviceTries - 27 && o.maxHolderPlaces == 8)
+}
+let eightOld = simulate(OldPlaces(), holders: eight.map { Holder(addresses: [v4($0)], hold: 2.0, per: 1) }, device: Device(source: v4("10.0.0.20")), seconds: 120)
+check("old rule, the same: every place held for good, nobody backed off, the device refused throughout",
+      eightOld.maxHolderPlaces == 8 && eightOld.backedOffAt.isEmpty && eightOld.deviceIn == 0)
+// What stays (the plan's "What stays open"): an address keeps about 4/5 of a place for good, so ten
+// addresses taking turns could keep the 8 shared places full. One connection held 2 s in every 2.5 s
+// (24 ends in any minute, 4.8): never backed off; in every 2.45 s (25 ends, 5.0): backed off.
+func paced(every: Double) -> [String] {
+    var p = Places(), backed: [String] = [], t = 0.0, n = 0
+    while t < 600 { n += 1; _ = p.arrive(n, v4("10.0.6.1"), now: t); backed += p.leave(n, .ended, now: t + 2); t += every }
+    return backed
+}
+check("new rule, a trade-off: one place held 2 s in every 2.5 s (4/5 of a place, 4.8 a minute) is never backed off; in every 2.45 s it is",
+      paced(every: 2.5).isEmpty && paced(every: 2.45).first == "10.0.6.1")
 // IPv6: any number of addresses in one /64, each trying to keep 2 places.
 let g64 = "2601:600:1:2::/64"
 let v6holders = (1...8).map { Holder(addresses: [src("2601:600:1:2::\($0)")], hold: 9.9) }
@@ -865,11 +898,11 @@ let v6new = simulate(Places(), holders: v6holders, device: Device(source: v4("10
 check("new rule, 8 addresses of one /64: 2 places at most, the /64 backed off within 25 s (at \(v6new.backedOffAt[g64] ?? -1) s), an unknown IPv4 device admitted at every try",
       v6new.maxHolderPlaces == 2 && (v6new.backedOffAt[g64] ?? .infinity) <= 25 && v6new.firstIn == 1.05 && v6new.deviceIn == v6new.deviceTries)
 let v6churn = simulate(Places(), holders: [Holder(addresses: (1...500).map { src("2601:600:1:2::\($0)") }, hold: 1.9)], device: nil, seconds: 200)
-check("new rule, one host taking a new address of its /64 for every connection, closing at 1.9 s: no address ever backed off, the /64 within 120 s (at \(v6churn.backedOffAt[g64] ?? -1) s)",
-      v6churn.backedOffAt.keys.sorted() == [g64] && (v6churn.backedOffAt[g64] ?? .infinity) <= 120)
+check("new rule, one host taking a new address of its /64 for every connection, closing at 1.9 s: no address ever backed off, the /64 within 62 s (at \(v6churn.backedOffAt[g64] ?? -1) s)",
+      v6churn.backedOffAt.keys.sorted() == [g64] && (v6churn.backedOffAt[g64] ?? .infinity) <= 62)
 let v6one = simulate(Places(), holders: [Holder(addresses: (1...500).map { src("2601:600:1:2::\($0)") }, hold: 2.0, per: 1)], device: nil, seconds: 320)
-check("new rule, the same holding one place at the cheapest (closing at 2.0 s): the /64 within 300 s (at \(v6one.backedOffAt[g64] ?? -1) s)",
-      v6one.backedOffAt.keys.sorted() == [g64] && (v6one.backedOffAt[g64] ?? .infinity) <= 300)
+check("new rule, the same holding one place at the cheapest (closing at 2.0 s, a tenth a second): the /64 within 121 s (at \(v6one.backedOffAt[g64] ?? -1) s)",
+      v6one.backedOffAt.keys.sorted() == [g64] && (v6one.backedOffAt[g64] ?? .infinity) <= 121)
 let v6old = simulate(OldPlaces(), holders: v6holders, device: Device(source: v4("10.0.0.20")), seconds: 60)
 check("old rule, 8 addresses of one /64: every place held, nobody backed off, the device refused throughout",
       v6old.maxHolderPlaces == 8 && v6old.backedOffAt.isEmpty && v6old.deviceIn == 0)

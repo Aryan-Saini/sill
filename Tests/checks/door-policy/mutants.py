@@ -82,8 +82,16 @@ M = [
     ("after the gate: home keeps a removed key while Require pairing is off", F, "            if wasPaired { return Goodbye.removed }\n", ""),
     # Finding 9 of the security scan of 2026-10-18: the places waiting for admission (DoorPolicy.Places).
     ("places: ending inside the free hold costs nothing (the scan's own suggestion: cycling at 1.9 s free)", F,
-     "        let cost = endCost + max(0, held - freeHold) / freeHold", "        let cost = max(0, held - freeHold) / freeHold"),
-    ("places: no free hold (every second waited costs)", F, "        let cost = endCost + max(0, held - freeHold) / freeHold", "        let cost = endCost + held / freeHold"),
+     "        let cost = max(endCost + max(0, held - freeHold) / freeHold, held * waitCost)", "        let cost = max(0, held - freeHold) / freeHold"),
+    ("places: no free hold (every second waited costs)", F, "        let cost = max(endCost + max(0, held - freeHold) / freeHold, held * waitCost)",
+     "        let cost = max(endCost + held / freeHold, held * waitCost)"),
+    # The review of 2026-10-29, its second pass: with a tenth for each end alone, one connection at a
+    # time from each of eight addresses, closed at 2 s, held every shared place for good.
+    ("places: waiting costs the tenth alone inside the free hold (eight addresses, one place each, never backed off)", F,
+     "        let cost = max(endCost + max(0, held - freeHold) / freeHold, held * waitCost)",
+     "        let cost = endCost + max(0, held - freeHold) / freeHold"),
+    ("places: a second of waiting costs a twentieth (a place held without a break stays under an address's 5)", F,
+     "    static let waitCost = 0.1", "    static let waitCost = 0.05"),
     ("places: a refusal may cost less than one failure", F, "        return refused ? max(1, cost) : cost", "        return cost"),
     ("places: a refusal costs one, whatever it held", F, "        return refused ? max(1, cost) : cost", "        return refused ? 1 : cost"),
     ("places: a known address has the 4 s handshake too", F,

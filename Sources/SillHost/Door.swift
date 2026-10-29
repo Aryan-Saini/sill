@@ -7,19 +7,19 @@ import StreamProtocol
 /// (StreamServer's Bonjour listener in Sill.app and SillHost --pairing). Who gets in is
 /// DoorPolicy's, so a rule changes in one place; this runs it. RemoteServer's admission, moved.
 ///
-/// Before admission a connection is cheap to refuse, and waiting costs (DoorPolicy.Places, finding 9
-/// of the security scan of 2026-10-18): 8 places for anyone and 2 more for addresses that recently
-/// proved a paired key, 2 per source (an IPv6 address answers for its /64 too), 4 s for the TLS
-/// handshake (10 s from a known address) and 4 s after it for a pairing connection's kind 19, 10 s
-/// in all. A connection that ends unadmitted, and a pairing connection when its kind 19 comes,
-/// costs its address (and, from an address not known, its /64) a tenth of a failure, one more for
-/// every 2 s it waited beyond the first 2, and at least one when the door refused it; 5 failures
-/// within 60 s refuse the address for 300 s, 12 within 300 s its /64 (but not the /64's known
-/// addresses), and a paired key clears its address's count. Sources the door does not admit are
-/// cancelled before the connection starts, so they get no byte, and judged again at `.preparing`,
-/// `.ready` and at kind 19. The verify block decides trust from the lock-protected TrustSnapshot
-/// and the negotiated ALPN (DoorPolicy.trusts). Refusals and backoffs are counted and reported at
-/// most once a minute, one line each per door.
+/// Before admission a connection is cheap to refuse, and waiting costs (DoorPolicy.Places, finding
+/// 9 of the security scan of 2026-10-18): 8 places for anyone and 2 more for addresses that
+/// recently proved a paired key, 2 per source (an IPv6 address answers for its /64 too), 4 s for
+/// the TLS handshake (10 s from a known address) and 4 s after it for a pairing connection's kind
+/// 19, 10 s in all. A connection that ends unadmitted, and a pairing connection when its kind 19
+/// comes, costs its address (and, from an address not known, its /64) a tenth of a failure, one
+/// more for every 2 s it waited beyond the first 2, never less than a tenth for each second it
+/// waited, and at least one when the door refused it; 5 failures within 60 s refuse the address for
+/// 300 s, 12 within 300 s its /64 (but not the /64's known addresses), and a paired key clears its
+/// address's count. Sources the door does not admit are cancelled before the connection starts, so
+/// they get no byte, and judged again at `.preparing`, `.ready` and at kind 19. The verify block
+/// decides trust from the lock-protected TrustSnapshot and the negotiated ALPN (DoorPolicy.trusts).
+/// Refusals and backoffs are counted and reported at most once a minute, one line each per door.
 ///
 /// Admitted sessions pass the device gate here, one place for both doors (DeviceGate; with the
 /// floor above "0" the hello, the first message inside TLS, is read before anything is registered,
@@ -492,11 +492,12 @@ final class Door {
 
     /// A connection that ended before it was admitted costs its address and its /64
     /// (DoorPolicy.Places): at least one failure when the door refused it (marked by `refuse`, or a
-    /// handshake the door failed, DoorPolicy.handshakeRefusal, counted for the summary here), else a
-    /// tenth of one and one more for every 2 s it waited beyond the first 2. A device that cancels the
-    /// losers of its own staggered dial within that, or gives up on a Mac whose key it no longer pins,
-    /// never adds up to a backoff, nor does an older Sill's plain try at the home door (-9836), which
-    /// is counted and shown instead and costs a tenth, so an iPad updated after a few plain retries is
+    /// handshake the door failed, DoorPolicy.handshakeRefusal, counted for the summary here), else
+    /// a tenth of one and one more for every 2 s it waited beyond the first 2, never less than a
+    /// tenth for each second it waited (DoorPolicy.waitCost). A device that cancels the losers of
+    /// its own staggered dial within that, or gives up on a Mac whose key it no longer pins, never
+    /// adds up to a backoff, nor does an older Sill's plain try at the home door (-9836), which is
+    /// counted and shown instead and costs a tenth, so an iPad updated after a few plain retries is
     /// not refused for 5 minutes; connections that wait for nothing do, their address refused for
     /// 300 s. Direct Wireless turned off (`cancelPending`) costs nothing.
     private func endedBeforeAdmission(_ id: ObjectIdentifier, error: NWError?) {
