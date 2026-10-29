@@ -1,4 +1,4 @@
-"""(integrate-12: follow-best-path's 61 mutants, unchanged, and R1-R9 of the merge's remote rule, against the merged file and policy-merge/main.swift.) Each mutant of DiscoveryPolicy's session route (P: route, S: sessionRoute/describesFlow), of the wired dial (D: dialInterface, W: wiredWait), of following the best path (F: pathPlan, pathGone, PathSightings, freshWifi, wifiInterface, rank) and of its review fixes (G: the reconnect over the cable, the refused listing, upWait), and of a row's kept TXT record (T: rowRecords, records.swift: the cable pulled; a browser made again starts afresh) must fail the policy check. usage: mutants.py"""
+"""(integrate-12: follow-best-path's 61 mutants, unchanged, and R1-R9 of the merge's remote rule, against the merged file and policy-merge/main.swift.) Each mutant of DiscoveryPolicy's session route (P: route, S: sessionRoute/describesFlow), of the wired dial (D: dialInterface, W: wiredWait), of following the best path (F: pathPlan, pathGone, PathSightings, freshWifi, wifiInterface, rank) and of its review fixes (G: the reconnect over the cable, the refused listing, upWait), and of a row's kept TXT record (T: rowRecords, records.swift: the cable pulled; a browser made again starts afresh), and of the reconnect of an unsaved open door pinned to the key its lost session saw (O: reconnectTrust, reconnectKey, homeEnd's otherKey, home.swift: the security scan's finding 3) must fail the policy check. usage: mutants.py"""
 import os, subprocess, sys
 SP = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(SP, "..", "..", ".."))   # the repository
@@ -246,15 +246,15 @@ MUTANTS = {
     "S4 copy: openOnMac names no menu": ("\"\\(mac) didn\\u{2019}t show a code. On the Mac, choose Pair iPhone or iPad\\u{2026} in the Sill menu, then tap \\(mac) again.\"", "\"\\(mac) didn\\u{2019}t show a code.\""),
     # The reconnect of an unsaved Mac on an open door pinned to the key its lost session saw (home.swift: the
     # security scan's finding 3, 2026-10-29), with the model of the glue.
-    "F3a reconnectTrust: any key again (as before the fix)": ("        if dial == .anyKey, let seen { return .open(seen: seen) }\n", ""),
-    "F3b reconnectTrust: a saved Mac's reconnect pinned to the seen key": (
+    "O1 reconnectTrust: any key again (as before the fix)": ("        if dial == .anyKey, let seen { return .open(seen: seen) }\n", ""),
+    "O2 reconnectTrust: a saved Mac's reconnect pinned to the seen key": (
         "        if dial == .anyKey, let seen { return .open(seen: seen) }", "        if dial == .anyKey || dial == .pinned, let seen { return .open(seen: seen) }"),
-    "F3c reconnectKey: the lost session's key forgotten": ("        if case .open(let seen?) = trust { return seen }\n        return nil", "        return nil"),
-    "F3d homeEnd: another key at the pinned reconnect read as the ordinary end (dialed on)": (
+    "O3 reconnectKey: the lost session's key forgotten": ("        if case .open(let seen?) = trust { return seen }\n        return nil", "        return nil"),
+    "O4 homeEnd: another key at the pinned reconnect read as the ordinary end (dialed on)": (
         "            if seen != nil, tls == pinRefused { return .otherKey }\n", ""),
-    "F3e homeEnd: an open session that saw no key ends otherKey too": (
+    "O5 homeEnd: an open session that saw no key ends otherKey too": (
         "            if seen != nil, tls == pinRefused { return .otherKey }", "            if tls == pinRefused { return .otherKey }"),
-    "F3f homeEnd: otherKey read as pairingRequired": (
+    "O6 homeEnd: otherKey read as pairingRequired": (
         "            if seen != nil, tls == pinRefused { return .otherKey }", "            if seen != nil, tls == pinRefused { return .pairingRequired }"),
     # A row keeps its TXT record while its result stays listed (records.swift: the cable pulled, 2026-10-27);
     # a browser made again starts afresh (the review of #232); each result of a name keeps its own.
