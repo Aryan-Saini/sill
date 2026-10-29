@@ -6718,10 +6718,12 @@ good.
   keys, with `_silltest._tcp` beside `_sill._tcp` for the harness's
   `-SillServiceType` (Release declares `_sill._tcp` alone).
   `PrivacyInfo.xcprivacy`, a resource of the target, is the privacy manifest:
-  it declares UserDefaults (CA92.1) and `systemUptime` (35F9.1), and any new
-  use of a required-reason API (file dates, disk space, `mach_absolute_time`,
-  active keyboards) must add its category and reason there before the next
-  upload. New files need their four pbxproj entries by hand.
+  it declares UserDefaults (CA92.1), `systemUptime` (35F9.1) and the active
+  keyboards (54BD.1: `UITextInputMode.activeInputModes`, which decides whether ⌃Space is
+  iPadOS's keyboard switch or the Mac's, #138; found by release-ios.sh's check on 2026-10-29,
+  which refuses an export App Store Connect would refuse, ITMS-91053), and any new use of a
+  required-reason API (file dates, disk space, `mach_absolute_time`) must add its category
+  and reason there before the next upload. New files need their four pbxproj entries by hand.
   Swift 5 language mode.
 - `docs/BRIEF.md` — product decisions, competition, scope, risks.
 - `docs/DEVELOPMENT.md` — building, running and testing from source; the
