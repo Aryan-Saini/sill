@@ -12,8 +12,8 @@ import StreamProtocol
 ///   The count as it stands when the first subscribes is taken as seen: what was on the clipboard then
 ///   is never sent, only what is copied while a device shares it. A change ClipboardPolicy.hostDecides
 ///   takes goes to every subscriber; one whose pasteboard has no items yet is looked at again for up
-///   to a second first (`hostWaits`: an app clears, then writes). A password manager's copy
-///   (`markerTypes`) and one from another device through Universal Clipboard are never read.
+///   to a second first (`hostWaits`: an app clears, then writes). One from another device through
+///   Universal Clipboard is never read; a password manager's copy goes like any other (2026-10-29).
 /// - A device's text becomes the pasteboard's, written for this Mac only (`.currentHostOnly`: Universal
 ///   Clipboard does not carry it to the person's other devices, the sender among them) with the
 ///   marker `ClipboardPolicy.ownType` naming this launch; it goes to every other subscriber at once,

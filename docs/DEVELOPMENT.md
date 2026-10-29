@@ -893,10 +893,7 @@ once; `-SillSetAfter '<s> shareClipboard=0'` in the bare app) and the CLI's
 `clipboard` 1. With both on, the device subscribes with an empty kind 32 and
 the Mac sends it the text copied on the Mac while it is subscribed, four looks
 a second at the pasteboard's change count. What was on the clipboard when the
-first device subscribed is never sent, nor anything a password manager or
-another app marks `org.nspasteboard.ConcealedType` or
-`org.nspasteboard.TransientType` (or three older markers: ClipboardPolicy's
-`markerTypes`), nor what came from another device through Universal Clipboard
+first device subscribed is never sent, nor what came from another device through Universal Clipboard
 (`com.apple.is-remote-clipboard`: reading it would fetch it from there), nor
 the Mac's own write; a pasteboard with no items yet is looked at again for up
 to a second (an app clears it, then writes, and only the clear moves the

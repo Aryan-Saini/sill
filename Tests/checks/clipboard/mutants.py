@@ -23,16 +23,12 @@ MUTANTS = [
     ("stopping says nothing", P, "public static var stopping: Data { Wire.encode(Clipboard(stop: true)) }", "public static var stopping: Data { Wire.encode(Clipboard()) }"),
     # The host.
     ("its own change count not its own", P, "if let own = ownChangeCount, own == changeCount { return .skip(.own) }\n", ""),
-    ("no marker skipped", P, "if types.contains(where: { markerTypes.contains($0) }) { return .skip(.marked) }\n", ""),
-    ("the concealed marker misspelt", P, 'public static let concealedType = "org.nspasteboard.ConcealedType"', 'public static let concealedType = "org.nspasteboard.Concealed"'),
-    ("the transient marker misspelt", P, 'public static let transientType = "org.nspasteboard.TransientType"', 'public static let transientType = "org.nspasteboard.transientType"'),
-    ("1Password's own marker left out", P, '"de.petermaurer.TransientPasteboardType", "com.agilebits.onepassword"]', '"de.petermaurer.TransientPasteboardType"]'),
     ("an empty pasteboard decided at once", P, "types.isEmpty && now - firstLook < settleWindow", "false && now - firstLook < settleWindow"),
     ("the settle window's end inside it", P, "types.isEmpty && now - firstLook < settleWindow", "types.isEmpty && now - firstLook <= settleWindow"),
     ("Universal Clipboard's copies sent", P, "        if types.contains(remoteClipboardType) { return .skip(.remote) }\n", ""),
     ("the text read before the markers", P,
-     "        if types.contains(where: { markerTypes.contains($0) }) { return .skip(.marked) }\n        if types.contains(remoteClipboardType) { return .skip(.remote) }\n        if types.contains(ownType), ownMarker() == launchID { return .skip(.own) }\n        guard let text = text() else { return .skip(.noText) }\n",
-     "        let read = text()\n        if types.contains(where: { markerTypes.contains($0) }) { return .skip(.marked) }\n        if types.contains(remoteClipboardType) { return .skip(.remote) }\n        if types.contains(ownType), ownMarker() == launchID { return .skip(.own) }\n        guard let text = read else { return .skip(.noText) }\n"),
+     "        if types.contains(remoteClipboardType) { return .skip(.remote) }\n        if types.contains(ownType), ownMarker() == launchID { return .skip(.own) }\n        guard let text = text() else { return .skip(.noText) }\n",
+     "        let read = text()\n        if types.contains(remoteClipboardType) { return .skip(.remote) }\n        if types.contains(ownType), ownMarker() == launchID { return .skip(.own) }\n        guard let text = read else { return .skip(.noText) }\n"),
     ("any launch's marker is its own", P, "if types.contains(ownType), ownMarker() == launchID { return .skip(.own) }", "if types.contains(ownType), ownMarker() != nil { return .skip(.own) }"),
     ("its marker read without its type", P, "if types.contains(ownType), ownMarker() == launchID { return .skip(.own) }", "if ownMarker() == launchID { return .skip(.own) }"),
     # macOS's paste privacy (the review's finding: the host read whatever macOS said).
@@ -96,8 +92,8 @@ MUTANTS = [
     ("a receipt waited for twice the round trip", P, "{ max(4, 4 * Double(worstRttMs ?? 0) / 1000) }", "{ max(4, 2 * Double(worstRttMs ?? 0) / 1000) }"),
     ("the chip under the link's line", P, "landscape && !linkLineShown ? .topTrailing : .bottomTrailing", "landscape ? .topTrailing : .bottomTrailing"),
     ("the cap in thousands", P, 'public static var cap: String { "\\(Clipboard.maxTextBytes / 1024) KB" }', 'public static var cap: String { "\\(Clipboard.maxTextBytes / 1000) KB" }'),
-    ("the Mac's footnote promises every password manager's copy (the review's copy finding)", P,
-     "Copies a password manager marks as concealed stay on this Mac.\"", "A password manager’s copies stay on this Mac.\""),
+    ("the Mac's footnote excepts a password manager's copies again", P,
+     "with Paste becomes this Mac’s.\"", "with Paste becomes this Mac’s. Copies a password manager marks as concealed stay on this Mac.\""),
     ("the subtitle without the key", P, 'public static let chipSubtitle = "Then press ⌘V there."', 'public static let chipSubtitle = "Then paste there."'),
 ]
 caught = 0
