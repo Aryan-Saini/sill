@@ -1053,10 +1053,17 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
             // ⌃Space with keyboards in two languages or more set up in iOS Settings: iPadOS's switch
             // between them (to Zhuyin, say), never the Mac's; with one, the Mac's shortcut, as before
             // (TextInputRules.isKeyboardSwitch, #138). At the press only: its release follows it, to the
-            // text system unless the press went to the Mac (`forwarded`).
+            // text system unless the press went to the Mac (`forwarded`). The Mac never hears this Space go
+            // down, which on a Mac stops the key repeating before it: the keys held down on the Mac but
+            // the modifiers come up now (ForwardedKeys.keyboardSwitch), or a letter held across the switch
+            // went on repeating there, as ⌃P while ⌃ was down.
             if down, TextInputRules.isKeyboardSwitch(usage: usage, modifiers: modifiers,
                                                      keyboards: UITextInputMode.activeInputModes.compactMap(\.primaryLanguage)) {
-                Self.hwkey(usage, down: down, via: channel, modifiers: modifiers, to: "iPadOS's keyboard switch")
+                let ups = forwarded.keyboardSwitch()
+                ups.forEach(send)
+                Self.hwkey(usage, down: down, via: channel, modifiers: modifiers, to: "iPadOS's keyboard switch"
+                           + (ups.isEmpty ? "" : "; let go on the Mac: " + ups.map { event -> String in
+                               if case .key(let u, _, _) = event { return "usage \(u)" } else { return "\(event)" } }.joined(separator: ", ")))
                 unhandled.insert(press)
                 continue
             }

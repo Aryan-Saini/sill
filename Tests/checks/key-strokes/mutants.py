@@ -169,6 +169,14 @@ MUTANTS = [
     ("a key's down carries UIKit's flags alone", CHORDS, "modifiers: isModifier ? held : Self.carried(usage, modifiers: modifiers))", "modifiers: isModifier ? held : modifiers)"),
     ("the letters end at Y", CHORDS, "static let letterUsages: ClosedRange<UInt16> = 0x04...0x1D", "static let letterUsages: ClosedRange<UInt16> = 0x04...0x1C"),
     ("the device's caps lock bit is the numeric pad's", CHORDS, "static let capsLock = KeyModifiers(rawValue: 1 << 16)", "static let capsLock = KeyModifiers(rawValue: 1 << 21)"),
+    # The device: iPadOS's ⌃Space switch, whose Space the Mac never hears (the review of #162's letters)
+    ("iPadOS's switch lets nothing up (a held letter repeats on through it, ⌃P)", CHORDS,
+     "            if let up = ended(usage) { ups.append(up) }\n        }\n        return ups\n    }\n\n    // MARK: A key command's key (Esc)",
+     "            _ = usage\n        }\n        return ups\n    }\n\n    // MARK: A key command's key (Esc)"),
+    ("iPadOS's switch lets the modifiers' own keys up too", CHORDS,
+     "for usage in down.reversed() where KeyModifiers.flag(forKey: usage) == nil {", "for usage in down.reversed() {"),
+    ("iPadOS's switch lets the first pressed up first", CHORDS,
+     "for usage in down.reversed() where KeyModifiers.flag(forKey: usage) == nil {", "for usage in down where KeyModifiers.flag(forKey: usage) == nil {"),
     # The device: Esc's key command, one key press sent once (#67)
     ("a press the command sent goes again (no swallowing)", CHORDS, "if let sent = commandedAt[usage], time <= sent {",
      "if let sent = commandedAt[usage], time <= sent - 1000 {"),

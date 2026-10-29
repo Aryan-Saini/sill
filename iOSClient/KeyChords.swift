@@ -274,6 +274,22 @@ struct ForwardedKeys {
         return ups
     }
 
+    /// iPadOS took a key's press for its own switch between keyboards (⌃Space with keyboards in two
+    /// languages: TextInputRules.isKeyboardSwitch), a key down the Mac never hears. On a Mac a key's down
+    /// stops the key repeating before it (KeyRepeat, on the host), so every key down on the Mac but the
+    /// modifiers' own comes up now, the last pressed first, each with the modifier keys still down there;
+    /// a modifier's own key stays down for its own release (⌃'s, the switch's own). A key let go here has
+    /// its release go to the text system later, as after `releaseAll`. Without it a letter or an arrow held
+    /// across ⌃Space went on repeating on the Mac, with control while ⌃ was down (⌃P, a line up; ⌃→, the
+    /// next Space), then plain, until it came up.
+    mutating func keyboardSwitch() -> [InputEvent] {
+        var ups: [InputEvent] = []
+        for usage in down.reversed() where KeyModifiers.flag(forKey: usage) == nil {
+            if let up = ended(usage) { ups.append(up) }
+        }
+        return ups
+    }
+
     // MARK: A key command's key (Esc)
 
     // iPadOS can keep a hardware Escape from pressesBegan (#67), so InputOverlayView also has key

@@ -1745,7 +1745,8 @@ do {
     check(events == before, "⌘S, ←, Esc by both channels and by its press: the same whoever types: \(events)")
 }
 // A key's way is decided at its down: A down while the Mac types, the keyboard switched to one iPadOS
-// types (⌃Space to Zhuyin, say), A's up still to the Mac; and the other way, nothing to the Mac.
+// types (by the Globe key, say: ⌃Space lets the keys held come up at its Space, below), A's up still to the
+// Mac; and the other way, nothing to the Mac.
 do {
     var kb = Keyboard(); kb.typing = .keys
     var events = kb.press(uA)
@@ -1764,6 +1765,58 @@ do {
     around += held.press(uA) + held.release(uA) + held.release(uLShift)
     check(around == [key(uLShift, true, shift), .text("x"), key(uLShift, false, 0)], "Shift held across a switch: \(around)")
     _ = onBothMacs(events + around, "keys across a switch")
+}
+// ⌃Space as iPadOS's own switch between keyboards (two languages set up: TextInputRules.isKeyboardSwitch, judged
+// in the overlay before `pressed`): the Space goes to iPadOS, so the Mac never hears a key go down, which on a Mac
+// stops the key repeating before it (KeyRepeat). Every key down on the Mac but the modifiers' own comes up at the
+// Space (ForwardedKeys.keyboardSwitch), the last pressed first, ⌃ (and ⇧) at their own releases; the keys' own
+// releases later are the text system's. Before, a letter held across the switch went on repeating on the Mac, with
+// control while ⌃ was down (⌃P, a line up), then plain until it came up.
+extension Keyboard {
+    /// The Space of ⌃Space taken by iPadOS (InputOverlayView.forward's switch): a key down the Mac never hears,
+    /// and the ups the switch sends.
+    mutating func iPadOSSwitch() -> [InputEvent] {
+        guard !physical.contains(uSpace) else { return [] }
+        physical.append(uSpace)
+        time += 0.2
+        return forwarded.keyboardSwitch()
+    }
+}
+do {
+    var kb = Keyboard(); kb.typing = .keys
+    var events = kb.press(uP) + kb.press(uLCtrl) + kb.iPadOSSwitch()
+    kb.typing = .text                                      // now Zhuyin, say
+    events += kb.release(uSpace) + kb.release(uLCtrl) + kb.release(uP)
+    check(events == [key(uP, true, 0), key(uLCtrl, true, control), key(uP, false, control), key(uLCtrl, false, 0)],
+          "P held across iPadOS's ⌃Space: P up at the Space, ⌃ at its own release, P's release nothing: \(events)")
+    check(kb.forwarded.down.isEmpty, "P held across iPadOS's ⌃Space: nothing left down")
+    expect(onBothMacs(events, "P held across iPadOS's ⌃Space"),
+           [.key(35, true, 0), .key(59, true, control), .key(35, false, control), .key(59, false, 0)],
+           "P held across iPadOS's ⌃Space on the Mac: P's up while ⌃ is down, before any other key")
+    // ⇧, P and ← held: both keys up, the last pressed first, with what the modifier keys hold; ⇧ stays down for
+    // its own release.
+    var two = Keyboard(); two.typing = .keys
+    var held = two.press(uLShift) + two.press(uP) + two.press(uLeft) + two.press(uLCtrl) + two.iPadOSSwitch()
+    held += two.release(uSpace) + two.release(uLCtrl) + two.release(uLeft) + two.release(uP) + two.release(uLShift)
+    check(held == [key(uLShift, true, shift), key(uP, true, shift), key(uLeft, true, shift), key(uLCtrl, true, shift | control),
+                   key(uLeft, false, shift | control), key(uP, false, shift | control), key(uLCtrl, false, shift), key(uLShift, false, 0)],
+          "⇧, P and ← held across iPadOS's ⌃Space: \(held)")
+    _ = onBothMacs(held, "⇧, P and ← held across iPadOS's ⌃Space")
+    // An arrow held while iPadOS types the characters (it repeats on every Mac with key repeat): the same.
+    var arrow = Keyboard()
+    let a = arrow.press(uRight) + arrow.press(uLCtrl) + arrow.iPadOSSwitch() + arrow.release(uSpace) + arrow.release(uLCtrl)
+        + arrow.release(uRight)
+    check(a == [key(uRight, true, 0), key(uLCtrl, true, control), key(uRight, false, control), key(uLCtrl, false, 0)],
+          "→ held across iPadOS's ⌃Space: \(a)")
+    // Nothing held but ⌃: ⌃'s own keys alone, as before.
+    var bare = Keyboard(); bare.typing = .keys
+    let b = bare.press(uLCtrl) + bare.iPadOSSwitch() + bare.release(uSpace) + bare.release(uLCtrl)
+    check(b == [key(uLCtrl, true, control), key(uLCtrl, false, 0)], "⌃Space with nothing held: \(b)")
+    // A key pressed again after the switch goes down and up as any key does.
+    var again = Keyboard(); again.typing = .keys
+    _ = again.press(uP) + again.press(uLCtrl) + again.iPadOSSwitch() + again.release(uSpace) + again.release(uLCtrl) + again.release(uP)
+    let next = again.press(uP) + again.release(uP)
+    check(next == [key(uP, true, 0), key(uP, false, 0)], "P again after the switch: \(next)")
 }
 // Two letters held, one let go: each down and up once, the Mac repeating the last pressed (KeyRepeat).
 do {
@@ -1806,7 +1859,7 @@ do {
 // and at the end; and once every key is let go nothing is down on the Mac.
 do {
     var rng = Rng(state: 0xDE71_CE5E)
-    var sessions = 0, oldBroken = 0, newBroken = 0, missed = 0, falseReports = 0, leftDown = 0, macTyped = 0, switched = 0
+    var sessions = 0, oldBroken = 0, newBroken = 0, missed = 0, falseReports = 0, leftDown = 0, macTyped = 0, switched = 0, ctrlSpaceSwitches = 0, switchLeftDown = 0
     var reported: [Mac.Ignore: Int] = [:]
     for (ignore, count) in [(Mac.Ignore.nothing, 2000), (.modifierUps, 500), (.keyUps, 500)] {
     for run in 0..<count {
@@ -1855,8 +1908,22 @@ do {
                 if overlay { send(kb.forwarded.releaseAll()) }
                 overlay.toggle()
             case 11:
-                // The keyboard switched (⌃Space, the Globe key) between one the Mac types and one iPadOS's
-                // text system types: keys down stay the way they went.
+                // The keyboard switched between one the Mac types and one iPadOS's text system types: by the
+                // Globe key, keys down stay the way they went; by ⌃Space, iPadOS's switch (while the overlay
+                // takes keys), whose Space the Mac never hears, every key down on the Mac but a modifier's own
+                // comes up (ForwardedKeys.keyboardSwitch).
+                if overlay, rng.chance(50), !kb.physical.contains(uSpace) {
+                    let ctrl = !kb.physical.contains(uLCtrl)
+                    if ctrl { send(kb.press(uLCtrl)) }
+                    send(kb.iPadOSSwitch())
+                    if kb.forwarded.down.contains(where: { KeyModifiers.flag(forKey: $0) == nil }) {
+                        switchLeftDown += 1
+                        if switchLeftDown <= 3 { print("FAIL: device run \(run): after iPadOS's ⌃Space \(kb.forwarded.down) still down") }
+                    }
+                    send(kb.release(uSpace))
+                    if ctrl { send(kb.release(uLCtrl)) }
+                    ctrlSpaceSwitches += 1
+                }
                 kb.typing = kb.typing == .keys ? .text : .keys
                 switched += 1
             default: send([.text("y")] + tap)
@@ -1894,6 +1961,8 @@ do {
     }
     check(leftDown == 0, "device sessions: \(leftDown) of \(sessions) left a key down on the Mac once every key was let go")
     check(macTyped > 1000 && switched > 1000, "the Mac typed in \(macTyped) sessions, and keyboards switched \(switched) times")
+    check(switchLeftDown == 0 && ctrlSpaceSwitches > 500,
+          "iPadOS's ⌃Space: \(switchLeftDown) of \(ctrlSpaceSwitches) left a key but a modifier down on the Mac")
     check(newBroken == 0, "device sessions on this Mac: \(newBroken) of 2000 broke the invariant")
     check(oldBroken == 0, "device sessions on a Mac from before this fix: \(oldBroken) of 2000 left a modifier held")
     check(missed == 0, "device sessions on a Mac keeping its table through some ups: \(missed) of 1000 left a modifier set that no check reported")
