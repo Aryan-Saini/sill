@@ -238,14 +238,16 @@ enum DoorPolicy {
     /// older Sill's plain try every 2 to 10 s never does (3 a minute at most).
     static let endCost = 0.1
     /// `failuresForBackoff` within `failureWindow` back an address off for `backoffSeconds`, as
-    /// before. `groupFailuresForBackoff` within `groupFailureWindow` back an IPv6 /64 off: three of
-    /// its addresses' worth, so no single address (which adds nothing while it is backed off itself)
-    /// ever backs its /64 off; over the longer window, which a host taking a new address for every
-    /// connection fills even at the slowest a place can be held (a tenth every 2 s: within 150 s).
+    /// before. `groupFailuresForBackoff` within `groupFailureWindow` back an IPv6 /64 off, counting
+    /// only its addresses that are not known: more than one address adds before it is backed off
+    /// itself (at most about 11: 4.9, then its two places' waits for a kind 19, cut at 8 s), after
+    /// which it adds nothing, so no single address backs its /64 off; and over the longer window,
+    /// which a host taking a new address for every connection fills even holding one place at the
+    /// cheapest (a tenth every 2 s: 15 in 300 s; two places, within 120 s).
     static let failureWindow: Double = 60
     static let failuresForBackoff: Double = 5
     static let groupFailureWindow: Double = 300
-    static let groupFailuresForBackoff: Double = 15
+    static let groupFailuresForBackoff: Double = 12
     static let backoffSeconds: Double = 300
     /// How long an address that proved a paired key at `.ready` stays known.
     static let knownFor: Double = 86_400
@@ -302,9 +304,10 @@ enum DoorPolicy {
     /// at `.ready` within `knownFor`) also takes the `reservedPlaces`, at most `placesPerSource`
     /// from the address, has `admissionDeadline` for its handshake, and is refused only while the
     /// address itself is backed off, never for its group. Every connection that ends unadmitted costs
-    /// its address and its group `charge(held:refused:)`, known or not: an address that is known, or
-    /// that someone else on the network takes while its device is away, still pays for what it holds.
-    /// A paired key at `.ready` clears its address's failures and backoff, as before.
+    /// its address `charge(held:refused:)`, known or not: an address that is known, or that someone
+    /// else on the network takes while its device is away, still pays for what it holds. Its group is
+    /// charged the same while the address is not known. A paired key at `.ready` clears its address's
+    /// failures and backoff, as before.
     struct Places {
         enum Arrival: Equatable {
             /// It waits in a place now; `known`: its address is known.
@@ -433,11 +436,14 @@ enum DoorPolicy {
             backedOffUntil[address] = nil
         }
 
-        /// `weight` failures for the address and for its group (an IPv6 address's /64).
+        /// `weight` failures for the address, and for its group (an IPv6 address's /64) unless the
+        /// address is known: a known one's own backoff is what bounds it, and its group's would not
+        /// refuse it anyway.
         private mutating func charge(_ s: Source, _ weight: Double, now: Double) -> [String] {
             var backedOff: [String] = []
+            let known = isKnown(s.address, now: now)
             if add(s.address, weight, threshold: DoorPolicy.failuresForBackoff, now: now) { backedOff.append(s.address) }
-            if s.group != s.address, add(s.group, weight, threshold: DoorPolicy.groupFailuresForBackoff, now: now) {
+            if s.group != s.address, !known, add(s.group, weight, threshold: DoorPolicy.groupFailuresForBackoff, now: now) {
                 backedOff.append(s.group)
             }
             return backedOff

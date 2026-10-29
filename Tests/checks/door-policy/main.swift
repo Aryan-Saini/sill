@@ -358,9 +358,9 @@ check("places: 8 for anyone, 2 more for known addresses, 2 per source",
       D.sharedPlaces == 8 && D.reservedPlaces == 2 && D.placesPerSource == 2)
 check("places: 4 s to be ready (10 s from a known address), then 4 s for the kind 19, 10 s at most from accept",
       D.handshakeDeadline == 4 && D.requestDeadline == 4 && D.admissionDeadline == 10)
-check("places: 2 s waited for a tenth of a failure; 5 failures in 60 s → an address refused for 300 s, 15 in 300 s → its /64; known for a day",
+check("places: 2 s waited for a tenth of a failure; 5 failures in 60 s → an address refused for 300 s, 12 in 300 s → its /64; known for a day",
       D.freeHold == 2 && D.endCost == 0.1 && D.failureWindow == 60 && D.failuresForBackoff == 5 && D.groupFailureWindow == 300
-      && D.groupFailuresForBackoff == 15 && D.backoffSeconds == 300 && D.knownFor == 86_400)
+      && D.groupFailuresForBackoff == 12 && D.backoffSeconds == 300 && D.knownFor == 86_400)
 
 // What a connection that ends unadmitted costs.
 check("charge: ended within 2 s → a tenth (0 s, 1.99 s, 2 s)",
@@ -491,17 +491,17 @@ for n in 1...50 {
 }
 check("backoff: 50 connections that ended within 2 s back the address off at the 50th (a tenth each, summed with a margin)", tenthAt == 50)
 
-// The /64: three of its addresses' worth back it off, never one address alone.
-var g15 = Places()
-var g15At = -1
-for n in 0..<15 {
+// The /64: more than one address's worth backs it off, never one address alone.
+var g12 = Places()
+var g12At = -1
+for n in 0..<12 {
     let s = src("2601:600:1:2::\(n + 1)")
-    _ = g15.arrive(n, s, now: 0)
-    if g15.leave(n, .refused, now: 0.1).contains("2601:600:1:2::/64"), g15At < 0 { g15At = n + 1 }
+    _ = g12.arrive(n, s, now: 0)
+    if g12.leave(n, .refused, now: 0.1).contains("2601:600:1:2::/64"), g12At < 0 { g12At = n + 1 }
 }
-check("group: fifteen addresses of one /64 refused once each back the /64 off at the 15th", g15At == 15
-      && g15.backedOff(src("2601:600:1:2::99"), now: 1) && !g15.backedOff(src("2601:600:1:3::1"), now: 1))
-check("group: no address of it is backed off itself (1 each)", !(1...15).contains { g15.backedOff(Src(address: "2601:600:1:2::\($0)", group: "nowhere"), now: 1) })
+check("group: twelve addresses of one /64 refused once each back the /64 off at the 12th", g12At == 12
+      && g12.backedOff(src("2601:600:1:2::99"), now: 1) && !g12.backedOff(src("2601:600:1:3::1"), now: 1))
+check("group: no address of it is backed off itself (1 each)", !(1...12).contains { g12.backedOff(Src(address: "2601:600:1:2::\($0)", group: "nowhere"), now: 1) })
 var gOne = Places()
 var gOneBacked: [String] = []
 for n in 0..<100 {
@@ -513,9 +513,29 @@ check("group: one address refused again and again backs itself off at its fifth,
 var gTwo = Places()
 for a in ["2601:600:1:2::7", "2601:600:1:2::8"] { for n in 0..<20 { if case .taken = gTwo.arrive("\(a)\(n)", src(a), now: Double(n)) { gTwo.leave("\(a)\(n)", .refused, now: Double(n) + 0.1) } } }
 check("group: two such addresses (10 failures) leave the /64 open to its others", !gTwo.backedOff(src("2601:600:1:2::9"), now: 21) && near(gTwo.failures("2601:600:1:2::/64", now: 21), 10))
+// The most one address not yet known adds: 4.95 in tenths and refusals, then its /64's two places
+// waiting for a kind 19 that never comes, cut at 8 s (ready at 3.99 s, then 4 s): 3.1 each.
+let a7 = src("2601:600:1:2::7")
+var gMostTrim = Places()
+for n in 0..<4 { _ = gMostTrim.refusedBeforeStart(a7, now: 0) }
+for n in 0..<9 { _ = gMostTrim.arrive("t\(n)", a7, now: 1); gMostTrim.leave("t\(n)", .ended, now: 1.5) }
+_ = gMostTrim.arrive("a", a7, now: 2); _ = gMostTrim.arrive("b", a7, now: 2)
+gMostTrim.ready("a", now: 5.99); gMostTrim.ready("b", now: 5.99)
+let cutAt = gMostTrim.deadline("a") ?? -1
+var gMostBacked = gMostTrim.leave("a", .refused, now: cutAt) + gMostTrim.leave("b", .refused, now: cutAt)
+for n in 0..<20 { if case .taken = gMostTrim.arrive("c\(n)", a7, now: 11 + Double(n)) { gMostBacked += gMostTrim.leave("c\(n)", .refused, now: 15 + Double(n)) } }
+check("group: the most one address not yet known adds before it is backed off (4.9, then its two places cut at 8 s: \(String(format: "%.2f", gMostTrim.failures("2601:600:1:2::/64", now: 40))) in all) leaves its /64 open",
+      near(cutAt, 9.99) && gMostBacked == ["2601:600:1:2::7"] && gMostTrim.failures("2601:600:1:2::/64", now: 40) < D.groupFailuresForBackoff
+      && gMostTrim.failures("2601:600:1:2::/64", now: 40) > 11 && !gMostTrim.backedOff(src("2601:600:1:2::8"), now: 40))
+var gKnownPays = Places()
+_ = gKnownPays.arrive("p", a7, now: 0); gKnownPays.leave("p", .admitted(paired: true), now: 0)
+_ = gKnownPays.arrive("a", a7, now: 1); _ = gKnownPays.arrive("b", a7, now: 1)
+let gKnownBacked = gKnownPays.leave("a", .ended, now: 10.9) + gKnownPays.leave("b", .ended, now: 10.9)
+check("group: a known address's waits cost it (two 9.9 s: 8.1, backed off), never its /64",
+      gKnownBacked == ["2601:600:1:2::7"] && near(gKnownPays.failures("2601:600:1:2::/64", now: 11), 0))
 var gSlow = Places()
-for n in 0..<14 { _ = gSlow.refusedBeforeStart(src("2601:600:1:2::\(n + 1)"), now: Double(n) * 15) }
-check("group: its failures count for 300 s (14 between 0 and 195 s, the 15th at 299.9 s backs it off; at 300 s the first has gone)",
+for n in 0..<11 { _ = gSlow.refusedBeforeStart(src("2601:600:1:2::\(n + 1)"), now: Double(n) * 15) }
+check("group: its failures count for 300 s (11 between 0 and 150 s, the 12th at 299.9 s backs it off; at 300 s the first has gone)",
       { var g = gSlow; return g.refusedBeforeStart(src("2601:600:1:2::99"), now: 299.9) == ["2601:600:1:2::/64"] }()
       && { var g = gSlow; return g.refusedBeforeStart(src("2601:600:1:2::99"), now: 300).isEmpty }())
 check("group: an address's own failures still count for 60 s only", { var g = Places()
@@ -658,7 +678,7 @@ struct OldPlaces: PlaceRule {
     }
 }
 
-struct Holder { var addresses: [Src]; var hold: Double; var readyAfter: Double? = nil }
+struct Holder { var addresses: [Src]; var hold: Double; var readyAfter: Double? = nil; var per = D.placesPerSource }
 struct Device { var source: Src; var handshake: Double = 0.05; var every: Double = 2; var from: Double = 1 }
 struct Outcome {
     var backedOffAt: [String: Double] = [:]
@@ -677,7 +697,7 @@ func simulate<R: PlaceRule>(_ rule: R, holders: [Holder], device: Device?, known
     var out = Outcome()
     var conns: [Conn] = []
     var nextID = 1
-    var free = Array(repeating: D.placesPerSource, count: holders.count)
+    var free = holders.map(\.per)
     var turn = Array(repeating: 0, count: holders.count)
     if let d = device, known {
         _ = r.arrive(0, d.source, now: -10); r.leave(0, .admitted(paired: true), now: -10)
@@ -774,11 +794,14 @@ check("old rule, the same on the pairing ALPN closing at 9.9 s: held for good", 
 let g64 = "2601:600:1:2::/64"
 let v6holders = (1...8).map { Holder(addresses: [src("2601:600:1:2::\($0)")], hold: 9.9) }
 let v6new = simulate(Places(), holders: v6holders, device: Device(source: v4("10.0.0.20")), seconds: 60)
-check("new rule, 8 addresses of one /64: 2 places at most, the /64 backed off within 30 s (at \(v6new.backedOffAt[g64] ?? -1) s), an unknown IPv4 device admitted at every try",
-      v6new.maxHolderPlaces == 2 && (v6new.backedOffAt[g64] ?? .infinity) <= 30 && v6new.firstIn == 1.05 && v6new.deviceIn == v6new.deviceTries)
+check("new rule, 8 addresses of one /64: 2 places at most, the /64 backed off within 25 s (at \(v6new.backedOffAt[g64] ?? -1) s), an unknown IPv4 device admitted at every try",
+      v6new.maxHolderPlaces == 2 && (v6new.backedOffAt[g64] ?? .infinity) <= 25 && v6new.firstIn == 1.05 && v6new.deviceIn == v6new.deviceTries)
 let v6churn = simulate(Places(), holders: [Holder(addresses: (1...500).map { src("2601:600:1:2::\($0)") }, hold: 1.9)], device: nil, seconds: 200)
-check("new rule, one host taking a new address of its /64 for every connection, closing at 1.9 s: no address ever backed off, the /64 within 160 s (at \(v6churn.backedOffAt[g64] ?? -1) s)",
-      v6churn.backedOffAt.keys.sorted() == [g64] && (v6churn.backedOffAt[g64] ?? .infinity) <= 160)
+check("new rule, one host taking a new address of its /64 for every connection, closing at 1.9 s: no address ever backed off, the /64 within 120 s (at \(v6churn.backedOffAt[g64] ?? -1) s)",
+      v6churn.backedOffAt.keys.sorted() == [g64] && (v6churn.backedOffAt[g64] ?? .infinity) <= 120)
+let v6one = simulate(Places(), holders: [Holder(addresses: (1...500).map { src("2601:600:1:2::\($0)") }, hold: 2.0, per: 1)], device: nil, seconds: 320)
+check("new rule, the same holding one place at the cheapest (closing at 2.0 s): the /64 within 300 s (at \(v6one.backedOffAt[g64] ?? -1) s)",
+      v6one.backedOffAt.keys.sorted() == [g64] && (v6one.backedOffAt[g64] ?? .infinity) <= 300)
 let v6old = simulate(OldPlaces(), holders: v6holders, device: Device(source: v4("10.0.0.20")), seconds: 60)
 check("old rule, 8 addresses of one /64: every place held, nobody backed off, the device refused throughout",
       v6old.maxHolderPlaces == 8 && v6old.backedOffAt.isEmpty && v6old.deviceIn == 0)
