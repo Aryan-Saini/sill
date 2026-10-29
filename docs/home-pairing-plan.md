@@ -236,13 +236,19 @@ Each such pairing is logged, listed as "over the USB cable" and shown in a notic
     scan's finding 3 (2026-10-29): the automatic reconnect after such a session is lost dials an
     open door's row pinned to the key the session saw, and another key under the lost Mac's name
     ends it ("‹Mac› answered with another key, so this ‹iPad› didn’t reconnect. Tap it to
-    connect."), where it took any key with no tap, the device's clipboard included. Left as they
-    were: a lost session that never saw a key (a tap's dial that ended before its handshake) is
-    reconnected with any key, as the tap was, and a DEBUG build still dials a plain door under that
-    name, as its tap would. Over the cable an app on this Mac can go further: listening on the Mac's
-    end of the cable (which the device cannot tell from Sill) and answering an ask with a proof-less
-    ok, it is saved as a Mac and gets what that device types, never the Mac itself. A saved Mac's
-    rows are always dialed pinned, so a paired device never is;
+    connect."), where it took any key with no tap, the device's clipboard included. Nor does that
+    reconnect dial a plain door (no `p`) under the name, as a DEBUG build's did (its tap still
+    does), with no key to check at all (the review of #255, 2026-10-29): it looks past one, as
+    Release does. A tap during the reconnect (its words invite one: "…Sill keeps trying, or tap it
+    to try now.") still takes any key, but if its dial ends before its handshake the reconnect that
+    follows it is pinned to the key the last session under that name saw (`openKeys`, the review of
+    #255), where it took any key from then on. Left as it was: a tap under a name no session has
+    seen a key under since Sill started (`openKeys` is kept in memory only), whose dial ended before
+    its handshake, leaves a reconnect that takes any key, as the tap would have. Over the cable an
+    app on this Mac can go further: listening on the Mac's end of the cable (which the device cannot
+    tell from Sill) and answering an ask with a proof-less ok, it is saved as a Mac and gets what
+    that device types, never the Mac itself. A saved Mac's rows are always dialed pinned, so a
+    paired device never is;
   - anyone who can reach the home door (this network, or radio range with Direct Wireless on) can
     connect and read the Mac's certificate: TLS 1.3 encrypts it on the wire, but a client that
     connects receives it, and its key is stable, so it names this Mac across networks, as the
@@ -1189,10 +1195,16 @@ New attention items (first group, orange):
 | no `p`, DEBUG, not `homeTLS` | plain, as today |
 | no `p`, otherwise | nothing dialed; status "Mac mini runs an older Sill. Update Sill on the Mac to connect." |
 
-- The automatic reconnect follows the same table, and never asks: an ask is a tap's. One row
-  differs since the security scan's finding 3 (2026-10-29, `DiscoveryPolicy.reconnectTrust`): an
+- The automatic reconnect follows the same table, and never asks: an ask is a tap's. Two rows
+  differ since the security scan's finding 3 (2026-10-29, `DiscoveryPolicy.reconnectTrust`): an
   unsaved `p=0` row is dialed pinned to the key the lost session saw (`Reconnect.openKey`), not
-  with any key, since the reconnect finds an unsaved Mac by its Bonjour name alone (§7.6).
+  with any key, since the reconnect finds an unsaved Mac by its Bonjour name alone (§7.6); and
+  after such a session a row without `p` is not dialed at all, where a DEBUG build dialed it plain
+  (the review of #255): the reconnect looks on, as Release's does past "Update Sill". A tap clears
+  the reconnect and dials any key; the reconnect after a tap whose dial ended before its handshake
+  pins the key the last session under that name saw (`DiscoveryPolicy.reconnectKey`'s `earlier`,
+  StreamClient's `openKeys`, in memory; the review of #255), and any key only when no session
+  under that name saw one.
 - A Wired row's dial goes over the cable first (`wiredDial`, :748; :832 at `cea195c`) with its
   fallback after `wiredWait`, for an ask as for a session.
 
