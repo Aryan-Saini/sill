@@ -143,7 +143,7 @@ serves the root or `/docs`, never `/site`. So:
   sharing) between `<!-- Pairing window` and `<!-- /Pairing window -->`, support.html's
   paragraph that Virtual Display is on unless you turn it off (PR #236, Sill for Mac's default
   since 2026-10-27) between `<!-- Virtual Display` and `<!-- /Virtual Display -->`, and the
-  thumbnail hold's (issue #113: privacy.html's item and support.html's section) between
+  thumbnail hold's (PR #248, issue #113: privacy.html's item and support.html's section) between
   `<!-- Thumbnail hold` and `<!-- /Thumbnail hold -->`. A republish before those
   releases (for words that hold for the builds already out, such as support.html's on a Mac asleep
   or restarted, or on a black picture) deletes the blocks of each release not out yet in the
@@ -176,7 +176,7 @@ perl -0pi -e 's/[ \t]*<!-- Tiles:.*?<!-- \/Tiles -->\n//gs' ../sill-site/*.html 
 perl -0pi -e 's/[ \t]*<!-- Reverse Scrolling:.*?<!-- \/Reverse Scrolling -->\n//gs' ../sill-site/*.html   # only before Reverse Scrolling's release
 perl -0pi -e 's/[ \t]*<!-- Pairing window:.*?<!-- \/Pairing window -->\n//gs' ../sill-site/*.html   # only before the release with PR #157
 perl -0pi -e 's/[ \t]*<!-- Virtual Display:.*?<!-- \/Virtual Display -->\n//gs' ../sill-site/*.html   # only before the release that turns Virtual Display on by default
-perl -0pi -e 's/[ \t]*<!-- Thumbnail hold:.*?<!-- \/Thumbnail hold -->\n//gs' ../sill-site/*.html   # only before the thumbnail hold's release (issue #113)
+perl -0pi -e 's/[ \t]*<!-- Thumbnail hold:.*?<!-- \/Thumbnail hold -->\n//gs' ../sill-site/*.html   # only before the thumbnail hold's release (PR #248)
 git -C ../sill-site add -A && git -C ../sill-site commit -m "Update the site" && git -C ../sill-site push
 ```
 

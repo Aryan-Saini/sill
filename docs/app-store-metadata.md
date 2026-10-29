@@ -855,7 +855,7 @@ Safe:
 - With Send Audio on by default on the Mac (2026-10-27, PR #236) the What's New's sound paragraph
   says it turns it off and on; the counts above were each taken on its own branch and are read again
   at the next release (docs/release-checklist.md).
-- With the thumbnail hold (issue #113; Noah, 2026-10-29: 0.5 s unless changed, 0.2 to 3 s in
+- With the thumbnail hold (PR #248, issue #113; Noah, 2026-10-29: 0.5 s unless changed, 0.2 to 3 s in
   Settings), a paragraph of 225 characters in the next What's New, after Reverse Scrolling's: the
   draft 2,112 characters (1,885 before); the rest unchanged.
 - The encryption key, now in `iOSClient/Info.plist`: Release builds of this

@@ -8,7 +8,7 @@ Formerly winstream; the folder still carries the old name.
 
 ## Current step
 
-**The hold before a thumbnail's lights (2026-10-29, branch `thumbnail-hold-stepper` from main at 35a9c47; issue #113,
+**The hold before a thumbnail's lights (2026-10-29, branch `thumbnail-hold-stepper` from main at 35a9c47, PR #248; issue #113,
 promised on the issue as "lower the time … and have it be user adjustable").** Noah, 2026-10-29: "The hold time should
 be patched and editable with a slider in settings (one of those fancy ones with the +/- buttons that increment by 0.1
 seconds, ideally the timer can go from 0.2s to 3s or something like that." Device only: no wire change, never sent.
