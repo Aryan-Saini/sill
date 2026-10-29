@@ -450,6 +450,9 @@ package final class StreamCoordinator {
         server.onClientRevoked = { [weak self] connection in
             Task { @MainActor in self?.clientRevoked(connection) }
         }
+        // The same devices, marked as the Mac decides (RemoteAccess, on the main actor): before any of
+        // their messages already waiting here, which the server's mark above would only follow.
+        remote?.onCutOff = { [weak self] matching in self?.cutOff(matching) }
         // Each device's link (LinkJudge): the report its kind 16 carries, the card's row, one line.
         server.onClientLinkChanged = { [weak self] connection, verdict in
             let id = ObjectIdentifier(connection)
@@ -1758,11 +1761,27 @@ package final class StreamCoordinator {
     private func clientRevoked(_ connection: NWConnection) {
         let id = ObjectIdentifier(connection)
         guard routes[id] != nil else { return }
-        revoked.insert(id)
+        markRevoked(id)
+    }
+
+    /// RemoteAccess cut these devices off (Remove, Require pairing turned on, Remote Access or internet
+    /// access turned off), on the main actor as it decided: each connection whose route `matching`
+    /// names is marked now, so its messages still waiting for the main actor (read off the network
+    /// while the Mac saved the change, the keychain's write) land nothing either. The server marks each
+    /// again as it says goodbye (`clientRevoked`). A connection whose registration still waits here (one
+    /// admitted while the Mac was saving the change) is the server's alone to mark: what it sent before
+    /// that mark still lands, for at most the save's length.
+    private func cutOff(_ matching: (ClientRoute) -> Bool) {
+        for (id, route) in routes where matching(route) { markRevoked(id) }
+    }
+
+    private func markRevoked(_ id: ObjectIdentifier) {
+        guard revoked.insert(id).inserted else { return }
         // TEST ONLY (SILL_TEST_INPUT_LOG, a synthetic host): where its input stops landing, so a test
         // reads what was posted for it after this line.
         if injector.testLog {
-            print("Test input: \(deviceName(connection)) is no longer served: only the up of a key or a button it holds down goes from here on.")
+            let device = status.snapshot.devices.first { $0.id == id }
+            print("Test input: \(device?.name ?? device?.endpoint ?? "a device") is no longer served: only the up of a key or a button it holds down goes from here on.")
         }
     }
 

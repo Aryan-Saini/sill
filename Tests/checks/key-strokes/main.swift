@@ -911,9 +911,15 @@ struct Board {
 enum HeldItem { case input(InputEvent, ObjectIdentifier), chord(ObjectIdentifier) }
 
 /// StreamServer's receive loop and StreamCoordinator's handling, hold, replay and a switch's drop, around
-/// RevokedInput (`fixed`), or as they were before it.
+/// RevokedInput (`fixed`), or as they were before it. What the receive loop hands on waits for the main
+/// actor in order (`inbox`: a Task each), and so does the server's mark of a device it cut off, behind what
+/// it had already handed on. The Mac decides to cut a device off on the main actor (RemoteAccess), and
+/// since the review of PR #254 the coordinator marks it there and then (`marksAtDecision`, `onCutOff`).
 struct Host {
     let fixed: Bool
+    var marksAtDecision = true
+    enum Job { case input(InputEvent, ObjectIdentifier), gesture(ObjectIdentifier), mark(ObjectIdentifier) }
+    var inbox: [Job] = []
     var board = Board()
     var connected: Set<ObjectIdentifier> = []
     var marked: Set<ObjectIdentifier> = []        // StreamServer: Client.revoked
@@ -925,21 +931,39 @@ struct Host {
     init(fixed: Bool) { self.fixed = fixed }
 
     mutating func drop(_ d: ObjectIdentifier) { dropped[d, default: 0] += 1 }
-    /// A device's input read off its connection (the receive loop), then handled (the coordinator).
-    mutating func receive(_ e: InputEvent, from d: ObjectIdentifier) {
+    /// A device's input read off its connection (the receive loop), then handled (the coordinator), the
+    /// main actor free.
+    mutating func receive(_ e: InputEvent, from d: ObjectIdentifier) { read(e, from: d); drain() }
+    /// A device's gesture (kind 28): its shortcut, behind what is held.
+    mutating func gesture(from d: ObjectIdentifier) { readGesture(from: d); drain() }
+    /// Read off its connection (the network queue): dropped there once the server has marked the device,
+    /// but a key's or a button's up; else it waits for the main actor.
+    mutating func read(_ e: InputEvent, from d: ObjectIdentifier) {
         guard connected.contains(d) else { return }                      // its connection has closed
         if fixed, marked.contains(d), !RevokedInput.mayLetGo(e) { drop(d); return }
-        if fixed, revoked.contains(d) {
-            if board.letsGo(e, from: d) { deliver(.input(e, d), placed: false) } else { drop(d) }
-            return
-        }
-        deliver(.input(e, d))
+        inbox.append(.input(e, d))
     }
-    /// A device's gesture (kind 28): its shortcut, behind what is held.
-    mutating func gesture(from d: ObjectIdentifier) {
+    mutating func readGesture(from d: ObjectIdentifier) {
         guard connected.contains(d) else { return }
         if fixed, marked.contains(d) { drop(d); return }
-        deliver(.chord(d))
+        inbox.append(.gesture(d))
+    }
+    /// The main actor gets to what waits for it, in order (StreamCoordinator.handle, clientRevoked).
+    mutating func drain() {
+        while !inbox.isEmpty {
+            switch inbox.removeFirst() {
+            case .input(let e, let d):
+                if fixed, revoked.contains(d) {
+                    if board.letsGo(e, from: d) { deliver(.input(e, d), placed: false) } else { drop(d) }
+                } else {
+                    deliver(.input(e, d))
+                }
+            case .gesture(let d):
+                if fixed, revoked.contains(d) { drop(d) } else { deliver(.chord(d)) }
+            case .mark(let d):
+                if fixed, connected.contains(d) { revoked.insert(d) }   // ignored once it has left (no route)
+            }
+        }
     }
     mutating func deliver(_ item: HeldItem, placed: Bool = true) {
         if holding || !held.isEmpty { held.append(item); return }
@@ -953,6 +977,7 @@ struct Host {
     /// device's only as the up of what it holds and none of its shortcuts; then the keys of the devices
     /// that left meanwhile.
     mutating func replay() {
+        drain()                                                          // what was read before it comes first
         holding = false
         let h = held; held = []
         for item in h {
@@ -971,6 +996,7 @@ struct Host {
     /// has down goes (DroppedInput), a gone device's only if it holds it (RevokedInput), where the
     /// pointer is; a shortcut unless its device is gone; then the keys of the devices that left meanwhile.
     mutating func switchDrop() {
+        drain()
         holding = false
         let h = held; held = []
         for item in h {
@@ -984,14 +1010,20 @@ struct Host {
         releaseLeft()
     }
     mutating func releaseLeft() { let left = leftWhileHeld; leftWhileHeld = []; for l in left { board.leave(l.device, revoked: l.revoked) } }
-    /// closeSessions: the server marks the session, and the coordinator learns it before any message the
-    /// receive loop reads after the mark.
+    /// The Mac cuts the device off, deciding on the main actor (RemoteAccess): the coordinator marks it there
+    /// and then (`onCutOff`, since the review); the server marks its session as it says goodbye
+    /// (closeSessions), and that mark reaches the coordinator behind what the receive loop had already
+    /// handed on, but before anything it hands on later (`onClientRevoked`).
     mutating func revoke(_ d: ObjectIdentifier) {
         guard connected.contains(d) else { return }
-        marked.insert(d); revoked.insert(d)
+        if fixed, marksAtDecision { revoked.insert(d) }
+        marked.insert(d)
+        inbox.append(.mark(d))
     }
-    /// Its connection closes (the goodbye handed to the network, or 0.25 s): onClientDisconnected.
+    /// Its connection closes (the goodbye handed to the network, or 0.25 s): onClientDisconnected, behind
+    /// what was read before it.
     mutating func leave(_ d: ObjectIdentifier) {
+        drain()
         guard connected.remove(d) != nil else { return }
         marked.remove(d)
         let cut = fixed && revoked.contains(d)        // read before it is forgotten, as the coordinator does
@@ -1243,35 +1275,73 @@ do {
     old.leave(A); old.replay()
     check(old.board.leftOwner == A, "before the fix its held click's down landed after it left, and the button stayed down")
 }
+// The Mac decides to remove a device (RemoteAccess, on the main actor) while messages of it wait for the
+// main actor: read off the network while the Mac saved the change (the keychain's write; with a locked login
+// keychain, while its prompt showed). The review of PR #254: the decision marks the device at once
+// (`onCutOff`), so none of them lands but the up of a key it holds; marked only by the server, which says
+// goodbye after the decision, the coordinator learned it behind them, and they all landed after it.
+do {
+    for atDecision in [true, false] {
+        var h = Host(fixed: true); h.marksAtDecision = atDecision
+        let A = newDevice(); h.connected = [A]
+        h.receive(key(uC, true, 0), from: A)
+        h.read(move, from: A); h.read(key(uS, true, 0), from: A); h.read(.text("x"), from: A); h.readGesture(from: A)
+        h.read(key(uC, false, 0), from: A)
+        let mark = h.board.posted.count
+        h.revoke(A)
+        h.read(.pointer(.leftDown, x: 0.5, y: 0.5), from: A)      // after the server's mark: dropped at the receive loop
+        h.drain()
+        let got = whats(h.board.posted, from: mark)
+        if atDecision {
+            check(got == ["key 8 up (none)"], "decided while its input waited: only the up of the key it held: \(got)")
+            check(h.dropped[A] == 5, "what waited dropped and counted, and what came after the server's mark: \(h.dropped[A] ?? 0)")
+        } else {
+            check(got == ["move", "key 1 down (none)", "text", "chord", "key 8 up (none)"],
+                  "marked only by the server (before the review), what waited landed after the decision: \(got)")
+        }
+    }
+}
 // Random sessions: A, removed at a random moment and gone a few events later (its connection closed),
 // B alongside, C leaving at a random moment, holds for activations coming and going, each ended by the
-// app coming up or by a switch; each sends downs, ups (its own, strays, and another's), moves, text,
-// scrolls and gestures, and A, once removed, often the up of something it holds. From the removal on
-// nothing lands for A but the up of something it holds down by the posted events; the same for C's
-// held input once it has left; A's own up of what it holds goes at once while nothing is held; nothing
-// of B's is dropped; once A and C have left, no key of theirs is down. As the glue was before, most
+// app coming up or by a switch; spells in which the main actor is busy and what is read waits for it, one
+// of them ending with the Mac's decision to remove A (its keychain write); each sends downs, ups (its own,
+// strays, and another's), moves, text, scrolls and gestures, and A, once removed, often the up of
+// something it holds. From the decision on nothing lands for A but the up of something it holds down by
+// the posted events; the same for C's held input once it has left; A's own up of what it holds goes at
+// once while nothing is held or waits; nothing of B's is dropped; once A and C have left, no key of theirs
+// is down, and no button of A's. Marked only by the server (the branch before its review), A's input read
+// while the Mac decided lands after the decision in many sessions; as the glue was before the fix, most
 // sessions land A's input after its removal.
 do {
     var rng = Rng(state: 0x0010_EE0E)
-    var bad = 0, oldLanded = 0, ownUps = 0, removed = 0, buttonsAtLeaving = 0
+    var bad = 0, oldLanded = 0, serverMarkLanded = 0, ownUps = 0, removed = 0, buttonsAtLeaving = 0, waited = 0
     let things: [UInt16] = [uLCmd, uLShift, uLCtrl, uC, uS, uEsc]
-    for fixed in [true, false] {
+    for (fixed, atDecision) in [(true, true), (true, false), (false, false)] {
         for run in 0..<3000 {
-            var h = Host(fixed: fixed)
+            var h = Host(fixed: fixed); h.marksAtDecision = atDecision
+            let review = fixed && atDecision
             let A = newDevice(), B = newDevice(), C = newDevice()
             h.connected = [A, B, C]
             let revokeAt = 3 + rng.below(30), goneAfter = 1 + rng.below(12), cLeavesAt = 2 + rng.below(50)
+            let busyBefore = rng.below(5)          // the decision's own spell: the keychain's write
             var mark: Int? = nil, cMark: Int? = nil
             var problem: String? = nil
+            var busy = false
             for step in 0..<60 {
-                if step == revokeAt { mark = h.board.posted.count; h.revoke(A) }
-                if step == revokeAt + goneAfter { h.leave(A) }
-                if step == cLeavesAt { cMark = h.board.posted.count; h.leave(C) }
-                if rng.chance(12) {
+                if step == revokeAt - busyBefore { busy = true }
+                if step == revokeAt {
+                    if review, h.inbox.contains(where: { if case .input(_, let x) = $0 { return x == A } else { return false } }) { waited += 1 }
+                    mark = h.board.posted.count; h.revoke(A); busy = false; h.drain()
+                }
+                if step == revokeAt + goneAfter { busy = false; h.leave(A) }
+                if step == cLeavesAt { busy = false; h.drain(); cMark = h.board.posted.count; h.leave(C) }   // what it sent before it left first
+                if busy, step < revokeAt - busyBefore || step > revokeAt { if rng.chance(40) { busy = false; h.drain() } }
+                else if !busy, rng.chance(6) { busy = true }
+                if !busy, rng.chance(12) {
                     if !h.holding { h.holding = true } else if rng.chance(70) { h.replay() } else { h.switchDrop() }
                 }
                 let d = rng.pick([A, A, A, B, C])
-                if rng.chance(5) { h.gesture(from: d); continue }
+                if rng.chance(5) { if busy { h.readGesture(from: d) } else { h.gesture(from: d) }; continue }
                 var e: InputEvent
                 let mine = h.board.ups(of: d)
                 if d == A, h.marked.contains(A), !mine.isEmpty, rng.chance(50) {
@@ -1299,9 +1369,9 @@ do {
                 // waits: it goes at once.
                 let before = h.board.posted.count
                 let lets = thing(e)
-                let expectNow = fixed && d == A && h.marked.contains(A) && !h.holding && h.held.isEmpty
+                let expectNow = fixed && !busy && d == A && h.marked.contains(A) && !h.holding && h.held.isEmpty
                     && lets != nil && owners(h.board.posted[...])[lets!] == A
-                h.receive(e, from: d)
+                if busy { h.read(e, from: d) } else { h.receive(e, from: d) }
                 if expectNow {
                     ownUps += 1
                     if !h.board.posted[before...].contains(where: { $0.device == A && $0.up && $0.thing == lets! }), problem == nil {
@@ -1309,11 +1379,12 @@ do {
                     }
                 }
             }
+            h.drain()
             if h.holding || !h.held.isEmpty { if rng.chance(70) { h.replay() } else { h.switchDrop() } }
             h.leave(A); h.leave(C)
             if mark != nil { removed += 1 }
             if let mark, let p = onlyLetsGo(h.board.posted, of: A, from: mark) {
-                if fixed { problem = problem ?? "A after its removal: \(p)" } else { oldLanded += 1 }
+                if review { problem = problem ?? "A after its removal: \(p)" } else if fixed { serverMarkLanded += 1 } else { oldLanded += 1 }
             }
             if fixed, let cMark, let p = onlyLetsGo(h.board.posted, of: C, from: cMark), problem == nil { problem = "C after it left: \(p)" }
             if fixed, h.board.keys.down.values.contains(A) || h.board.keys.down.values.contains(C), problem == nil {
@@ -1322,17 +1393,19 @@ do {
             if fixed, h.board.leftOwner == A || h.board.rightOwner == A, problem == nil {
                 problem = "a button of the removed device is still down after it left"
             }
-            if fixed { buttonsAtLeaving += h.board.buttonsLetGo }
+            if review { buttonsAtLeaving += h.board.buttonsLetGo }
             if fixed, let n = h.dropped[B], problem == nil { problem = "\(n) of B's events dropped, though the Mac still served it" }
-            if fixed, let problem { bad += 1; if bad <= 3 { print("FAIL: revoked run \(run): \(problem)") } }
+            if fixed, let problem { bad += 1; if bad <= 3 { print("FAIL: revoked run \(run)\(review ? "" : " (marked by the server alone)"): \(problem)") } }
         }
     }
-    check(removed == 6000, "every session removed A: \(removed) of 6000")
-    check(bad == 0, "random sessions with a removal: \(bad) of 3000 landed input of a device the Mac no longer served")
+    check(removed == 9000, "every session removed A: \(removed) of 9000")
+    check(bad == 0, "random sessions with a removal: \(bad) of 6000 landed input of a device the Mac no longer served, or left something down")
+    check(waited > 1000, "the decision found A's input waiting for the main actor in many sessions: \(waited) of 3000")
+    check(serverMarkLanded > 500, "marked by the server alone (before the review), A's input read while the Mac decided landed after the decision: \(serverMarkLanded) of 3000")
     check(ownUps > 500, "its own ups were tried at once in many sessions: \(ownUps)")
     check(oldLanded > 2000, "as the glue was before, most sessions landed its input after its removal: \(oldLanded) of 3000")
     check(buttonsAtLeaving > 100, "the removed device's buttons let go of as it left in many sessions: \(buttonsAtLeaving)")
-    print("revoked: 3000 sessions with a removal and a departure; its own ups at once \(ownUps) times; its buttons let go of as it left \(buttonsAtLeaving) times; before the fix \(oldLanded) of 3000 landed its input after the removal")
+    print("revoked: 3000 sessions with a removal and a departure, its input waiting at the decision in \(waited); its own ups at once \(ownUps) times; its buttons let go of as it left \(buttonsAtLeaving) times; marked by the server alone \(serverMarkLanded) of 3000, before the fix \(oldLanded) of 3000 landed its input after the removal")
 }
 
 // MARK: Random sessions
