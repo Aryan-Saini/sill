@@ -61,7 +61,11 @@ repeating at its own 0.4 s and 20 a second), which this branch leaves alone.
   with ⌥ let go mid-hold (option, then none), ⇧ pressed mid-hold (shift, then none), ⌘Z (command),
   → over ← (← stops, → repeats), text (stops), pings stopped (repeats end half a second after the
   last), the client leaving (its key up, nothing after), a pick of none (stops; the up still goes),
-  Esc. Not run: the key row's caps on a device or simulator (no touch could be made here).
+  Esc. Not run: the key row's caps pressed on a screen. A scratch rig (the cap's SwiftUI Button and
+  HeldCapStyle with HeldCap, pressed by Tests/touchrig's TouchSynth on a private iOS 27.0 simulator,
+  deleted after) reached no SwiftUI control at all, through `sendEvent` or UIKit's HID entry point (iOS
+  27 has no `UITouch setGestureView:`), so the press's report is untested; if SwiftUI never reports it
+  the caps are taps as before, and a missed end is ended by the action.
 - **Untested, for Noah** (a Mac build of this branch and the iPad with a Magic Keyboard): hold ←, →,
   ⌥←, ⌘→, Forward Delete and ⌘Z in TextEdit and a terminal: the first repeat after this Mac's delay
   and then at its rate, as the Mac's own keyboard (System Settings › Keyboard changes both), and
