@@ -137,7 +137,10 @@ repeating at its own 0.4 s and 20 a second), which this branch leaves alone.
   up held back 0.1, 0.2, 0.3 and 0.6 s), as the arrows always did, now Delete too; with two Latin keyboards
   ⌃Space stays the iPad's though the Mac types; a hardware letter ends what dictation can revise. run-all.sh
   57 of 57 (55 one at a time on 0288e6cb, key-strokes and text-composition with their mutants); CI green on
-  0288e6cb and f7374b10. The simulator runs waited for disk (the report says what they found).
+  0288e6cb and f7374b10. No simulator this time (the free disk stayed under the rules' 25 GB, other sessions'
+  work): each of the first run's live runs replayed against the final host, its device events as its app logged
+  them put through the real `ForwardedKeys`, gave the first run's numbers (P held 55 repeats, E 85, ⇧A 40 and 40,
+  Delete 55, Space 56, Caps Lock's A 25 with caps lock and shift, ⌘Z 25, Esc 25, each first at 0.49 to 0.51 s).
 - sillclient.py: `--key=USAGE,HOLD@T` (a key held, pinging four a second meanwhile, as a device) and
   `--ping=S`.
 - Defaults taken (docs/hardware-keyboard-plan.md, open question 12): modifiers mid-hold change the
