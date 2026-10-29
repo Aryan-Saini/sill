@@ -13,31 +13,49 @@ security scan of 2026-10-18, Low; Noah's go of 2026-10-29).** A TLS door (the re
 Sill.app and `SillHost --pairing`) held 8 connections waiting for admission, 2 per address, 10 s each, and backed an
 address off only for its own refusals: four addresses closing each connection at 9.9 s kept every place full for good
 and a paired device got "limit". Host only, no wire change. `DoorPolicy.Places` (pure) owns the places, `Door` runs
-it on a monotonic clock: a connection that ends unadmitted costs its address a tenth of a failure, one more for every
-2 s it waited beyond the first 2, at least one when refused (5 in 60 s: 300 s, as before; a paired key at `.ready`
-clears its address); the TLS handshake has 4 s (Network.framework does not say when a ClientHello arrives, so the
-whole handshake rather than its first bytes; 10 s from a known address), a pairing connection's kind 19 4 s after
-`.ready`, 10 s in all; an IPv6 address answers for its /64 too (a link-local one's on its interface): 2 waiting
-places per /64 for addresses not known, and 12 failures in 300 s from those back the /64 off, which no single address
-reaches (its own backoff stops it at 5, 11.1 at most with its last waits); 2 places beyond the 8 for addresses that
-proved a paired key within a day (known: never refused for nor charged to their /64, but they pay for what they hold,
-so someone at a paired device's address is backed off with it: nothing tells them apart before TLS). One line a
+it on a monotonic clock: a connection that ends unadmitted, and a pairing connection's kind 19, costs its address a
+tenth of a failure, one more for every 2 s it waited beyond the first 2 (counted to its deadline at most), at least
+one when refused (5 in 60 s: 300 s, as before; a paired key at `.ready` clears its address); the TLS handshake has
+4 s (Network.framework does not say when a ClientHello arrives, so the whole handshake rather than its first bytes;
+10 s from a known address), a pairing connection's kind 19 4 s after `.ready`, 10 s in all; an IPv6 address answers
+for its /64 too (a link-local one's on its interface): 2 waiting places per /64 for addresses not known, and 12
+failures in 300 s from those back the /64 off, which no single address reaches (its own backoff stops it at 5, 11.1
+at most with its last waits); 2 places beyond the 8 for addresses that proved a paired key within a day (known:
+never refused for nor charged to their /64, and they pay for what they hold as an address not known does, so someone
+at a paired device's address is backed off with it within 30 s: nothing tells them apart before TLS). One line a
 minute per door, "Home door backed off 10.128.0.34 for 300 s: its connections waited without being admitted, or were
 refused." `AskLimits.quietKey`: the quiet after the Mac's Cancel or a stop covers the asker's IPv6 /64. Checks:
-`door-policy` 227 (the scan's attack modelled against the rule before and this one: before, every place held and the
+`door-policy` 243 (the scan's attack modelled against the rule before and this one: before, every place held and the
 paired device refused at all 60 tries in 2 minutes; now the four backed off 12 s in, the paired device admitted at
 every try, one not yet known in at 13 s; closing at 1.9 s, 47.5 s; IPv6 churn in a /64, the /64 at 114 s, holding one
-place at 240 s) and 98 of 98 mutants; `ask-limits` 43 and 24 of 24. Live on loopback synthetic `--pairing` hosts
+place at 240 s) and 104 of 104 mutants; `ask-limits` 43 and 24 of 24. Live on loopback synthetic `--pairing` hosts
 (sources 127.0.0.1, en0's 10.128.0.34, en13's 10.128.0.148 and en14's 169.254.219.184, whose connections to 127.0.0.1
 stay on lo0; 127.0.0.2–5 cannot be bound without a root alias): main's build refused the paired client at all 30
 tries in 90 s ("… 27 over the limit."), backing nobody off; this one cut the four at 4.2 s and backed them off at
 12.6 s ("Home door backed off 10.128.0.34 for 300 s: …", the client at 127.0.0.1 with them); a scratch build with 6
 shared places (three addresses filling them as four fill 8) served a known client at all 20 tries and an unknown one
 from 13 s; one address cycling at 1.9 s held 2 places for good on main and was backed off at 47.9 s here. Plan's
-"What stays open" updated (IPv4 churn, the co-located address, a device not yet paired in a backed-off /64).
+"What stays open" updated (IPv4 churn, the co-located address, a device not yet paired in a backed-off /64, which a
+stranger in it keeps backed off with a dozen refused handshakes as each 5 minutes end).
+- The review (2026-10-29; the report's "The review", f9-pending-slots-report.md in sill-handoff's
+  triage/2026-10-29-security): three findings, each reproduced live on 7929c539 first and fixed in a commit of its own.
+  A kind 19 left its place for nothing, and the home door's verify block takes `sill-pair/1` with any key: a holder
+  doing TLS on it 3 s in and a kind 19 (`v` 2, answered `closed`, nothing shown) 3.5 s later held all 8 places for
+  90 s from four addresses (112 kind 19s), nobody backed off, an unknown paired client refused at all 30 tries; now
+  `Places.End.request` pays as a connection that ended then (fd0a58c5): the same holder backed off at 13.07 s. The
+  wait counted from accept on CLOCK_MONOTONIC, which runs on through a sleep while the deadline's timer does not: one
+  connection waiting across a 20 s SIGSTOP of the host (a sleep's stand-in) backed 127.0.0.1 off at the continue and
+  the known client was refused at all 13 tries; now a wait counts to its place's deadline at most (0b457e48): no
+  backoff, 13 of 13 served. A known address was charged for all of its 10 s (a cut 4.1, its device's own let-go at
+  5 s 1.6, where main charged 1 and nothing): a known device's reconnect whose dials stalled was backed off at 40.06 s
+  and refused at all 6 tries after; now it pays as an address not known (1.1 at most for a handshake, 3.1 for a
+  pairing connection; 8e0148a0): no backoff, 6 of 6 served. Docs: the plans' limits tables, sillclient's `--pair-hold`
+  note, DEVELOPMENT.md, and the /64 trade-off (a check: the /64 open 1.8 s of 15 minutes).
 **Untested, for Noah:** a week of ordinary use at home and away (Wi-Fi, cable, Tailscale, the hotspot) with no
 "backed off" line in Sill.log (note any, with what the device did); a new pairing over the hotspot through Tailscale
-(its handshake inside 4 s); an iPad back after a night asleep.
+(its handshake inside 4 s); an iPad back after a night asleep; from the review, the Mac's lid closed while the iPad
+reconnects, then opened: the iPad back at once, no "backed off" line; the iPad sent to the background mid-dial a few
+times, or walked out of Wi-Fi range while it redials: no "backed off" line for its address.
 
 **Pinch to zoom (2026-10-28/29, addhumal's PR #196 with maintainer edits; issue #65).** Noah's decisions of
 2026-10-19/20: pinch to zoom, not a slider; Photos-like, centred on the point between the fingers, the Mac's cursor

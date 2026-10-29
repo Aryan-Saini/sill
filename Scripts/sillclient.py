@@ -579,7 +579,8 @@ if flood:
 mac_pin = None
 if pair_hold is not None:
     # A pairing connection still pending: TLS up (ALPN sill-pair/1), then silence. The host's
-    # admission deadline (10 s) or a Direct Wireless change may close it first.
+    # deadline for its kind 19 (4 s after the handshake, 10 s at most from accept, a TLS door's
+    # DoorPolicy.deadline) or a Direct Wireless change may close it first.
     ensure_identity(identity_dir)
     hs, _ = tls_connect("sill-pair/1", b64u_decode(pin_arg) if pin_arg and pin_arg != "none" else None)
     t_hold = time.time(); closed_at = None

@@ -1308,17 +1308,21 @@ private one, never this Mac's clipboard.
 `SILL_TEST_NO_SCREEN=1` (a `--synthetic` host only) keeps the window catalog off ScreenCaptureKit altogether: the window list stays empty and no thumbnail is taken, so a headless test host asks macOS for no screen recording, which otherwise counts against the grant of whatever launched it and brings up macOS's reminder after every rebuilt binary.
 
 A TLS door (the remote door, and the home door of `--pairing` and Sill.app)
-charges an address for each connection that ends without being admitted: a
-tenth of a failure, one more for every 2 s it waited beyond the first 2, and at
-least one when the door refused it. Five failures in a minute refuse the
-address for 5 minutes (twelve in 5 minutes from an IPv6 /64's addresses, the
-/64), and a paired key that gets in clears its address. So a test that abandons
-or fails many connections from 127.0.0.1 (a run of `--pair-hold`s, five
-`--expect-tls-fail`s, a client that connects and closes again and again) meets
-that backoff as an attacker would (`--flood`'s resets mostly never reach the
-door), and the host says so ("Home door backed off 127.0.0.1 for 300 s: its
-connections waited without being admitted, or were refused.");
-`SILL_TEST_BACKOFF_SECONDS=<s>` shortens it on a test host.
+charges an address for each connection that ends without being admitted, and
+for each pairing connection's kind 19 (`--pair-ask`, `--pair-url`,
+`--pair-code`): a tenth of a failure, one more for every 2 s it waited beyond
+the first 2 (up to its deadline: 4 s for the handshake, 4 s more for a kind
+19, so a `--pair-hold` longer than that is cut, and refused), and at least one
+when the door refused it. Five failures in a minute refuse the address for 5
+minutes (twelve in 5 minutes from an IPv6 /64's addresses, the /64), and a
+paired key that gets in clears its address. So a test that abandons or fails
+many connections from 127.0.0.1 (a run of `--pair-hold`s, five
+`--expect-tls-fail`s, a client that connects and closes again and again, fifty
+pairing requests in a minute) meets that backoff as an attacker would
+(`--flood`'s resets mostly never reach the door), and the host says so ("Home
+door backed off 127.0.0.1 for 300 s: its connections waited without being
+admitted, or were refused."); `SILL_TEST_BACKOFF_SECONDS=<s>` shortens it on a
+test host.
 
 `Scripts/sillrelay.py --listen 0 --to HOST:PORT [--delay-ms N] [--rate-mbps R]
 [--blackhole-after S] [--record PREFIX]` sits between a client and a host, and

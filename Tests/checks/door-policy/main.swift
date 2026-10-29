@@ -561,6 +561,22 @@ _ = gPart.refusedBeforeStart(src("2601:600:1:2::a"), now: 0)
 _ = gPart.arrive("p", src("2601:600:1:2::a"), now: 1); gPart.leave("p", .admitted(paired: true), now: 1)
 check("group: an IPv6 address that proves a paired key starts clean itself; its /64 keeps what all owed",
       near(gPart.failures("2601:600:1:2::a", now: 2), 0) && near(gPart.failures("2601:600:1:2::/64", now: 2), 5))
+// A trade-off of the /64 (the plan's "What stays"): nothing is charged while it is backed off, but a
+// stranger in it backs it off again with a dozen refused handshakes from new addresses as each 5
+// minutes end (two places at a time), so a device not yet known there waits throughout.
+var keep = Places()
+var keepOpen = 0.0, keepNext = 0
+for tick in 0..<9000 {
+    let t = Double(tick) / 10
+    if !keep.backedOff(src("2601:600:1:2::999"), now: t) { keepOpen += 0.1 }
+    for _ in 0..<2 {
+        keepNext += 1
+        let a = src("2601:600:1:2::f:" + String(keepNext, radix: 16))
+        if case .taken = keep.arrive(keepNext, a, now: t) { keep.leave(keepNext, .refused, now: t + 0.05) }
+    }
+}
+check("group, a trade-off: a stranger in a /64 refused a dozen times from new addresses as each backoff ends keeps it backed off all but \(String(format: "%.1f", keepOpen)) s of 15 minutes",
+      keepOpen < 2.5)
 
 // Known addresses pay for what they hold: someone else at a paired device's address (behind its
 // NAT, or on its address while it is away) is backed off like anyone.
