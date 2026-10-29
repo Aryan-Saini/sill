@@ -438,7 +438,7 @@ final class VirtualStage {
             if oversized, attempt == 0 {
                 // The app took a bigger size than asked (its minimum). Grow the display to it once;
                 // the window lands on a real display for a moment while the display is recreated.
-                print("\(p.appName) insists on \(Int(live.width))×\(Int(live.height)) pt (asked \(Int(wanted.width))×\(Int(wanted.height))); growing the virtual display.")
+                print("\(p.appName) insists on \(ViewportBounds.whole(live.size)) pt (asked \(ViewportBounds.whole(wanted))); growing the virtual display.")
                 do {
                     try await ensureDisplay(atLeast: live.size)
                 } catch {

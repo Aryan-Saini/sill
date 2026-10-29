@@ -184,8 +184,11 @@ package final class StreamCoordinator {
     /// the user's pick.
     private var pickArrivedWhileSwitching: StreamSource?
     /// The client's last stream panel size and text scale. One stream, so with several clients
-    /// the last one to report wins.
+    /// the last one to report wins. Only ever one a host takes (ViewportBounds); a refused one
+    /// leaves it as it was.
     private var viewport: Viewport?
+    /// When each connection's last "Viewport from … refused" line was printed: one a second at most.
+    private var viewportRefusedLineAt: [ObjectIdentifier: CFAbsoluteTime] = [:]
     /// The windows Sill sized for a device in regular mode, each with its way back (WindowRestore,
     /// issue #57): recorded at the first fit (`fitToViewport`), put back when the window stops
     /// streaming (`restoreFits`), handed to the virtual display's stage when it takes the window.
@@ -457,6 +460,7 @@ package final class StreamCoordinator {
                 let id = ObjectIdentifier(connection)
                 self.gestureArrivals[id] = nil
                 self.keyframeRequestAt[id] = nil
+                self.viewportRefusedLineAt[id] = nil
                 self.routes[id] = nil
                 self.lastPairingWanted[id] = nil
                 self.connections[id] = nil
@@ -1049,7 +1053,19 @@ package final class StreamCoordinator {
             print("Keyframe for \(deviceName(connection)): its picture was interrupted.")
             encoder.requestKeyframe()
         case .viewport:
-            guard let v = Wire.decode(Viewport.self, from: message.payload) else { return }
+            // A device's panel and text scale. One outside what a host takes (ViewportBounds), or a
+            // payload that does not decode, is refused whole, with a line: the last viewport stands and
+            // nothing of the message is taken, its rate neither. Until 2026-10-29 a side of 1e300 points
+            // reached the window's fit and the virtual display's window size, whose lines trapped in
+            // Int(), and the host died with every device's session (security scan, finding 4).
+            guard let v = Wire.decode(Viewport.self, from: message.payload) else {
+                refuseViewport("it does not decode as a viewport", from: connection)
+                return
+            }
+            if let why = ViewportBounds.refusal(v) {
+                refuseViewport(why, from: connection)
+                return
+            }
             viewport = v
             let id = ObjectIdentifier(connection)
             clientFPS[id] = v.fps ?? 60
@@ -1247,9 +1263,23 @@ package final class StreamCoordinator {
         // Asked again for a size the app already refused (its minimum): nothing moved.
         guard abs(actual.width - current.width) >= 1 || abs(actual.height - current.height) >= 1 else { return nil }
         Stats.shared.bump("win.resized")
-        print("Resized \(window.owningApplication?.applicationName ?? "?") to \(Int(actual.width))×\(Int(actual.height)) pt "
-              + "(asked \(Int(target.width))×\(Int(target.height)) for a \(Int(v.width))×\(Int(v.height)) panel at \(textScale)×)")
+        // ViewportBounds.whole prints as Int() did, without its trap (finding 4: 1e300 points got here).
+        print("Resized \(window.owningApplication?.applicationName ?? "?") to \(ViewportBounds.whole(actual)) pt "
+              + "(asked \(ViewportBounds.whole(target)) for a \(ViewportBounds.whole(CGSize(width: v.width, height: v.height))) panel at \(textScale)×)")
         return actual
+    }
+
+    /// A device's viewport refused (ViewportBounds; `why` its words, or that it does not decode):
+    /// counted (`vp.refused` in the stats line) and said in a line that names the device, at once and
+    /// then at most once a second per connection, so a device that sends nothing else costs a line a
+    /// second, not one per message.
+    private func refuseViewport(_ why: String, from connection: NWConnection) {
+        Stats.shared.bump("vp.refused")
+        let id = ObjectIdentifier(connection)
+        let now = CFAbsoluteTimeGetCurrent()
+        if let last = viewportRefusedLineAt[id], now >= last, now - last < 1 { return }
+        viewportRefusedLineAt[id] = now
+        print("Viewport from \(deviceName(connection)) refused: \(why)")
     }
 
     /// A new viewport while a window streams. The encoder is fixed to the old size, but the
