@@ -93,9 +93,14 @@ out in Insiders first tomorrow". Merge "Version 0.5.5 for both apps" (PR #244, b
   check 245 of 245 (its stale 03:17 rule moved to 09:17, 41 new for the environments; 25 problems on
   984d7f0c), 46 run blocks under /bin/bash -n; nightly.yml's run blocks executed 52 of 52 (9 failing on
   984d7f0c); the environments' run blocks 19 of 19 (16 failing on 984d7f0c); testflight.yml's mode 12
-  of 12; the keychain steps 16 of 16; 15 of 15 mutants of the environment rules caught; the check's jq
-  filters against the documented response shapes and on the live endpoint (read-only: no environment
-  exists yet).
+  of 12; the keychain steps 16 of 16; 15 of 15 mutants of the environment rules caught; the look's jq
+  filters against the documented response shapes, on the live endpoint (read-only: no environment
+  exists yet) and, when the work resumed after a usage stop, on other public repositories' real
+  environments (a tag rule with a required reviewer, a `main` branch rule), the REST reference read
+  again (the PUT's fields; the POST's `name` and `type`, 404 without `custom_branch_policies`, 303 for a
+  rule already there); actionlint 1.7.12 with the `xcode-27` label declared: only the 17 shellcheck
+  notes 984d7f0c has too; CI's Build and check on 5d2bb590 (run 40865615093). The checklist's
+  TestFlight key line names the Admin key's own file, not the notary key's.
 - **Untested, for Noah (docs/release-checklist.md, "Nightlies", "The first run"):** the privacy
   manifest's ActiveKeyboards (#147's `UITextInputMode.activeInputModes`, ITMS-91053) is declared on main
   since PR #243 (54BD.1; release-ios.sh's check of run 40843967209's binary against main's manifest: every
