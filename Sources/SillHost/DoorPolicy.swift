@@ -304,9 +304,11 @@ enum DoorPolicy {
     // MARK: Test hooks
 
     /// Which hosts honour the TEST ONLY hooks that bear on who gets in or on what pairing needs
-    /// (§4.3): one that does not advertise and is not a .app's executable. Any process of this
-    /// user can start Sill.app's own executable with an environment and arguments, and it then
-    /// runs with Sill's Screen Recording and Accessibility grants; the bundle ignores them.
+    /// (§4.3): one that does not advertise and is not Sill.app's own code (`bundled`: the app's
+    /// AppIdentity, by the code's signature and bundle, wherever it runs from; the CLI is never
+    /// bundled). Any process of this user can start Sill.app's own executable, or a copy of it,
+    /// with an environment and arguments, and it then runs with Sill's Screen Recording and
+    /// Accessibility grants; Sill.app ignores them.
     static func isTestHost(advertises: Bool, bundled: Bool) -> Bool { !advertises && !bundled }
 
     /// TEST ONLY: SILL_TEST_ASK_FROM_THIS_MAC=1, on a test host only, judges an ask from this Mac

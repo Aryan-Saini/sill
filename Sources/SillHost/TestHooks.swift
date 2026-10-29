@@ -2,13 +2,13 @@ import Foundation
 
 /// The TEST ONLY variables that bear on who gets in or what pairing needs
 /// (docs/home-pairing-plan.md §4.3). Each is read where it acts, and honoured only on a test host
-/// (DoorPolicy.isTestHost: one that does not advertise and is not a .app's executable): any process
-/// of this user can start Sill.app's own executable with an environment, and it then runs with
-/// Sill's Screen Recording and Accessibility grants. Anywhere else each one set is ignored with one
-/// line, here. The encoder's variables and the test tone's (SyntheticAudio: only a synthetic host
-/// has the tone) let nobody in and are not among them;
-/// SILL_TEST_REMOTE_DIR is read, and refused, where the identity store is chosen (the CLI and the
-/// app).
+/// (DoorPolicy.isTestHost: one that does not advertise and is not Sill.app's own code, by its
+/// signature and bundle wherever it runs from): any process of this user can start Sill.app's own
+/// executable, or a copy of it, with an environment, and it then runs with Sill's Screen Recording
+/// and Accessibility grants. Anywhere else each one set is ignored with one line, here. The
+/// encoder's variables and the test tone's (SyntheticAudio: only a synthetic host has the tone) let
+/// nobody in and are not among them; SILL_TEST_REMOTE_DIR is read, and refused, where the identity
+/// store is chosen (the CLI and the app).
 enum TestHooks {
     static let doorAndPairing = [
         "SILL_TEST_SERVICE_TYPE", "SILL_TEST_SWAP_FAIL", "SILL_TEST_PEER_TO_PEER_INTERFACE", "SILL_TEST_ORIGIN",
