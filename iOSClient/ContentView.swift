@@ -298,8 +298,9 @@ struct ContentView: View {
 /// * `-SillInputScript '<t> <step>; …'` — with `-SillLive 1` only: input for the simulator gates,
 ///   which have no finger (`InputScript`): `t` is seconds since the session's first window list, and
 ///   a step is `down`, `pad DX,DY`, `lift`, `click` or `padscroll DX,DY` on the portrait pad, `tap
-///   X,Y` (a frame fraction) or `drag DX,DY` on the stream, `key USAGE` (a hardware key) or `row
-///   USAGE` (a key of the portrait key row), `esc [MODS]`, `scroll DX,DY`, `wheel DX,DY`, `keyboard
+///   X,Y` (a frame fraction) or `drag DX,DY` on the stream, `key USAGE` (a hardware key), `type TEXT`
+///   (the on-screen keyboard's typing) or `row USAGE` (a key of the portrait key row), `esc [MODS]`,
+///   `scroll DX,DY`, `wheel DX,DY`, `keyboard
 ///   attach|detach` or `orient landscape|portrait` (InputScript has them all). The console says
 ///   "input script: …" at each.
 ///   It runs only when the session was dialled by `-SillConnect` to a loopback address and the
@@ -714,6 +715,8 @@ struct LayoutHarness: View {
 ///   picture's middle, lifted at 600 pt/s (so it coasts), through the finger pan's scroll path
 ///   (Reverse Scrolling turns it around);
 /// * `key USAGE` — a hardware key (a HID usage), down and up: this device's pointer hides;
+/// * `type TEXT` — the on-screen keyboard's typing: TEXT (one word) handed to the input view as the
+///   keyboard hands it its keys (`insertText`), typed text for the Mac;
 /// * `row USAGE` — a key of the portrait key row: what the sprite shows stays;
 /// * `gesture NAME[,FINGERS]` — a three-finger (or four-finger) gesture a surface decided, through
 ///   `StreamClient.sendGesture` as a surface's decision goes (the switch, the Mac's `gestures`, the
@@ -742,7 +745,7 @@ struct LayoutHarness: View {
 enum InputScript {
     enum Step: Equatable, CustomStringConvertible {
         case down, pad(dx: Double, dy: Double), lift, click, padScroll(dx: Double, dy: Double)
-        case tap(x: Double, y: Double), drag(dx: Double, dy: Double), key(UInt16), row(UInt16)
+        case tap(x: Double, y: Double), drag(dx: Double, dy: Double), key(UInt16), type(String), row(UInt16)
         case touch(x: Double, y: Double), pinch(factor: Double, x: Double, y: Double)
         case gesture(TrackpadGestures.Gesture, fingers: Int)
         case esc(modifiers: String), scroll(dx: Double, dy: Double), wheel(dx: Double, dy: Double)
@@ -760,6 +763,7 @@ enum InputScript {
             case .pinch(let factor, let x, let y): return "pinch \(factor)@\(x),\(y)"
             case .drag(let dx, let dy): return "drag \(dx),\(dy)"
             case .key(let usage): return "key \(usage)"
+            case .type(let text): return "type \(text)"
             case .row(let usage): return "row \(usage)"
             case .gesture(let g, let fingers): return "gesture \(g.rawValue)" + (fingers == 3 ? "" : ",\(fingers)")
             case .esc(let modifiers): return "esc" + (modifiers.isEmpty ? "" : " \(modifiers)")
@@ -816,6 +820,7 @@ enum InputScript {
                 step = .pinch(factor: factor, x: xy[0], y: xy[1])
             case ("drag", 3) where pair.count == 2: step = .drag(dx: pair[0], dy: pair[1])
             case ("key", 3): guard let usage = UInt16(words[2]) else { return nil }; step = .key(usage)
+            case ("type", 3): step = .type(words[2])
             case ("row", 3): guard let usage = UInt16(words[2]) else { return nil }; step = .row(usage)
             case ("gesture", 3):
                 let parts = words[2].split(separator: ",").map(String.init)
@@ -908,6 +913,7 @@ enum InputScript {
             return
         case .drag(let dx, let dy): if let overlay { overlay.scriptScroll(dx: dx, dy: dy, from: .finger) } else { done = false }
         case .key(let usage): if let overlay { overlay.scriptKey(usage) } else { done = false }
+        case .type(let text): if let overlay { overlay.scriptType(text) } else { done = false }
         case .row(let usage):
             client.sendFromKeyRow(.key(hidUsage: usage, down: true, modifiers: 0))
             client.sendFromKeyRow(.key(hidUsage: usage, down: false, modifiers: 0))

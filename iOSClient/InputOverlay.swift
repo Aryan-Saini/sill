@@ -539,6 +539,12 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
         send(.key(hidUsage: usage, down: false, modifiers: 0))
     }
 
+    /// `type TEXT`: the on-screen keyboard's typing, as it hands this view its text (`insertText`): typed
+    /// text for the Mac whoever types a hardware keyboard's characters (KeyTyping is for presses only).
+    func scriptType(_ text: String) {
+        insertText(text)
+    }
+
     /// `esc [MODS]`: Esc as its key command reaches this view, only while it takes Esc (it holds the
     /// keyboard and no EscapeKey is on screen in its window). False when it does not.
     func scriptEscape(_ modifiers: UIKeyModifierFlags) -> Bool {

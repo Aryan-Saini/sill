@@ -17,7 +17,8 @@ Tests/keyrig/run.sh UDID keys 29,04,e3:down,1a,e3:up            # Esc, a, then â
 Tests/keyrig/run.sh UDID point 'move 300,200|wheel -3|wait 0.2|wheel -3'   # the pointer over a view, two notches
 ```
 
-`keys` takes `USAGE[:down|:up]` steps (a bare usage is a press: down, 60 ms, up), 250 ms apart. `point`
+`keys` takes `USAGE[:down|:up]` steps (a bare usage is a press: down, 60 ms, up), 250 ms apart, and
+`wait:S`, S seconds more: `13:down,wait:2,13:up` holds P for about 2.3 s. `point`
 takes `move DX,DY`, `wheel DY` (lines), `phase began|changed|ended DX,DY`, `momentum BITS DY` (the
 momentum bits in hex: 2 start, 1 continue, 4 end) and `wait S`, separated by `;` or `|`. Each run makes
 its own virtual device, waits `SETTLE` seconds (0.6) for the event system to take it, posts, and keeps it
