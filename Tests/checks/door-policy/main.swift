@@ -536,9 +536,39 @@ gMostTrim.ready("a", now: 5.99); gMostTrim.ready("b", now: 5.99)
 let cutAt = gMostTrim.deadline("a") ?? -1
 var gMostBacked = gMostTrim.leave("a", .refused, now: cutAt) + gMostTrim.leave("b", .refused, now: cutAt)
 for n in 0..<20 { if case .taken = gMostTrim.arrive("c\(n)", a7, now: 11 + Double(n)) { gMostBacked += gMostTrim.leave("c\(n)", .refused, now: 15 + Double(n)) } }
-check("group: the most one address not yet known adds before it is backed off (4.9, then its two places cut at 8 s: \(String(format: "%.2f", gMostTrim.failures("2601:600:1:2::/64", now: 40))) in all) leaves its /64 open",
-      near(cutAt, 9.99) && gMostBacked == ["2601:600:1:2::7"] && gMostTrim.failures("2601:600:1:2::/64", now: 40) < D.groupFailuresForBackoff
-      && gMostTrim.failures("2601:600:1:2::/64", now: 40) > 11 && !gMostTrim.backedOff(src("2601:600:1:2::8"), now: 40))
+check("group: the most one address not yet known adds before it is backed off (4.9, then its two places cut at 8 s: 11.1) counts for its share, \(String(format: "%.2f", gMostTrim.failures("2601:600:1:2::/64", now: 40))), and leaves its /64 open",
+      near(cutAt, 9.99) && gMostBacked == ["2601:600:1:2::7"] && near(gMostTrim.failures("2601:600:1:2::/64", now: 40), D.groupShare)
+      && !gMostTrim.backedOff(src("2601:600:1:2::8"), now: 40))
+// The review of 2026-10-29, its second pass: an address's own backoff (5 in 60 s) does not bound what
+// it adds over the /64's 300 s. Paced under it, one address alone backed its /64 off: an older Sill's
+// plain try every 2 s on its link-local address (a tenth each, 3 a minute) backed off its whole link,
+// fe80::/64%en0, at 238 s, and a device not yet known there was refused; one refusal every 16 s (4 a
+// minute), at 176 s. Now an address counts for `groupShare` (6) at most: it takes two.
+check("group: an address counts for 6 at most toward its /64, half the 12", D.groupShare == 6 && D.groupShare * 2 == D.groupFailuresForBackoff)
+var gOlder = Places()
+var gOlderBacked: [String] = []
+for n in 0..<300 { let t = Double(n) * 2; if case .taken = gOlder.arrive(n, src("fe80::30", "en0"), now: t) { gOlderBacked += gOlder.leave(n, .ended, now: t + 0.01) } }
+check("group: an older Sill's plain try every 2 s on its link-local address for 10 minutes backs off neither it nor its link (counted for \(String(format: "%.1f", gOlder.failures("fe80::/64%en0", now: 599))))",
+      gOlderBacked.isEmpty && near(gOlder.failures("fe80::/64%en0", now: 599), 6) && !gOlder.backedOff(src("fe80::99", "en0"), now: 599))
+func refusedEvery16(_ addresses: [String]) -> (backed: [String], at: Double?) {
+    var p = Places(), backed: [String] = [], at: Double?
+    for n in 0..<38 {
+        for (k, a) in addresses.enumerated() {
+            let t = Double(n) * 16 + Double(k) * 8
+            if case .taken = p.arrive("\(a)-\(n)", src(a), now: t) {
+                let b = p.leave("\(a)-\(n)", .refused, now: t + 0.1)
+                if b.contains("2601:600:1:2::/64"), at == nil { at = t + 0.1 }
+                backed += b
+            }
+        }
+    }
+    return (backed, at)
+}
+let r16one = refusedEvery16(["2601:600:1:2::7"]), r16two = refusedEvery16(["2601:600:1:2::7", "2601:600:1:2::8"])
+check("group: one address refused every 16 s for 10 minutes (4 a minute, under its own 5): never backed off, nor its /64",
+      r16one.backed.isEmpty)
+check("group: two such addresses back the /64 off once both have given their 6 (at \(r16two.at ?? -1) s)",
+      (r16two.at.map { near($0, 88.1) } ?? false) && r16two.backed.allSatisfy { $0 == "2601:600:1:2::/64" })
 var gKnownPays = Places()
 _ = gKnownPays.arrive("p", a7, now: 0); gKnownPays.leave("p", .admitted(paired: true), now: 0)
 var gKnownBacked: [String] = []
@@ -927,6 +957,9 @@ check("legit: a dial's loser every 6 s for 10 minutes from an address that never
       !losers.backedOff(v4("10.0.0.30"), now: 600) && losers.failures("10.0.0.30", now: 599) < 2)
 let older = legit((0..<300).map { (Double($0) * 2, 0.01, Places.End.ended) })
 check("legit: an older Sill's plain try every 2 s for 10 minutes: never backed off", !older.backedOff(v4("10.0.0.30"), now: 600))
+let older6 = legit((0..<300).map { (Double($0) * 2, 0.01, Places.End.ended) }, source: src("2601:600:1:2::30"))
+check("legit: the same from an IPv6 address: never backed off, nor its /64 (the review's second pass: at 238 s before)",
+      !older6.backedOff(src("2601:600:1:2::30"), now: 600) && !older6.backedOff(src("2601:600:1:2::31"), now: 600))
 let flicker = legit((0..<200).map { (Double($0) * 0.3, 0.01, Places.End.ended) })
 check("legit, a trade-off: a plain retry every 0.3 s (a build from before pairing at home) backs its address off within a minute",
       flicker.backedOff(v4("10.0.0.30"), now: 59))

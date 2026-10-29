@@ -15,11 +15,12 @@ import StreamProtocol
 /// comes, costs its address (and, from an address not known, its /64) a tenth of a failure, one
 /// more for every 2 s it waited beyond the first 2, never less than a tenth for each second it
 /// waited, and at least one when the door refused it; 5 failures within 60 s refuse the address for
-/// 300 s, 12 within 300 s its /64 (but not the /64's known addresses), and a paired key clears its
-/// address's count. Sources the door does not admit are cancelled before the connection starts, so
-/// they get no byte, and judged again at `.preparing`, `.ready` and at kind 19. The verify block
-/// decides trust from the lock-protected TrustSnapshot and the negotiated ALPN (DoorPolicy.trusts).
-/// Refusals and backoffs are counted and reported at most once a minute, one line each per door.
+/// 300 s, 12 within 300 s its /64 (an address counting 6 at most; never the /64's known addresses),
+/// and a paired key clears its address's count. Sources the door does not admit are cancelled
+/// before the connection starts, so they get no byte, and judged again at `.preparing`, `.ready`
+/// and at kind 19. The verify block decides trust from the lock-protected TrustSnapshot and the
+/// negotiated ALPN (DoorPolicy.trusts). Refusals and backoffs are counted and reported at most once
+/// a minute, one line each per door.
 ///
 /// Admitted sessions pass the device gate here, one place for both doors (DeviceGate; with the
 /// floor above "0" the hello, the first message inside TLS, is read before anything is registered,

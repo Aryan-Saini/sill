@@ -247,15 +247,21 @@ enum DoorPolicy {
     static let waitCost = 0.1
     /// `failuresForBackoff` within `failureWindow` back an address off for `backoffSeconds`, as
     /// before. `groupFailuresForBackoff` within `groupFailureWindow` back an IPv6 /64 off, counting
-    /// only its addresses that are not known: more than one address adds before it is backed off
-    /// itself (at most about 11: 4.9, then its two places' waits for a kind 19, cut at 8 s), after
-    /// which it adds nothing, so no single address backs its /64 off; and over the longer window,
-    /// which a host taking a new address for every connection fills even holding one place at the
-    /// cheapest (`waitCost` a second: 30 in 300 s, the /64 at 120 s; two places, at 60 s).
+    /// only its addresses that are not known, each for `groupShare` at most, so that it takes two of
+    /// them at least; over the longer window, which a host taking a new address for every
+    /// connection fills even holding one place at the cheapest (`waitCost` a second: 30 in 300 s, the
+    /// /64 at 120 s; two places, at 60 s).
     static let failureWindow: Double = 60
     static let failuresForBackoff: Double = 5
     static let groupFailureWindow: Double = 300
     static let groupFailuresForBackoff: Double = 12
+    /// The most one address counts toward its /64 within `groupFailureWindow`: half of
+    /// `groupFailuresForBackoff`. Its own backoff (5 in 60 s) does not bound what an address adds over
+    /// 300 s: paced under it, one address alone backed its /64 off (the review of 2026-10-29, its
+    /// second pass: an older Sill's plain try every 2 s at 238 s, a refusal every 16 s at 176 s), and
+    /// at home a link-local address's /64 is its whole interface, so every device not yet known there
+    /// was then refused for 5 minutes; Tailscale's IPv6 is one /64 for every node.
+    static let groupShare: Double = 6
     static let backoffSeconds: Double = 300
     /// How long an address that proved a paired key at `.ready` stays known.
     static let knownFor: Double = 86_400
@@ -316,8 +322,8 @@ enum DoorPolicy {
     /// a pairing connection when its kind 19 comes (`End.request`), costs its address
     /// `charge(held:refused:)`, known or not: an address that is known, or that someone else on the
     /// network takes while its device is away, still pays for what it holds. Its group is
-    /// charged the same while the address is not known. A paired key at `.ready` clears its address's
-    /// failures and backoff, as before.
+    /// charged the same while the address is not known, one address counting for `groupShare` at
+    /// most. A paired key at `.ready` clears its address's failures and backoff, as before.
     struct Places {
         enum Arrival: Equatable {
             /// It waits in a place now; `known`: its address is known.
@@ -360,7 +366,10 @@ enum DoorPolicy {
         let backoff: Double
         private(set) var pending: [AnyHashable: Entry] = [:]
         /// By address and by group (their keys never meet: a group's ends in "/64…").
-        private var charges: [String: [(at: Double, weight: Double)]] = [:]
+        private var charges: [String: [Charge]] = [:]
+        /// One charge: when, how many failures, and the address charged (in a group's records, which
+        /// of its addresses, for `groupShare`).
+        private struct Charge { let at: Double; let weight: Double; let from: String }
         private var backedOffUntil: [String: Double] = [:]
         /// By address.
         private var provenAt: [String: Double] = [:]
@@ -381,9 +390,17 @@ enum DoorPolicy {
         }
 
         /// The failures an address is charged with now (within `failureWindow`), or a group (within
-        /// `groupFailureWindow`).
+        /// `groupFailureWindow`, each of its addresses counting for `groupShare` at most).
         func failures(_ key: String, now: Double) -> Double {
-            (charges[key] ?? []).filter { now - $0.at < Self.window(key) }.reduce(0) { $0 + $1.weight }
+            Self.total((charges[key] ?? []).filter { now - $0.at < Self.window(key) }, key: key)
+        }
+
+        /// What `list` comes to for `key`: a group's addresses each for `groupShare` at most.
+        private static func total(_ list: [Charge], key: String) -> Double {
+            guard key.contains("/") else { return list.reduce(0) { $0 + $1.weight } }
+            var each: [String: Double] = [:]
+            for c in list { each[c.from, default: 0] += c.weight }
+            return each.values.reduce(0) { $0 + min($1, DoorPolicy.groupShare) }
         }
 
         /// A key's window: a group's (its key has the prefix length, "/64") or an address's.
@@ -473,26 +490,26 @@ enum DoorPolicy {
             backedOffUntil[address] = nil
         }
 
-        /// `weight` failures for the address, and for its group (an IPv6 address's /64) unless the
-        /// address is known: a known one's own backoff is what bounds it, and its group's would not
-        /// refuse it anyway.
+        /// `weight` failures for the address, and for its group (an IPv6 address's /64, where it counts
+        /// for `groupShare` at most) unless the address is known: a known one's own backoff is what
+        /// bounds it, and its group's would not refuse it anyway.
         private mutating func charge(_ s: Source, _ weight: Double, now: Double) -> [String] {
             var backedOff: [String] = []
             let known = isKnown(s.address, now: now)
-            if add(s.address, weight, threshold: DoorPolicy.failuresForBackoff, now: now) { backedOff.append(s.address) }
-            if s.group != s.address, !known, add(s.group, weight, threshold: DoorPolicy.groupFailuresForBackoff, now: now) {
+            if add(s.address, weight, from: s.address, threshold: DoorPolicy.failuresForBackoff, now: now) { backedOff.append(s.address) }
+            if s.group != s.address, !known, add(s.group, weight, from: s.address, threshold: DoorPolicy.groupFailuresForBackoff, now: now) {
                 backedOff.append(s.group)
             }
             return backedOff
         }
 
-        /// `weight` more failures for `key`; true when they reach `threshold` within its window, which
-        /// backs `key` off and starts its count again.
-        private mutating func add(_ key: String, _ weight: Double, threshold: Double, now: Double) -> Bool {
+        /// `weight` more failures for `key`, charged for the address `from`; true when they reach
+        /// `threshold` within its window, which backs `key` off and starts its count again.
+        private mutating func add(_ key: String, _ weight: Double, from: String, threshold: Double, now: Double) -> Bool {
             var list = (charges[key] ?? []).filter { now - $0.at < Self.window(key) }
-            list.append((now, weight))
+            list.append(Charge(at: now, weight: weight, from: from))
             // A tenth fifty times sums to a hair under 5 in binary: compare with a margin.
-            guard list.reduce(0, { $0 + $1.weight }) + 1e-9 >= threshold else {
+            guard Self.total(list, key: key) + 1e-9 >= threshold else {
                 charges[key] = list
                 return false
             }
