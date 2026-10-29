@@ -942,8 +942,10 @@ expired (TestFlight › the build › Expire Build). The pre-release can be dele
 nightly makes it again.
 
 A release after nightlies: the version is already on main (part 2's first item), so tag the commit.
-Sill for Mac as before; the pre-release stays beside the release, never "latest". Sill for iPhone and
-iPad: App Store Connect already has builds of the version numbered by commit count (987 and up), and
+Sill for Mac: with `SILL_SIGN_IN_CI` on, as the nightlies need it, pushing the tag starts release.yml's
+publish job, which builds, notarizes and publishes the release itself, the profile embedded; don't also
+run `release.sh --publish` from this Mac (it would find the release there and stop). The pre-release
+stays beside the release, never "latest". Sill for iPhone and iPad: App Store Connect already has builds of the version numbered by commit count (987 and up), and
 the committed CURRENT_PROJECT_VERSION (4) is far below them, so either submit the nightly build of
 the tagged commit itself (that commit, App Store-signed, processed and tested), or upload from the
 tag with `--build-number "$(git rev-list --count HEAD)"`, above every nightly before it.
