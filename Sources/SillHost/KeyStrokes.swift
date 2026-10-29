@@ -321,7 +321,7 @@ package enum DroppedInput {
 /// from it in the quarter of a second until its connection closes, or from the input held for it (up
 /// to 0.6 s), and nothing it pressed stays down there for want of its up (a modifier would make every
 /// later click a ⌘-click, a button every later move a drag). The keys it still holds when it leaves go
-/// up as any leaving device's do (KeyStrokes.release).
+/// up as any leaving device's do (KeyStrokes.release), and so does a button it holds (`buttonsLetGo`).
 package enum RevokedInput {
     /// What a revoked session's receive loop still hands on (StreamServer, on its network queue): a
     /// key's up, or a button's, which may let go of something the device holds. Its downs, moves,
@@ -348,5 +348,18 @@ package enum RevokedInput {
         case .pointer(.rightUp, _, _): return rightOwner == device
         default: return false
         }
+    }
+
+    /// A device left (its connection closed): which of its buttons go up as it goes, where the pointer
+    /// is, after its keys (InputInjector.releaseKeys). A device the Mac no longer served (`revoked`) lets
+    /// go of a button whose down it made last (`leftOwner`, `rightOwner`, nil while the button is up):
+    /// its up would still have gone (`stillGoes`), but its connection closed first (a drag the Mac's user
+    /// cut off), and left down the button would make every later move, any device's, a drag. Any other
+    /// device's buttons stay as they are when it leaves, as before: its session may go on over another
+    /// connection (a move to the cable or to Wi-Fi), whose up lets go of it.
+    package static func buttonsLetGo(by device: KeyStrokes.Device, revoked: Bool,
+                                     leftOwner: KeyStrokes.Device?, rightOwner: KeyStrokes.Device?) -> [PointerAction] {
+        guard revoked else { return [] }
+        return (leftOwner == device ? [.leftUp] : []) + (rightOwner == device ? [.rightUp] : [])
     }
 }

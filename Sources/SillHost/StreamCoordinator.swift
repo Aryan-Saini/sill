@@ -477,9 +477,11 @@ package final class StreamCoordinator {
                 if self.flipWait == id { self.flipWait = nil }
                 self.menus.clientLeft(connection)
                 self.clipboard.clientLeft(connection)
+                // Its keys go up, and its buttons when the Mac no longer served it (`revoked`, read before
+                // it is forgotten below). Its input still held for an activation is judged as a departed
+                // device's from here on (`gone`: `leftWhileHeld`), and an identifier a later connection
+                // takes is never revoked.
                 self.releaseKeys(of: id)
-                // Its input still held for an activation is judged as a departed device's from here on
-                // (`gone`: `leftWhileHeld`), and an identifier a later connection takes is never revoked.
                 self.revoked.remove(id)
                 self.status.update { $0.devices.removeAll { $0.id == id } }
                 // The last device at home left devices away behind: the away quality, at once.
@@ -1711,8 +1713,9 @@ package final class StreamCoordinator {
     private enum Held { case input(InputEvent, CGRect, KeyStrokes.Device), chord(keyCode: UInt16, flags: UInt64, device: KeyStrokes.Device) }
     private var heldInput: [Held] = []
     private var holdUntil: CFAbsoluteTime = 0
-    /// Devices that left while input was held: their keys go up after it (`releaseKeys`).
-    private var leftWhileHeld: [KeyStrokes.Device] = []
+    /// Devices that left while input was held: their keys go up after it (`releaseKeys`), and the
+    /// buttons of one the Mac no longer served (`revoked`).
+    private var leftWhileHeld: [(device: KeyStrokes.Device, revoked: Bool)] = []
     /// How long held input waits for the app to become frontmost before it is replayed anyway.
     private static let activationTimeout: TimeInterval = 0.6
 
@@ -1747,7 +1750,7 @@ package final class StreamCoordinator {
     /// A device the Mac no longer serves (`revoked`), or one that left while input was held
     /// (`leftWhileHeld`): of what it sent, only the up of a key or a button it holds down still goes.
     private func gone(_ device: KeyStrokes.Device) -> Bool {
-        revoked.contains(device) || leftWhileHeld.contains(device)
+        revoked.contains(device) || leftWhileHeld.contains { $0.device == device }
     }
 
     /// StreamServer marked this device revoked (`closeSessions`). Ignored once it has left (no route):
@@ -1763,18 +1766,20 @@ package final class StreamCoordinator {
         }
     }
 
-    /// A device left: the keys it still holds down on the Mac go up (InputInjector.releaseKeys),
-    /// after whatever of its input is still held for an activation, so no up of its own is overtaken
-    /// and no down of its own comes after.
+    /// A device left: the keys it still holds down on the Mac go up (InputInjector.releaseKeys), and
+    /// the buttons of one the Mac no longer served (`revoked`: RevokedInput.buttonsLetGo), after
+    /// whatever of its input is still held for an activation, so no up of its own is overtaken and no
+    /// down of its own comes after.
     private func releaseKeys(of device: KeyStrokes.Device) {
-        if !heldInput.isEmpty || CFAbsoluteTimeGetCurrent() < holdUntil { leftWhileHeld.append(device); return }
-        injector.releaseKeys(of: device)
+        let cutOff = revoked.contains(device)
+        if !heldInput.isEmpty || CFAbsoluteTimeGetCurrent() < holdUntil { leftWhileHeld.append((device, cutOff)); return }
+        injector.releaseKeys(of: device, revoked: cutOff)
     }
 
     private func releaseKeysOfDevicesThatLeft() {
         let left = leftWhileHeld
         leftWhileHeld = []
-        for device in left { injector.releaseKeys(of: device) }
+        for (device, cutOff) in left { injector.releaseKeys(of: device, revoked: cutOff) }
     }
 
     private func raiseIfInteracting(_ event: InputEvent) {

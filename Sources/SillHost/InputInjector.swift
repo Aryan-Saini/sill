@@ -526,9 +526,15 @@ final class InputInjector {
 
     /// A device left: every key it still holds down goes up (KeyStrokes.release), so a key or a
     /// modifier whose up it never sent (its connection ended in between) does not stay down on the
-    /// Mac and make the next click a ⌘-click. Counted, `in.keyLetGo`, when posted.
-    func releaseKeys(of device: KeyStrokes.Device) {
+    /// Mac and make the next click a ⌘-click. Counted, `in.keyLetGo`, when posted. A device the Mac
+    /// no longer served (`revoked`) lets go of a button it holds down too, where the pointer is
+    /// (RevokedInput.buttonsLetGo), or every later move would be a drag.
+    func releaseKeys(of device: KeyStrokes.Device, revoked: Bool = false) {
         post(keys.release(device), letGo: true)
+        for action in RevokedInput.buttonsLetGo(by: device, revoked: revoked, leftOwner: left.isDown ? left.owner : nil,
+                                                rightOwner: right.isDown ? right.owner : nil) {
+            pointer(action, at: pointerNow())
+        }
     }
 
     /// The host is going: every key any device holds down goes up (KeyStrokes.releaseAll), then a

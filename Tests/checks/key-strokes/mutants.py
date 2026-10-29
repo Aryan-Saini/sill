@@ -133,6 +133,13 @@ MUTANTS = [
     ("everything of a revoked device lands", STROKES,
      "        case .pointer(.rightUp, _, _): return rightOwner == device\n        default: return false\n",
      "        case .pointer(.rightUp, _, _): return rightOwner == device\n        default: return true\n"),
+    # A revoked device's buttons as it leaves (the review of PR #254)
+    ("a removed device's buttons stay down when it leaves (before the review)", STROKES,
+     "        guard revoked else { return [] }\n        return (leftOwner == device ? [.leftUp] : []) + (rightOwner == device ? [.rightUp] : [])\n",
+     "        return []\n"),
+    ("every leaving device lets go of its buttons", STROKES, "        guard revoked else { return [] }\n", ""),
+    ("a removed device lets go of another's left button", STROKES, "(leftOwner == device ? [.leftUp] : [])", "(leftOwner != nil ? [.leftUp] : [])"),
+    ("a removed device's right button judged by the left", STROKES, "(rightOwner == device ? [.rightUp] : [])", "(leftOwner == device ? [.rightUp] : [])"),
     # The device: its shortcuts
     ("a shortcut without its modifiers' keys going down", CHORDS, "        modifiersDown(modifiers)\n            + [.key(", "        [.key("),
     ("a shortcut without its modifiers' keys coming up", CHORDS, "\n            + modifiersUp(modifiers)\n", "\n"),
