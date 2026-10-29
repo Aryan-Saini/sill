@@ -14,14 +14,16 @@ rule per path, and a Mac held `/Applications/Sill.app` allowed and `…/Contents
 (`socketfilterfw --listapps`): nothing reached Sill from the network, System Settings showed it allowed, and
 `--getappblocked` on the bundle said "permitted"; `sudo socketfilterfw --unblockapp` on the executable fixed it.
 No wire change.
-- `FirewallCheck` asks `/usr/libexec/ApplicationFirewall/socketfilterfw` `--getglobalstate`, then while on
-  `--getblockall`, `--getappblocked` for the running executable (`proc_pidpath`) and its bundle, and
-  `--listapps`: a process each, read-only, no privileges (macOS 27.0.1: 4–8 ms each, no prompt; one run with
-  `--listapps` after `--getappblocked` was killed, 6 of 6; no `com.apple.alf.plist` there). At launch, when the
-  listener comes up, when Sill.app's General opens or Sill becomes active over it, and when a device gets in
-  from the network while the verdict says none can (`asksAgain`); never on a timer.
-- `FirewallRule` (pure, `Tests/checks/firewall`, 335 checks, 64 mutants): off, allows,
-  `blocks(executable:bundle:)` (its own answer or its rule in the list, either enough), `blocksAll`, unknown.
+- `FirewallCheck` asks `/usr/libexec/ApplicationFirewall/socketfilterfw` `--getglobalstate`, then unless it is
+  off `--getblockall`, `--getappblocked` for the running executable (`proc_pidpath`) and its bundle, and
+  `--listapps`: a process each, read-only, no privileges (macOS 27.0.1: 4–8 ms each, no prompt; asked in one run
+  the tool dies, 137 or 133, whenever `--getappblocked` is given a bundle's path and another option follows; no
+  `com.apple.alf.plist` there). At launch, when the listener comes up, when Sill.app's status menu opens (the
+  glyph at once, its item from the next opening), when its General opens or Sill becomes active over it, and
+  when a device gets in from the network while the verdict says none can (`asksAgain`); never on a timer.
+- `FirewallRule` (pure, `Tests/checks/firewall`, 340 checks, 67 mutants): off, allows (only once `--listapps`
+  was read), `blocks(executable:bundle:)` (its own answer or its rule in the list, either enough), `blocksAll`,
+  unknown (with why, in the log).
   While it blocks: General's line in the Permissions style with `sudo …/socketfilterfw --unblockapp <the running
   executable's path>` (a line per option; Copy copies one line), for Block all where to turn it off; the menu's
   "Devices Can’t Connect — The macOS firewall blocks Sill’s executable." (opens General); one log line per change
@@ -35,10 +37,25 @@ No wire change.
   unreadable, a VPN-origin client clearing a stale verdict, the bare app's menu and line, this Mac's real
   firewall "none (allows)". Not built: an Unblock button with the admin password (`osascript` off the main
   thread, or a privileged helper), Noah's call.
+- The review (2026-10-29, three lenses; each finding reproduced first, then fixed in a commit of its own;
+  sill-handoff's `triage/2026-10-29-security/firewall-line-report.md`, "The review"): a block that came after
+  launch (a Deny in the firewall's own prompt, Block all turned on) went unsaid until General opened or the
+  listener was replaced, as `asksAgain` can only clear one (on loopback, the canned answer blocked from 2 s: a
+  client at 3.6 s and the bare app's menu at 4 and 7 s said nothing): the status menu asks again as it opens
+  (bd18d96b); with `--listapps` unread the verdict took the executable's own "permitted" for allowed and dropped
+  why: unknown, with why, unless an answer blocks (3d10ea95); the check's usage stand-in had no "apps", so a
+  reading that took any mention of apps for a list passed (56d3f3a3); the docs had the tool die whenever
+  `--listapps` followed `--getappblocked` in one run: it dies when `--getappblocked` is given a bundle's path
+  and another option follows, 8 of 8 (the docs commit). Re-run: the check 340 and 67 of 67 mutants (64 of 64
+  before; two extra mutants had survived); `run-all.sh`, all 57; the release build, the CaptureProbe warning
+  only; main's CLI masked and sorted, idle (8 lines) and with a client (three passes, as main against main);
+  previews 162 files; on loopback a device in from a VPN re-asking without clearing a block that holds, and
+  clearing a stale one.
 - **Untested, for Noah:** the report's state by hand (`sudo …/socketfilterfw --add …/Contents/MacOS/Sill`, then
   `--blockapp`; `--remove` after): the device's tap failing, the menu item and log line, General's line and
-  Copy, the command in Terminal, then both gone without a relaunch; Block all on and off; VoiceOver; macOS 14
-  or 15 (answers that don't read log "Firewall: couldn’t read …" once and show nothing).
+  Copy, the command in Terminal, then both gone without a relaunch; Block all on and off, also with Sill running
+  and its menu opened twice (the glyph turns at the first, Devices Can’t Connect at the second); VoiceOver;
+  macOS 14 or 15 (answers that don't read log "Firewall: couldn’t read …" once and show nothing).
 
 **Pinch to zoom (2026-10-28/29, addhumal's PR #196 with maintainer edits; issue #65).** Noah's decisions of
 2026-10-19/20: pinch to zoom, not a slider; Photos-like, centred on the point between the fingers, the Mac's cursor
@@ -6073,8 +6090,8 @@ good.
   log's lines; the TEST ONLY SILL_TEST_FIREWALL's canned answers; pure,
   `Tests/checks/firewall`) and `FirewallCheck` (asks `socketfilterfw` five
   read-only questions, a process each, no privileges: at launch, when the
-  listener comes up, when Sill.app's General opens, when a device gets in
-  while the verdict says none can), `DeviceSettings` (what a device may
+  listener comes up, when Sill.app's status menu or General opens, when a
+  device gets in while the verdict says none can), `DeviceSettings` (what a device may
   set, `HostConfig` ↔ wire), `HostLog` (the print shadow, the app's ring and
   log file),
   `WindowCatalog` (polls windows and thumbnails only while a client is

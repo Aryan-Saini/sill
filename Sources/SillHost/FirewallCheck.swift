@@ -8,9 +8,10 @@ import Foundation
 /// `--listapps`. Never a question that changes anything, never sudo.
 ///
 /// Measured on macOS 27.0.1 (2026-10-29), as an ordinary user with no privileges: each question
-/// answers in 4–8 ms, exit status 0, no prompt. Asked in one run, the tool was killed (SIGKILL,
-/// nothing printed) whenever `--listapps` came after `--getappblocked`, 6 runs of 6, hence a process
-/// for each. The plist older Macs kept, /Library/Preferences/com.apple.alf.plist, does not exist
+/// answers in 4–8 ms, exit status 0, no prompt. Asked in one run, the tool died (SIGKILL or SIGTRAP:
+/// statuses 137 and 133, nothing printed) whenever `--getappblocked` was given an app bundle's path
+/// and another option followed, 8 runs of 8 (the review's); never with an executable's path (3 of
+/// 3), and the bundle's question alone answered 10 of 10: hence a process for each. The plist older Macs kept, /Library/Preferences/com.apple.alf.plist, does not exist
 /// there (only the tool's own defaults in /usr/libexec/ApplicationFirewall), so nothing is read
 /// from a file.
 ///

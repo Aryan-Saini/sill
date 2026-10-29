@@ -1710,13 +1710,15 @@ AirDrop, Sidecar and Universal Control can hold AWDL on too.
   once, Devices Can’t Connect from the menu's next opening, as the menu is
   built before the answer) and whenever Settings › General opens or Sill
   becomes active over it; never on a timer. FirewallCheck asks
-  `--getglobalstate`, then, while the firewall is on, `--getblockall`,
+  `--getglobalstate`, then, unless the firewall is off, `--getblockall`,
   `--getappblocked` for the running executable and for its bundle, and
   `--listapps`, each in a process of its own: read-only, no privileges, nothing
   changed. FirewallRule (pure, `Tests/checks/firewall`) reads the answers: on,
   with a rule that blocks the executable or its bundle (its own answer or the
   list's, either one enough) or with Block all incoming connections, devices on
-  the network cannot connect. Settings › General then says so, with the
+  the network cannot connect; allowed only once the list was read (a path's
+  own "permitted" never stands in for it: the report's bundle said it), else
+  unknown, and the log says why. Settings › General then says so, with the
   Terminal command that unblocks what is blocked (the running executable's own
   path, quoted for the shell when it needs it) and Copy, or for Block all where
   to turn it off; the menu says "Devices Can’t Connect" (it opens General); the
@@ -1725,8 +1727,11 @@ AirDrop, Sidecar and Universal Control can hold AWDL on too.
   when it no longer does. Sill never runs the command itself: it needs an
   administrator.
 - Measured on macOS 27.0.1 as an ordinary user: each question answers in 4–8
-  ms with no prompt, and asked in one run the tool is killed whenever
-  `--listapps` follows `--getappblocked` (hence a process each).
+  ms with no prompt. Asked in one run, the tool dies (SIGKILL or SIGTRAP,
+  nothing printed) whenever `--getappblocked` is given an app bundle's path and
+  another option follows; never with an executable's path, and the bundle's
+  question alone answers every time: hence a process each. An option it does
+  not know ends with status 255.
   `/Library/Preferences/com.apple.alf.plist`, which older Macs kept, does not
   exist there. Answers that don't read put "Firewall: couldn’t read the macOS
   firewall’s settings (…)" in the log once, and nothing on screen.
