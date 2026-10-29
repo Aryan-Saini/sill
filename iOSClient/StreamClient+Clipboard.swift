@@ -402,6 +402,9 @@ extension StreamClient {
     }
 
     func showClipboardNote(_ text: String, spoken: String, warning: Bool) {
+        #if DEBUG
+        print("clipboard: the note: \(text)")
+        #endif
         clipboardNote = ClipboardNote(text: text, spoken: spoken, warning: warning, at: uptime)
         UIAccessibility.post(notification: .announcement, argument: spoken)
         clipboardNoteExpiry?.cancel()
