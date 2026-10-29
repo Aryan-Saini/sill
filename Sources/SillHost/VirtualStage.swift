@@ -192,9 +192,10 @@ final class VirtualStage {
     // MARK: Geometry (pure; the numbers in CLAUDE.md come from these)
 
     /// The size the window should have on the virtual display, in Mac points: the client's panel
-    /// divided by its text scale (Aa Off or a bad scale count as 1.0), each side held to 1…4096 as
-    /// the envelope is (VirtualDisplaySize, pure, where the rule is), or the window's own size when
-    /// no viewport has arrived yet.
+    /// divided by its text scale (Aa Off or a bad scale count as 1.0), each side held to 1…65536, the
+    /// most a host takes, so a full-screen window's crop keeps the panel's shape (VirtualDisplaySize,
+    /// pure, where the rule and its reasons are), or the window's own size when no viewport has
+    /// arrived yet. The placement fits it to the display (`dest` in `prepare`).
     static func windowSize(for v: Viewport?, own: CGSize) -> CGSize {
         VirtualDisplaySize.windowSize(panel: v.map { CGSize(width: $0.width, height: $0.height) },
                                       scale: v?.scale.map { CGFloat($0) }, own: own)
