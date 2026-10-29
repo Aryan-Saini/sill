@@ -1005,23 +1005,23 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
     //     ⌃ and ⌥ themselves, *any* key while command, control or option is held, because those
     //     combinations are shortcuts (⌘S, ⌃A, ⌥←) and never reach `insertText`, and return and tab with
     //     shift, which the text path would hand over as a bare "\n" and "\t" (⇧Return a plain Return on
-    //     the Mac). And while the Mac types the characters (`KeyTyping.keys`: the keyboard selected on the
-    //     iPad types the Latin alphabet directly, nothing is composed and no modifier is latched), every
-    //     key that types one too: the letters, digits, punctuation, Space, Delete, Return, Tab and Shift
-    //     (ForwardedKeys.characterUsages), which iPadOS's text system then never sees (#162: it typed a
-    //     held letter once and gave it its accent popover, and repeated Delete and Space at its own timing,
-    //     each repeat a separate press on the Mac).
+    //     the Mac). And while the Mac types the characters (`KeyTyping.keys`: it says it repeats held keys,
+    //     the keyboard selected on the iPad types the Latin alphabet directly, nothing is composed and no
+    //     modifier is latched), every key that types one too: the letters, digits, punctuation, Space,
+    //     Delete, Return, Tab and Shift (ForwardedKeys.characterUsages), which iPadOS's text system then
+    //     never sees (#162: it typed a held letter once and gave it its accent popover, and repeated Delete
+    //     and Space at its own timing, each repeat a separate press on the Mac).
     //
     //   • Text path (`insertText` / `deleteBackward`, and an input method's and dictation's marked text
     //     and corrections: `TextComposition`) owns the rest: every key that produces characters while
-    //     iPadOS's text system types them (`KeyTyping.text`: a keyboard in another script, an input
-    //     method's, while the key row has a modifier latched), with or without shift, and return and tab
-    //     without it, and the few character keys no Sill for Mac has (the keypad, the ISO keyboards'
-    //     extra keys) and Caps Lock whoever types. Those arrive already composed — shifted, dead-keyed,
-    //     chosen from an input method's candidates, dictated — which is exactly what we want to send as
-    //     `.text`, as iPadOS types it: the Mac never repeats a key the text system takes (iPadOS types a
-    //     held letter once, and repeats Delete and Space itself). While an input method composes, every key
-    //     is the text path's (`KeyTyping.composing`, `pressesBegan`).
+    //     iPadOS's text system types them (`KeyTyping.text`: a Mac from before key repeat, a keyboard in
+    //     another script, an input method's, while the key row has a modifier latched), with or without
+    //     shift, and return and tab without it, and the few character keys no Sill for Mac has (the
+    //     keypad, the ISO keyboards' extra keys) and Caps Lock whoever types. Those arrive already
+    //     composed — shifted, dead-keyed, chosen from an input method's candidates, dictated — which is
+    //     exactly what we want to send as `.text`, as iPadOS types it: the Mac never repeats a key the
+    //     text system takes (iPadOS types a held letter once, and repeats Delete and Space itself). While
+    //     an input method composes, every key is the text path's (`KeyTyping.composing`, `pressesBegan`).
     //
     // Which path a key takes is decided when it goes down (ForwardedKeys.goesAsKey), and its up takes the
     // same one whatever the flags or the keyboard say by then (ForwardedKeys): ⌘'s own release and a key
@@ -1091,6 +1091,13 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
         // input method does with it. None reaches the Mac until the composition is chosen.
         let typing = keyTyping
         if typing == .composing {
+            #if DEBUG
+            for press in presses {
+                guard let key = press.key else { continue }
+                Self.hwkey(UInt16(key.keyCode.rawValue), down: true, via: "pressesBegan", modifiers: UInt64(key.modifierFlags.rawValue),
+                           to: "the text system's", typing: typingNote(typing))
+            }
+            #endif
             super.pressesBegan(presses, with: event)
             return
         }
