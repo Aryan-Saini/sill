@@ -47,12 +47,24 @@ No wire change.
   (bd18d96b); with `--listapps` unread the verdict took the executable's own "permitted" for allowed and dropped
   why: unknown, with why, unless an answer blocks (3d10ea95); the check's usage stand-in had no "apps", so a
   reading that took any mention of apps for a list passed (56d3f3a3); the docs had the tool die whenever
-  `--listapps` followed `--getappblocked` in one run (the docs commit, af3283d1; the second review measured
-  which options do, below). Re-run: the check 340 and 67 of 67 mutants (64 of 64
-  before; two extra mutants had survived); `run-all.sh`, all 57; the release build, the CaptureProbe warning
-  only; main's CLI masked and sorted, idle (8 lines) and with a client (three passes, as main against main);
-  previews 162 files; on loopback a device in from a VPN re-asking without clearing a block that holds, and
-  clearing a stale one.
+  `--listapps` followed `--getappblocked` in one run (the docs commit, af3283d1; the second review measured which
+  options do, below). Re-run: the check 340 and 67 of 67 mutants (64 of 64 before; two extra mutants had
+  survived); `run-all.sh`, all 57; the release build, the CaptureProbe warning only; main's CLI masked and sorted,
+  idle (8 lines) and with a client (three passes, as main against main); previews 162 files; on loopback a device
+  in from a VPN re-asking without clearing a block that holds, and clearing a stale one.
+- The second review (2026-10-29, after af3283d1; the report's "The second review"): two findings, each reproduced
+  first and fixed in a commit of its own. The first review's correction of when the tool dies was wrong both ways
+  (read-only, as noah, 3 runs of 3 each): `--getstealthmode` or `--getallowsigned` after `--getappblocked` kill it
+  whatever the path, `--listapps` only after a bundle's, and `--getglobalstate`, `--getblockall` or another
+  `--getappblocked` after it answer (78685c9a, docs). A tool that never answered was asked all five questions, and
+  one that ignored SIGTERM was left running, a thread blocked on its pipe, after each (FirewallCheck's own code
+  against a stand-in: 10.04 s a check; 20.11 s and 5 processes left; the state on and the rest deaf, 16.16 s and
+  4), which the menu's re-asking at every opening would add up: nothing more is asked once the state decides
+  (`asksRules`: off, Block all, a state that doesn't read) and an unanswered question is killed a second after
+  SIGTERM (2.01, 3.01 and 12.06 s, none left; 6d836d1f). Re-run: the check 390 and 69 of 69 mutants; `run-all.sh`,
+  all 57; a release build from an empty `.build`, the CaptureProbe warning only; this Mac's firewall through the
+  fixed check, 19–22.5 ms for Sill.app's five questions, allows; previews 162 files; on loopback a Block all held
+  against a device in from a VPN, then blocked, cleared and unreadable as the canned answer changed.
 - **Untested, for Noah:** the report's state by hand (`sudo …/socketfilterfw --add …/Contents/MacOS/Sill`, then
   `--blockapp`; `--remove` after): the device's tap failing, the menu item and log line, General's line and
   Copy, the command in Terminal, then both gone without a relaunch; Block all on and off, also with Sill running
