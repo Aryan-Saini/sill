@@ -187,6 +187,12 @@ MUTANTS = [
     ("K11 Emoji and dictation counted as keyboards set up", "let set = keyboards().filter(TextInputRules.isKeyboard)", "let set = keyboards()"),
     ("K12 the keyboards set up asked for every key", "        if let inputMode { return typesOnMac(inputMode) ? .keys : .text }\n        let set = keyboards()",
      "        let all = keyboards()\n        if let inputMode { return typesOnMac(inputMode) ? .keys : .text }\n        let set = all"),
+    ("K16 only keyRepeat 1 counts: a later generation's Mac gets no keys", "static func macRepeats(keyRepeat: Int?) -> Bool { (keyRepeat ?? 0) >= 1 }",
+     "static func macRepeats(keyRepeat: Int?) -> Bool { keyRepeat == 1 }"),
+    ("K17 a Mac that says nothing counted as repeating", "static func macRepeats(keyRepeat: Int?) -> Bool { (keyRepeat ?? 0) >= 1 }",
+     "static func macRepeats(keyRepeat: Int?) -> Bool { (keyRepeat ?? 1) >= 1 }"),
+    ("K18 keyRepeat 0 counted as repeating", "static func macRepeats(keyRepeat: Int?) -> Bool { (keyRepeat ?? 0) >= 1 }",
+     "static func macRepeats(keyRepeat: Int?) -> Bool { (keyRepeat ?? -1) >= 0 }"),
 ]
 caught = 0
 for name, old, new in MUTANTS:

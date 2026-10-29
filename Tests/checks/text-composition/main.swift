@@ -820,6 +820,12 @@ _ = T.of(inputMode: nil, keyboards: setUp(), composing: false, latched: false, m
 check("the keyboards set up are asked for only when none is selected", setUpAsked == 0)
 _ = T.of(inputMode: nil, keyboards: setUp(), composing: false, latched: false, macRepeats: true)
 check("…and are then", setUpAsked == 1)
+// Whether the session's Mac repeats a held key, by its window list's `keyRepeat` (the stream screens'
+// `macRepeatsKeys`): any generation from 1, so a later one is sent the characters as keys too; none
+// (a Mac from before key repeat) and 0, never.
+check("the Mac repeats held keys from keyRepeat 1 on, a later generation too; nil and 0 never",
+      !T.macRepeats(keyRepeat: nil) && !T.macRepeats(keyRepeat: 0) && T.macRepeats(keyRepeat: 1) && T.macRepeats(keyRepeat: 2)
+      && T.macRepeats(keyRepeat: 7))
 
 // MARK: - Random edit sequences
 

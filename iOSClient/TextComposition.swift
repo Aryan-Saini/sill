@@ -423,6 +423,12 @@ enum KeyTyping: Equatable {
     /// comes up.
     case keys
 
+    /// Whether the session's Mac repeats a key held down, by its window list's `keyRepeat` (KeyRepeat's
+    /// generation on the host: 1, nil from every Mac before key repeat): any generation from 1, so a later
+    /// one (one that also has the ISO keyboards' extra keys, say) is sent the characters as keys too. The
+    /// stream screens' `macRepeatsKeys`.
+    static func macRepeats(keyRepeat: Int?) -> Bool { (keyRepeat ?? 0) >= 1 }
+
     /// The typing for a key going down now: `inputMode`, the selected keyboard's primary language (nil when
     /// iPadOS gives none), `keyboards`, the primary languages of every keyboard set up (asked only when it
     /// gives none: the Mac then types only if every keyboard set up, Emoji and dictation aside, would have
