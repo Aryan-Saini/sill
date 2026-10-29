@@ -19,9 +19,12 @@
 #   uploaded, unless:
 # - the repository variable SILL_TESTFLIGHT_IN_CI is true. Then the same run also uploads the
 #   archive to App Store Connect (--upload), where it becomes a TestFlight build once Apple has
-#   processed it. Its build number is the committed CURRENT_PROJECT_VERSION: on a Mac, run
-#   Scripts/release-ios.sh --bump (or set the number and commit it), push, then run this. An
-#   upload of a number App Store Connect already has is refused.
+#   processed it. An upload of a number App Store Connect already has is refused.
+#
+# The build number is the commit count (git rev-list --count HEAD), given to release-ios.sh with
+# --build-number for the run only, as the nightly workflow does (docs/release-checklist.md,
+# "Nightlies"): it grows with every commit, so a run never needs a bump committed first, and a build
+# of a commit never collides with another commit's. The checkout keeps the whole history for it.
 #
 # Cost: nothing in a public repository. In a private one (GitHub's prices on 2026-09-25), a run
 # takes about 5 minutes of macOS time, under 10, and each macOS minute counts as ten of the
@@ -56,6 +59,7 @@ jobs:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0 # the build number is the commit count
           persist-credentials: false
 
       # A build for App Store Connect is made with the newest Xcode 27 that is not a beta or not at
@@ -101,6 +105,9 @@ jobs:
             echo "The archive is signed through the API key, exported and checked; nothing is uploaded (SILL_TESTFLIGHT_IN_CI is not true)."
           fi
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          build="$(git rev-list --count HEAD)"
+          echo "The build number: $build, the commit count of $(git rev-parse --short=12 HEAD) (--build-number; the project's own is not changed)."
+          echo "build=$build" >> "$GITHUB_OUTPUT"
 
       # In a folder of this run's own, outside the checkout (release-ios.sh refuses a key inside
       # the repository), deleted by the last step whatever happened.
@@ -125,15 +132,18 @@ jobs:
 
       - name: Archive without signing and check it (Scripts/release-ios.sh --unsigned)
         if: steps.mode.outputs.mode == 'unsigned'
-        run: Scripts/release-ios.sh --unsigned -v
+        env:
+          BUILD_NUMBER: ${{ steps.mode.outputs.build }}
+        run: Scripts/release-ios.sh --unsigned --build-number "$BUILD_NUMBER" -v
 
       - name: Archive, sign through the API key, export and check (Scripts/release-ios.sh --sign-at-export)
         if: steps.mode.outputs.mode == 'export'
         env:
           SILL_TESTFLIGHT_KEY_ID: ${{ secrets.SILL_TESTFLIGHT_KEY_ID }}
           SILL_TESTFLIGHT_ISSUER_ID: ${{ secrets.SILL_TESTFLIGHT_ISSUER_ID }}
+          BUILD_NUMBER: ${{ steps.mode.outputs.build }}
         run: |
-          Scripts/release-ios.sh --sign-at-export -v --api-key "$SILL_TESTFLIGHT_KEY_FILE" \
+          Scripts/release-ios.sh --sign-at-export --build-number "$BUILD_NUMBER" -v --api-key "$SILL_TESTFLIGHT_KEY_FILE" \
             --api-key-id "$SILL_TESTFLIGHT_KEY_ID" --api-issuer "$SILL_TESTFLIGHT_ISSUER_ID"
 
       - name: Archive, sign, export, check and upload to App Store Connect (Scripts/release-ios.sh --sign-at-export --upload)
@@ -141,8 +151,9 @@ jobs:
         env:
           SILL_TESTFLIGHT_KEY_ID: ${{ secrets.SILL_TESTFLIGHT_KEY_ID }}
           SILL_TESTFLIGHT_ISSUER_ID: ${{ secrets.SILL_TESTFLIGHT_ISSUER_ID }}
+          BUILD_NUMBER: ${{ steps.mode.outputs.build }}
         run: |
-          Scripts/release-ios.sh --sign-at-export --upload -v --api-key "$SILL_TESTFLIGHT_KEY_FILE" \
+          Scripts/release-ios.sh --sign-at-export --upload --build-number "$BUILD_NUMBER" -v --api-key "$SILL_TESTFLIGHT_KEY_FILE" \
             --api-key-id "$SILL_TESTFLIGHT_KEY_ID" --api-issuer "$SILL_TESTFLIGHT_ISSUER_ID"
 
       - name: Name the .ipa and summarize
