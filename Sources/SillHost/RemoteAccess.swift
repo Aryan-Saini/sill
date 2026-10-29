@@ -430,7 +430,7 @@ package final class RemoteAccess {
             openPairing(requestedBy: device)
             return
         }
-        let asker = PairingWindow.DeviceAsk(fingerprint: s.fingerprint, source: s.source, from: s.from)
+        let asker = PairingWindow.DeviceAsk(fingerprint: s.fingerprint, source: s.display, from: s.from)
         _ = decideAsk(name: device, display: s.display, asker: asker, fromThisMac: s.fromThisMac, cable: nil, cableClaimed: false)
     }
 
@@ -600,7 +600,7 @@ package final class RemoteAccess {
     private func ask(_ a: Door.PairAttempt, _ identity: HostIdentity) -> PairResult {
         let name = Self.displayName(a.request)
         let from = a.origin == .direct ? "nearby" : (a.fromThisMac || a.origin == .loopback ? "on this Mac" : "on this network")
-        let asker = PairingWindow.DeviceAsk(fingerprint: a.deviceFingerprint, source: a.source, from: from)
+        let asker = PairingWindow.DeviceAsk(fingerprint: a.deviceFingerprint, source: a.display, from: from)
         let verdict = decideAsk(name: name, display: a.display, asker: asker, fromThisMac: a.fromThisMac,
                                 cable: a.cable, cableClaimed: a.request.cable == true)
         guard verdict == .pairNow, let cable = a.cable else {
