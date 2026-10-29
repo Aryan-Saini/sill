@@ -1144,10 +1144,15 @@ do {
     check(h.activated(uEsc, latched: [], at: 1.81).isEmpty, "the action just after: nothing")
     check(h.activated(uEsc, latched: [], at: 1.85) == KeyChord.press(uEsc, with: []), "a second activation after it is a press of its own")
     var g = HeldCap()
-    _ = g.touchDown(uTab, latched: [], at: 1.0)
-    check(g.activated(uTab, latched: [], at: 1.5).isEmpty, "the action before the press ends: nothing")
-    check(g.touchUp(uTab, at: 1.51) == [key(uTab, false, 0)], "then the release: its up")
+    _ = g.touchDown(uTab, latched: [.option], at: 1.0)
+    check(g.activated(uTab, latched: [.shift], at: 1.5) == [key(uTab, false, option), key(uLOpt, false, 0)] && g.down == nil,
+          "the action before the press's end is told: it is the release, the key and its ⌥ up")
+    check(g.touchUp(uTab, at: 1.51).isEmpty, "then the press's end: nothing more")
     check(g.activated(uTab, latched: [], at: 3.0) == KeyChord.press(uTab, with: []), "a later activation: the whole press")
+    // The latch is spent when a key goes down with it: a touch's down, a whole press; never by an up.
+    check(HeldCap.spendsLatch(KeyChord.down(uEsc, with: [])) && HeldCap.spendsLatch(KeyChord.press(uTab, with: [.shift]))
+          && !HeldCap.spendsLatch(KeyChord.up(uLeft, with: [.option])) && !HeldCap.spendsLatch([]),
+          "the latch: spent by a down or a press, not by an up or nothing")
 }
 // With ⌥ latched: ⌥'s own key and ← go down at the touch, ← and then ⌥ come up at the release; a
 // modifier latched meanwhile is not the held cap's (touchUp takes no latch).
@@ -1166,9 +1171,9 @@ do {
     _ = h.touchUp(uEsc, at: 6.2)
     check(h.activated(uEsc, latched: [], at: 7.0) == KeyChord.press(uEsc, with: []), "0.8 s after a slid-off touch: the whole press")
     _ = h.touchDown(uEsc, latched: [], at: 8.0)
-    check(h.activated(uEsc, latched: [], at: 8.4).isEmpty, "the finger still on it: the action is the touch's")
+    check(h.activated(uEsc, latched: [], at: 8.4) == [key(uEsc, false, 0)], "the action with the finger still on it, as told: its up")
     check(h.activated(uEsc, latched: [], at: 8.45) == KeyChord.press(uEsc, with: []), "a second activation: its own press")
-    check(h.touchUp(uEsc, at: 8.5) == [key(uEsc, false, 0)], "the release still brings the up")
+    check(h.touchUp(uEsc, at: 8.5).isEmpty, "the press's end after: nothing more")
 }
 // A finger on a second cap: the first comes up first (one key at a time), then the second goes down;
 // the first's own release and action later send nothing.
@@ -1251,13 +1256,17 @@ do {
                 let u = rng.pick(caps)
                 let events = h.touchDown(u, latched: latched, at: t)
                 send(events)
-                if !events.isEmpty { latched = []; holds += 1 }
+                if HeldCap.spendsLatch(events) { latched = []; holds += 1 }
                 if !fingers.contains(u) { fingers.append(u) }
             case 3, 4:
                 if let u = fingers.isEmpty ? nil : fingers[rng.below(fingers.count)] {
+                    // The release: the press's end and the Button's action, in either order, or the end alone
+                    // (the finger slid off the cap).
+                    let action = rng.chance(70), first = rng.chance(50)
+                    if action && first { send(h.activated(u, latched: latched, at: t)) }
                     send(h.touchUp(u, at: t))
                     fingers.removeAll { $0 == u }
-                    if rng.chance(70) { t += Double(rng.below(30)) / 1000; send(h.activated(u, latched: latched, at: t)) }
+                    if action && !first { t += Double(rng.below(30)) / 1000; send(h.activated(u, latched: latched, at: t)) }
                 }
             case 5:
                 let u = rng.pick(caps)
@@ -1265,7 +1274,7 @@ do {
                     let events = h.activated(u, latched: latched, at: t + 1)
                     t += 1
                     send(events)
-                    if !events.isEmpty { latched = []; presses += 1 }
+                    if HeldCap.spendsLatch(events) { latched = []; presses += 1 }
                 }
             case 6, 7:
                 latched.formSymmetricDifference(rng.pick([KeyModifiers.control, .shift, .option, .command]))

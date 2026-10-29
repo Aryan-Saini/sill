@@ -102,11 +102,13 @@ enum KeyChord {
 /// held, after its own Delay Until Repeat and at its Key Repeat Rate, as it repeats a key of its own
 /// keyboard (KeyRepeat, on the host: an event Sill posts never repeats by itself). What is latched goes
 /// down with it, its modifiers' own keys first (`KeyChord.down`), and is spent at the touch, so a
-/// modifier latched while the cap is held waits for the next key. One cap at a time, as the Mac repeats
-/// one key at a time: a finger on a second cap lets the first come up first. The cap's own action,
-/// which its Button sends as the finger lifts on it, sends nothing more; a cap activated with no touch
-/// (VoiceOver, Switch Control, Voice Control, Full Keyboard Access) sends its whole press at once, as
-/// every cap did before. The latching modifiers, the Keyboard cap and Spotlight are taps, as before.
+/// modifier latched while the cap is held waits for the next key (the caller spends the latch when a
+/// key goes down with it: `spendsLatch`). One cap at a time, as the Mac repeats one key at a time: a
+/// finger on a second cap lets the first come up first. The cap's own action, which its Button sends as
+/// the finger lifts on it, sends nothing more, or the up of a press whose end was not told yet (so a
+/// release the press's end missed still lets the key up); a cap activated with no touch (VoiceOver,
+/// Switch Control, Voice Control, Full Keyboard Access) sends its whole press at once, as every cap did
+/// before. The latching modifiers, the Keyboard cap and Spotlight are taps, as before.
 struct HeldCap {
     /// The cap whose key is down on the Mac, with the modifiers it went down with.
     private(set) var down: (usage: UInt16, modifiers: KeyModifiers)?
@@ -119,8 +121,8 @@ struct HeldCap {
     static let actionWindow = 0.5
 
     /// A finger landed on cap `usage` at `time` (systemUptime) with `latched` latched: the cap held
-    /// before it comes up, then this cap's key goes down with `latched`. The caller spends the latch when
-    /// what comes back is not empty (nothing: this cap is down already).
+    /// before it comes up, then this cap's key goes down with `latched`; nothing when this cap is down
+    /// already.
     mutating func touchDown(_ usage: UInt16, latched: KeyModifiers, at time: Double) -> [InputEvent] {
         touches[usage] = Touch(endedAt: nil)
         if down?.usage == usage { return [] }
@@ -138,11 +140,19 @@ struct HeldCap {
         return KeyChord.up(usage, with: held.modifiers)
     }
 
-    /// Cap `usage`'s action at `time`: nothing after a touch (its key went down and up with it); with
-    /// no touch, the whole press with `latched`, which the caller then spends.
+    /// Cap `usage`'s action at `time`: after a touch, nothing (its key went down and up with it), or the
+    /// up of the press if its end was not told yet: the action comes with the release; with no touch, the
+    /// whole press with `latched`.
     mutating func activated(_ usage: UInt16, latched: KeyModifiers, at time: Double) -> [InputEvent] {
-        if let touch = touches.removeValue(forKey: usage), time - (touch.endedAt ?? time) <= Self.actionWindow { return [] }
+        if let touch = touches.removeValue(forKey: usage), time - (touch.endedAt ?? time) <= Self.actionWindow {
+            return down?.usage == usage ? touchUp(usage, at: time) : []
+        }
         return KeyChord.press(usage, with: latched)
+    }
+
+    /// Whether what a cap sent spent the latch: a key went down with it (a touch's down, a whole press).
+    static func spendsLatch(_ events: [InputEvent]) -> Bool {
+        events.contains { if case .key(_, true, _) = $0 { return true } else { return false } }
     }
 
     /// The cap down comes up: the key row leaving the screen, after which no release comes.

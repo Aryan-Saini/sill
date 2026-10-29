@@ -697,8 +697,8 @@ private extension View {
 
 /// A key row cap that is held (HeldCap): dimmed while a finger is on it, and its press told as it
 /// begins and ends (the Button's own pressed state), so its key is down on the Mac from the touch to
-/// the release. The Button's action, the Large Content Viewer and the accessibility activation are the
-/// Button's, as for every other cap.
+/// the release. The Button's action (which also ends a press whose end was not told), the Large Content
+/// Viewer and the accessibility activation are the Button's, as for every other cap.
 private struct HeldCapStyle: ButtonStyle {
     let pressed: (Bool) -> Void
 
@@ -852,16 +852,16 @@ private struct KeyRow: View {
         guard down else { heldCap.touchUp(usage, at: now).forEach(send); return }
         let events = heldCap.touchDown(usage, latched: latched, at: now)
         events.forEach(send)
-        if !events.isEmpty { latched = [] }
+        if HeldCap.spendsLatch(events) { latched = [] }
     }
 
     /// Escape's, tab's or an arrow's action: nothing after a finger's touch (its key went down and up
-    /// with it); from VoiceOver, Switch Control, Voice Control or a keyboard, or where the caps do not
-    /// hold (`capsHold`), the whole press, as `tap`.
+    /// with it; or its up, if the press's end was not told yet); from VoiceOver, Switch Control, Voice
+    /// Control or a keyboard, or where the caps do not hold (`capsHold`), the whole press, as `tap`.
     private func activate(_ usage: UInt16) {
         let events = heldCap.activated(usage, latched: latched, at: ProcessInfo.processInfo.systemUptime)
         events.forEach(send)
-        if !events.isEmpty { latched = [] }
+        if HeldCap.spendsLatch(events) { latched = [] }
     }
 
     /// What a tap on each cap does (escape, tab and the arrows: a whole press at once, as an assistive
