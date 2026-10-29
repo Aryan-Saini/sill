@@ -1792,15 +1792,15 @@ package final class StreamCoordinator {
     /// whatever of its input is still held for an activation, so no up of its own is overtaken and no
     /// down of its own comes after.
     private func releaseKeys(of device: KeyStrokes.Device) {
-        let cutOff = revoked.contains(device)
-        if !heldInput.isEmpty || CFAbsoluteTimeGetCurrent() < holdUntil { leftWhileHeld.append((device, cutOff)); return }
-        injector.releaseKeys(of: device, revoked: cutOff)
+        let wasRevoked = revoked.contains(device)
+        if !heldInput.isEmpty || CFAbsoluteTimeGetCurrent() < holdUntil { leftWhileHeld.append((device, wasRevoked)); return }
+        injector.releaseKeys(of: device, revoked: wasRevoked)
     }
 
     private func releaseKeysOfDevicesThatLeft() {
         let left = leftWhileHeld
         leftWhileHeld = []
-        for (device, cutOff) in left { injector.releaseKeys(of: device, revoked: cutOff) }
+        for (device, wasRevoked) in left { injector.releaseKeys(of: device, revoked: wasRevoked) }
     }
 
     private func raiseIfInteracting(_ event: InputEvent) {
