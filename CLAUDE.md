@@ -75,10 +75,34 @@ out in Insiders first tomorrow". Merge "Version 0.5.5 for both apps" (PR #244, b
   executed; the signing run's artifact rechecked (0.5.1 (987), Apple Distribution, get-task-allow false).
   Not changed here, for the session that talks to Noah: the version (the handoff records his 08:55 UTC
   decision that pre-release builds say 0.5.5 and the release 0.6: #244 and these docs say 0.5.5 since the main session's fix-up of 2026-10-29) and the hour (09:17 UTC, applied the same way); PR #247's README and download-page words repeat this one's.
+- The environments (2026-10-29, the security batch's item for the scan's findings 5 and 6; Noah: "the
+  environments as a checklist step before SILL_SIGN_IN_CI goes on"): the nine secrets were repository
+  secrets, which reach a run on any branch or tag, and release.yml and testflight.yml run by hand from
+  any ref with that ref's scripts. release.yml's publish job now runs in the environment `release` (only
+  `v*` tags; Noah its required reviewer, so a release waits for his click), nightly.yml's Mac and iOS
+  jobs and testflight.yml's job in `nightly` (only main; no reviewer, so a night runs unattended). An
+  environment without its secrets gives empty strings, so each job names the environment and what is
+  missing when the run needs it: release.yml's first step, before the checkout (it also stops a run by
+  hand that didn't start from the tag it releases); the nightly mode steps as before, in the
+  environment's words, a notice when the iOS key is absent. decide builds nothing off main; testflight.yml
+  runs from main only (its first-parent check kept). docs/release-checklist.md, "Secrets and variables":
+  the step before the variables (the two environments with `gh api` PUT and their branch and tag
+  policies, written from GitHub's REST reference and not run: nothing may be created here; the check
+  with `gh api` GETs; the secrets with `--env`; the nine repository secrets deleted), and Nightlies'
+  first run gains it as step 4; DEVELOPMENT.md's three paragraphs. Verified: the workflows' structural
+  check 245 of 245 (its stale 03:17 rule moved to 09:17, 41 new for the environments; 25 problems on
+  984d7f0c), 46 run blocks under /bin/bash -n; nightly.yml's run blocks executed 52 of 52 (9 failing on
+  984d7f0c); the environments' run blocks 19 of 19 (16 failing on 984d7f0c); testflight.yml's mode 12
+  of 12; the keychain steps 16 of 16; 15 of 15 mutants of the environment rules caught; the check's jq
+  filters against the documented response shapes and on the live endpoint (read-only: no environment
+  exists yet).
 - **Untested, for Noah (docs/release-checklist.md, "Nightlies", "The first run"):** the privacy
   manifest's ActiveKeyboards (#147's `UITextInputMode.activeInputModes`, ITMS-91053) is declared on main
   since PR #243 (54BD.1; release-ios.sh's check of run 40843967209's binary against main's manifest: every
-  API declared). Merge #244, then this; `gh workflow run nightly.yml -f verify_only=true` and its artifacts;
+  API declared). Merge #244, then this; the environments `release` and `nightly` with their rules, the
+  secrets in each, the nine repository secrets deleted ("Secrets and variables", steps 1 to 3: the `gh api`
+  calls were never run); `gh workflow run nightly.yml -f verify_only=true` and its artifacts (the iOS key
+  from `nightly`);
   `SILL_SIGN_IN_CI` and `SILL_TESTFLIGHT_IN_CI` true; a run by hand: the pre-release, the notarized dmg on
   a second Mac (quarantined: opens, drags, opens, the iPad still paired), TestFlight's groups (the real
   names: the step lists them) and What to Test; `SILL_NIGHTLY` true; after his Insiders test,
@@ -6822,8 +6846,10 @@ good.
   pushed tag `v*`, or by hand with one; verify only (the tag, the checks,
   `make-app.sh` signed ad hoc, zipped, and `make-dmg.sh`'s image of it, ad hoc
   too, as two artifacts) unless the repository
-  variable `SILL_SIGN_IN_CI` is `true`, then the Developer ID .p12 into a
-  temporary keychain, the notary key stored as a profile in it, the Developer ID
+  variable `SILL_SIGN_IN_CI` is `true`, then, in the environment `release`
+  (only `v*` tags, Noah its required reviewer; its first step names a missing
+  secret and refuses a run by hand not started from its tag), the Developer
+  ID .p12 into a temporary keychain, the notary key stored as a profile in it, the Developer ID
   profile decoded from `SILL_PROVISION_PROFILE` into
   `Packaging/embedded.provisionprofile` (since the nightlies), `release.sh
   --publish`, Apple's notary logs kept as an artifact (`include-hidden-files:
@@ -6831,7 +6857,8 @@ good.
   with a dot, `.build` included), and the keychain deleted in an always()
   step. Secrets,
   variables, rotation and costs: docs/release-checklist.md, "Releasing from
-  GitHub Actions". `testflight.yml`: by hand only; `release-ios.sh
+  GitHub Actions". `testflight.yml`: by hand from main only (the environment
+  `nightly`); `release-ios.sh
   --unsigned` without an App Store Connect key, `--sign-at-export` with one
   (the secrets `SILL_TESTFLIGHT_KEY_ID`, `SILL_TESTFLIGHT_ISSUER_ID`,
   `SILL_TESTFLIGHT_KEY_P8`, an Admin key: cloud signing, no certificate or
@@ -6847,7 +6874,9 @@ good.
   artifacts), Sill for iPhone and iPad (`release-ios.sh --build-number`, the
   upload with `SILL_TESTFLIGHT_IN_CI`, then `asc.swift distribute`: every
   internal group, the public beta group only while `SILL_NIGHTLY_PUBLIC_BETA` is
-  `true`); only main publishes (docs/release-checklist.md, "Nightlies").
+  `true`); only main builds: both jobs run in the environment `nightly` (only
+  main, no reviewer), which holds the nine secrets, none of them a repository
+  secret (docs/release-checklist.md, "Nightlies", "Secrets and variables").
   `.github/actions/select-xcode` —
   selects the newest Xcode of the `version` asked for (27; CI's build 27.1)
   whose folder is not a beta and prints `xcodebuild -version`; with
