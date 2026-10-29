@@ -429,14 +429,24 @@ enum DoorPolicy {
             }
         }
 
-        /// What `e` held its place for: up to its deadline at most, since the door refuses it there.
-        /// Any longer is time the door did not run, not time a source held a place against anyone:
-        /// the Mac asleep (the monotonic clock runs on through a sleep, the deadline's timer does
-        /// not, so a connection waiting as the Mac slept ended at the wake, hours "held"), or its
-        /// queue held up (the review of 2026-10-29: one connection across a 20 s stop of the host
-        /// cost 9.25 and backed its address off).
+        /// What `e` is charged for holding its place: its wait up to the deadline an address that is
+        /// not known has (the review of 2026-10-29, both its findings):
+        /// - never past a deadline, where the door refuses it anyway: any longer is time the door
+        ///   did not run, not time a source held a place against anyone: the Mac asleep (the
+        ///   monotonic clock runs on through a sleep, the deadline's timer does not, so a connection
+        ///   waiting as the Mac slept ended at the wake, hours "held"), or its queue held up (one
+        ///   connection across a 20 s stop of the host cost 9.25 and backed its address off);
+        /// - a known address's longer handshake (`admissionDeadline`) is time it is given, not time
+        ///   it is charged for: charged to its own 10 s, a paired device whose dials stalled (a path
+        ///   dying mid-handshake, the device suspended) was backed off sooner than one not known,
+        ///   at two cuts at 10 s (4.1 each) or four of its reconnect's own let-gos at 5 s (1.6). So
+        ///   it pays at most what an address not known can (1.1 for a handshake, 3.1 for a pairing
+        ///   connection, its `.ready` counted at 4 s at the latest), still at least one when
+        ///   refused: someone at a paired device's address holding its places is backed off within
+        ///   30 s.
         private static func held(_ e: Entry, now: Double) -> Double {
-            min(now - e.acceptedAt, DoorPolicy.deadline(known: e.known, readyAfter: e.readyAt.map { $0 - e.acceptedAt }))
+            let readyAfter = e.readyAt.map { min($0 - e.acceptedAt, DoorPolicy.handshakeDeadline) }
+            return min(now - e.acceptedAt, DoorPolicy.deadline(known: false, readyAfter: readyAfter))
         }
 
         /// One failure for a connection refused before it took a place (its origin). Returns what

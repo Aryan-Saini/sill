@@ -533,9 +533,9 @@ check("group: the most one address not yet known adds before it is backed off (4
       && gMostTrim.failures("2601:600:1:2::/64", now: 40) > 11 && !gMostTrim.backedOff(src("2601:600:1:2::8"), now: 40))
 var gKnownPays = Places()
 _ = gKnownPays.arrive("p", a7, now: 0); gKnownPays.leave("p", .admitted(paired: true), now: 0)
-_ = gKnownPays.arrive("a", a7, now: 1); _ = gKnownPays.arrive("b", a7, now: 1)
-let gKnownBacked = gKnownPays.leave("a", .ended, now: 10.9) + gKnownPays.leave("b", .ended, now: 10.9)
-check("group: a known address's waits cost it (two 9.9 s: 8.1, backed off), never its /64",
+var gKnownBacked: [String] = []
+for n in 0..<5 { _ = gKnownPays.arrive(n, a7, now: Double(n)); gKnownBacked += gKnownPays.leave(n, .ended, now: Double(n) + 9.9) }
+check("group: a known address's waits cost it (five 9.9 s, 1.1 each: backed off at the fifth), never its /64",
       gKnownBacked == ["2601:600:1:2::7"] && near(gKnownPays.failures("2601:600:1:2::/64", now: 11), 0))
 var gSlow = Places()
 for n in 0..<11 { _ = gSlow.refusedBeforeStart(src("2601:600:1:2::\(n + 1)"), now: Double(n) * 15) }
@@ -573,7 +573,8 @@ check("known: a known address refused 5 times is backed off like any other", kaB
 var kh = Places()
 _ = kh.arrive("p", v4("10.0.0.9"), now: 0); kh.leave("p", .admitted(paired: true), now: 0)
 _ = kh.arrive("h", v4("10.0.0.9"), now: 1)
-check("known: its 10 s wait costs as anyone's (9.9 s: 4.05 failures)", { var k = kh; k.leave("h", .ended, now: 10.9); return near(k.failures("10.0.0.9", now: 11), 4.05) }())
+check("known: its 10 s wait costs what an address not known pays at most for its handshake (9.9 s: 1.1; the review of 2026-10-29: it was 4.05)",
+      { var k = kh; k.leave("h", .ended, now: 10.9); return near(k.failures("10.0.0.9", now: 11), 1.1) }())
 var b4 = Places()
 for t in 0..<5 { _ = b4.refusedBeforeStart(v4("10.0.0.3"), now: Double(t)) }
 check("backoff: a backed-off address takes no place, even to prove a key", b4.arrive("p", v4("10.0.0.3"), now: 5) == .backedOff && b4.pending.isEmpty)
@@ -599,7 +600,8 @@ check("leave: a pairing connection's kind 19 costs as one that ended then, never
       near(cost(.request, held: 0.1, readyAfter: 0.05), 0.1) && near(cost(.request, held: 1.9, readyAfter: 0.05), 0.1)
       && near(cost(.request, held: 7.9, readyAfter: 3.9), 3.05))
 check("leave: refused costs at least one", near(cost(.refused, held: 0.2), 1) && near(cost(.refused, held: 4), 1.1))
-check("leave: a known address costs the same", near(cost(.ended, held: 9.9, known: true), 4.05) && near(cost(.refused, held: 0.2, known: true), 1))
+check("leave: a known address pays as one not known at most (9.9 s: 1.1; 3 s: 0.6; refused at once: 1)",
+      near(cost(.ended, held: 9.9, known: true), 1.1) && near(cost(.ended, held: 3, known: true), 0.6) && near(cost(.refused, held: 0.2, known: true), 1))
 check("leave: an IPv6 address's end costs it and its /64 alike", { var p = Places()
     _ = p.arrive("c", src("2601:600:1:2::5"), now: 0); p.leave("c", .ended, now: 3)
     return near(p.failures("2601:600:1:2::5", now: 3), 0.6) && near(p.failures("2601:600:1:2::/64", now: 3), 0.6) }())
@@ -612,7 +614,9 @@ check("leave: a wait counts to its deadline at most (the Mac asleep an hour with
 check("leave: a pairing connection ready at 3 s, an hour on: what its cut at 7 s costs (2.6)", { var p = Places()
     _ = p.arrive("c", v4("s"), now: 10); p.ready("c", now: 13); p.leave("c", .ended, now: 3610)
     return near(p.failures("s", now: 3610), 2.6) }())
-check("leave: a known address's wait to its 10 s at most (an hour: 4.1)", near(cost(.ended, held: 3600, known: true), 4.1))
+check("leave: a known address's an hour asleep: 1.1, as one not known", near(cost(.ended, held: 3600, known: true), 1.1))
+check("leave: a known address's pairing connection ready late (at 9 s), its kind 19 at 9.9 s: 3.1 at most, as one not known can (ready by 4 s, 8 s)",
+      near(cost(.request, held: 9.9, known: true, readyAfter: 9), 3.1) && near(cost(.request, held: 5, known: true, readyAfter: 1), 1.6))
 var slept = Places()
 _ = slept.arrive("a", src("2601:600:1:2::5"), now: 0); _ = slept.arrive("b", src("2601:600:1:2::6"), now: 0)
 let sleptBacked = slept.leave("a", .refused, now: 3600) + slept.leave("b", .ended, now: 3600)
@@ -860,8 +864,8 @@ check("new rule, a device not yet known in the holders' own /64: refused while t
       v6stranger.deviceIn == 0)
 // Someone at a paired device's own address (its NAT, or its address while it is away) pays too.
 let shared = simulate(Places(), holders: holdersOn(["10.0.0.9"], hold: 9.9), device: paired, known: true, seconds: 60)
-check("new rule, a holder at the paired device's own address: that address backed off within 10 s (at \(shared.backedOffAt["10.0.0.9"] ?? -1) s), the device with it (nothing tells them apart before TLS)",
-      (shared.backedOffAt["10.0.0.9"] ?? .infinity) <= 10 && shared.deviceIn < shared.deviceTries)
+check("new rule, a holder at the paired device's own address: that address backed off within 30 s (at \(shared.backedOffAt["10.0.0.9"] ?? -1) s: 1.1 each, as an address not known), the device with it (nothing tells them apart before TLS)",
+      (shared.backedOffAt["10.0.0.9"] ?? .infinity) <= 30 && shared.deviceIn < shared.deviceTries)
 
 // Legitimate traffic is never backed off.
 func legit(_ ends: [(at: Double, held: Double, end: Places.End)], source: Src = v4("10.0.0.30")) -> Places {
@@ -894,6 +898,38 @@ let slower = simulate(Places(), holders: [], device: Device(source: v4("10.0.0.4
 check("legit: one whose handshake takes 4.5 s is cut at 4 s while its address is not known", slower.deviceIn == 0)
 let slowKnown = simulate(Places(), holders: [], device: Device(source: v4("10.0.0.41"), handshake: 6, every: 10), known: true, seconds: 30)
 check("legit: a known device whose handshake takes 6 s gets in (10 s from a known address)", slowKnown.deviceIn == slowKnown.deviceTries && slowKnown.deviceTries == 3)
+// The review of 2026-10-29: a known address is given 10 s for its handshake, and was charged for
+// all of it (a cut at 10 s 4.1, its own device letting go at 5 s 1.6), so a paired device whose
+// dials stalled after TCP (a path dying mid-handshake, the device suspended) was backed off sooner
+// than one not known. The reconnect's dials (at once, then 5, 10, 20 and every 30 s after the last
+// started, DiscoveryPolicy.redialRow, 12 at most), each let go after 5 s
+// (StreamClient.reconnectDialWait) unless the Mac cut it first: backed off at the fourth, 40 s in.
+func stalledReconnect(known: Bool) -> (backedOffAt: Double?, dials: Int, owed: Double) {
+    var p = Places()
+    let s = v4("10.0.0.50")
+    if known { _ = p.arrive("p", s, now: -1); p.leave("p", .admitted(paired: true), now: -1) }
+    var start = 0.0, gaps: [Double] = [5, 10, 20], n = 0, owed = 0.0
+    var backedAt: Double?
+    while n < 12 {
+        n += 1
+        if case .taken = p.arrive(n, s, now: start), let cut = p.deadline(n) {
+            let end = min(cut, start + 5)
+            if !p.leave(n, cut <= start + 5 ? .refused : .ended, now: end).isEmpty, backedAt == nil { backedAt = end }
+            owed = max(owed, p.failures("10.0.0.50", now: end))
+        }
+        start += gaps.isEmpty ? 30 : gaps.removeFirst()
+    }
+    return (backedAt, n, owed)
+}
+let stalledKnown = stalledReconnect(known: true), stalledNew = stalledReconnect(known: false)
+check("legit: a known device whose 12 reconnect dials all stall (each let go at 5 s) is never backed off (\(String(format: "%.1f", stalledKnown.owed)) owed at most)",
+      stalledKnown.backedOffAt == nil && stalledKnown.dials == 12)
+check("legit: nor one not yet known (each cut at 4 s: \(String(format: "%.1f", stalledNew.owed)) owed at most)", stalledNew.backedOffAt == nil)
+var tapped = Places()
+_ = tapped.arrive("p", v4("10.0.0.51"), now: -1); tapped.leave("p", .admitted(paired: true), now: -1)
+for (n, t) in [0.0, 12, 24, 36].enumerated() { _ = tapped.arrive(n, v4("10.0.0.51"), now: t); tapped.leave(n, .refused, now: t + 10) }
+check("legit: a known device's taps whose dials stall to the Mac's 10 s, four in a minute: \(String(format: "%.1f", tapped.failures("10.0.0.51", now: 46))), not backed off",
+      !tapped.backedOff(v4("10.0.0.51"), now: 46))
 
 // MARK: Test hooks
 
