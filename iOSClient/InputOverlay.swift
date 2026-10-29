@@ -964,14 +964,15 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
     }
 
     /// DEBUG: every hardware key this view sees, and which way it went ("hwkey: usage 41 down via
-    /// keyCommand (shift): to the Mac"), so a device shows which channel delivered Esc.
+    /// keyCommand (shift): to the Mac"), so a device shows which channel delivered Esc; `note`, what more
+    /// the line says (who types, the keys a switch let go), is made only in a Debug build.
     static func hwkey(_ usage: UInt16, down: Bool, via channel: String, modifiers: UInt64? = nil, to outcome: String? = nil,
-                      typing: @autoclosure () -> String? = nil) {
+                      note: @autoclosure () -> String? = nil) {
         #if DEBUG
         var line = "hwkey: usage \(usage) \(down ? "down" : "up") via \(channel)"
         if let modifiers { line += " (" + InputOverlayView.modifierNames(modifiers) + ")" }
         if let outcome { line += ": " + outcome }
-        if let typing = typing() { line += "; " + typing }
+        if let note = note() { line += "; " + note }
         print(line)
         #endif
     }
@@ -1061,9 +1062,9 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
                                                      keyboards: UITextInputMode.activeInputModes.compactMap(\.primaryLanguage)) {
                 let ups = forwarded.keyboardSwitch()
                 ups.forEach(send)
-                Self.hwkey(usage, down: down, via: channel, modifiers: modifiers, to: "iPadOS's keyboard switch"
-                           + (ups.isEmpty ? "" : "; let go on the Mac: " + ups.map { event -> String in
-                               if case .key(let u, _, _) = event { return "usage \(u)" } else { return "\(event)" } }.joined(separator: ", ")))
+                Self.hwkey(usage, down: down, via: channel, modifiers: modifiers, to: "iPadOS's keyboard switch",
+                           note: ups.isEmpty ? nil : "let go on the Mac: " + ups.map { event -> String in
+                               if case .key(let u, _, _) = event { return "usage \(u)" } else { return "\(event)" } }.joined(separator: ", "))
                 unhandled.insert(press)
                 continue
             }
@@ -1074,11 +1075,11 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
                 if down { forgetTyped() }
                 send(event)
                 Self.hwkey(usage, down: down, via: channel, modifiers: modifiers, to: "to the Mac",
-                           typing: down ? typingNote(typing) : nil)
+                           note: down ? typingNote(typing) : nil)
             case .text:
                 unhandled.insert(press)
                 Self.hwkey(usage, down: down, via: channel, modifiers: modifiers, to: "the text system's",
-                           typing: down ? typingNote(typing) : nil)
+                           note: down ? typingNote(typing) : nil)
             case .swallow:
                 Self.hwkey(usage, down: down, via: channel, modifiers: modifiers, to: "the key command sent it")
             }
@@ -1102,7 +1103,7 @@ final class InputOverlayView: UIView, UITextInput, UIGestureRecognizerDelegate {
             for press in presses {
                 guard let key = press.key else { continue }
                 Self.hwkey(UInt16(key.keyCode.rawValue), down: true, via: "pressesBegan", modifiers: UInt64(key.modifierFlags.rawValue),
-                           to: "the text system's", typing: typingNote(typing))
+                           to: "the text system's", note: typingNote(typing))
             }
             #endif
             super.pressesBegan(presses, with: event)
