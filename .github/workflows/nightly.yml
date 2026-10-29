@@ -27,11 +27,13 @@
 #   - with the key otherwise: signed through it and exported, nothing uploaded.
 #   - without the key: archived without signing and checked.
 #
-# Secrets (repository secrets: a nightly runs unattended from main): SILL_DEVELOPER_ID_P12,
-# SILL_DEVELOPER_ID_P12_PASSWORD, SILL_NOTARY_KEY_ID, SILL_NOTARY_ISSUER_ID, SILL_NOTARY_KEY_P8,
-# SILL_PROVISION_PROFILE (the profile in base64), SILL_TESTFLIGHT_KEY_ID, SILL_TESTFLIGHT_ISSUER_ID,
-# SILL_TESTFLIGHT_KEY_P8. Variables: SILL_NIGHTLY, SILL_SIGN_IN_CI, SILL_TESTFLIGHT_IN_CI,
-# SILL_NIGHTLY_PUBLIC_BETA. A run from any branch but main is verify only, whatever they say.
+# Secrets: the environment nightly's (Settings › Environments; docs/release-checklist.md, "Secrets and
+# variables"), not the repository's. The Mac and iOS jobs run in it, only main may use it, and it has no
+# reviewer, so a night runs unattended: SILL_DEVELOPER_ID_P12, SILL_DEVELOPER_ID_P12_PASSWORD,
+# SILL_NOTARY_KEY_ID, SILL_NOTARY_ISSUER_ID, SILL_NOTARY_KEY_P8, SILL_PROVISION_PROFILE (the profile in
+# base64), SILL_TESTFLIGHT_KEY_ID, SILL_TESTFLIGHT_ISSUER_ID, SILL_TESTFLIGHT_KEY_P8. Variables (the
+# repository's): SILL_NIGHTLY, SILL_SIGN_IN_CI, SILL_TESTFLIGHT_IN_CI, SILL_NIGHTLY_PUBLIC_BETA. A run
+# from any other branch builds nothing (decide says so; GitHub would refuse it the environment anyway).
 #
 # Cost: nothing in a public repository (docs/release-checklist.md, "What it costs").
 name: Nightly
@@ -96,15 +98,19 @@ jobs:
           date="$(date -u +%Y%m%d)"
           build="$(git rev-list --count HEAD)"
           publish=false
+          run=true
           if [ "$GITHUB_REF" != refs/heads/main ]; then
-            echo "::notice::This run is on $GITHUB_REF, not main: verify only, whatever the variables say."
+            # Both builds run in the environment nightly, which only main may use.
+            run=false
+            words="This run is on $GITHUB_REF, not main: nothing is built. Sill for Mac and Sill for iPhone and iPad build in the environment nightly, which only main may use."
+            echo "::notice::$words"
+            echo "$words" >> "$GITHUB_STEP_SUMMARY"
           elif [ "$VERIFY_ONLY" = true ]; then
             echo "Verify only, as asked: nothing is published or uploaded."
           else
             publish=true
           fi
-          run=true
-          if [ "$EVENT" = schedule ]; then
+          if [ "$run" = true ] && [ "$EVENT" = schedule ]; then
             last="$(source Scripts/release.sh && nightly_last_sha "$REPOSITORY")"
             if [ "$last" = "$head" ]; then
               run=false
@@ -164,6 +170,10 @@ jobs:
     name: Sill for Mac
     needs: decide
     if: needs.decide.outputs.run == 'true'
+    # The environment nightly (docs/release-checklist.md, "Secrets and variables"): only main may use
+    # it, it has no reviewer, and the secrets below are its own; the repository keeps none. An
+    # environment without them gives empty strings: the mode step names what is missing.
+    environment: nightly
     runs-on: xcode-27
     timeout-minutes: 120
     permissions:
@@ -208,14 +218,14 @@ jobs:
               if [ -z "$(printenv "$name")" ]; then missing="$missing $name"; fi
             done
             if [ -n "$missing" ]; then
-              echo "::error::SILL_SIGN_IN_CI is true, but these repository secrets are not set:$missing. docs/release-checklist.md, Nightlies."
+              echo "::error::SILL_SIGN_IN_CI is true, but these secrets of the environment nightly are not set:$missing (gh secret set NAME --env nightly; docs/release-checklist.md, Nightlies)."
               exit 1
             fi
             mode=publish
             echo "Signed with Developer ID, notarized and published on the pre-release nightly."
           else
             mode=adhoc
-            echo "Signed ad hoc and kept as artifacts; nothing is published (SILL_SIGN_IN_CI is not true, the run is verify only, or it is not on main)."
+            echo "Signed ad hoc and kept as artifacts; nothing is published (SILL_SIGN_IN_CI is not true, or the run is verify only)."
           fi
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
 
@@ -285,7 +295,7 @@ jobs:
           if ! printf '%s' "$SILL_DEVELOPER_ID_P12" | base64 --decode > "$p12" 2>/dev/null \
               || ! security import "$p12" -k "$keychain" -f pkcs12 -P "$SILL_DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign > /dev/null; then
             rm -f "$p12"
-            echo "::error::SILL_DEVELOPER_ID_P12 is not the Developer ID certificate and its key as a .p12 in base64, or SILL_DEVELOPER_ID_P12_PASSWORD is not its password (base64 -i DeveloperID.p12 | gh secret set SILL_DEVELOPER_ID_P12; docs/release-checklist.md, Releasing from GitHub Actions)."
+            echo "::error::SILL_DEVELOPER_ID_P12 is not the Developer ID certificate and its key as a .p12 in base64, or SILL_DEVELOPER_ID_P12_PASSWORD is not its password (base64 -i DeveloperID.p12 | gh secret set SILL_DEVELOPER_ID_P12 --env nightly; docs/release-checklist.md, Nightlies)."
             exit 1
           fi
           rm -f "$p12"
@@ -315,7 +325,7 @@ jobs:
           if ! printf '%s' "$SILL_NOTARY_KEY_P8" | base64 --decode > "$key" 2>/dev/null \
               || ! grep -q -e '-----BEGIN PRIVATE KEY-----' "$key"; then
             rm -f "$key"
-            echo "::error::SILL_NOTARY_KEY_P8 is not an App Store Connect key file in base64 (base64 -i AuthKey_<Key ID>.p8 | gh secret set SILL_NOTARY_KEY_P8)."
+            echo "::error::SILL_NOTARY_KEY_P8 is not an App Store Connect key file in base64 (base64 -i AuthKey_<Key ID>.p8 | gh secret set SILL_NOTARY_KEY_P8 --env nightly)."
             exit 1
           fi
           # Validates the key with Apple before saving it, so a wrong key fails here.
@@ -340,7 +350,7 @@ jobs:
           if ! printf '%s' "$SILL_PROVISION_PROFILE_B64" | base64 --decode > "$profile" 2>/dev/null \
               || ! security cms -D -i "$profile" > "$RUNNER_TEMP/profile.plist" 2>/dev/null; then
             rm -f "$profile" "$RUNNER_TEMP/profile.plist"
-            echo "::error::SILL_PROVISION_PROFILE is not a provisioning profile in base64 (base64 -i Packaging/embedded.provisionprofile | gh secret set SILL_PROVISION_PROFILE)."
+            echo "::error::SILL_PROVISION_PROFILE is not a provisioning profile in base64 (base64 -i Packaging/embedded.provisionprofile | gh secret set SILL_PROVISION_PROFILE --env nightly)."
             exit 1
           fi
           echo "The profile: $(plutil -extract Name raw -o - "$RUNNER_TEMP/profile.plist"), until $(plutil -extract ExpirationDate raw -o - "$RUNNER_TEMP/profile.plist"). make-app.sh checks it against the app's entitlements and certificate."
@@ -392,6 +402,8 @@ jobs:
     name: Sill for iPhone and iPad
     needs: decide
     if: needs.decide.outputs.run == 'true'
+    # The environment nightly, as the Mac job: the App Store Connect key below is its own.
+    environment: nightly
     runs-on: xcode-27
     # The upload, then up to 90 minutes of App Store Connect's processing (Scripts/asc.swift's wait).
     timeout-minutes: 150
@@ -434,22 +446,22 @@ jobs:
             if [ -n "$(printenv "$name")" ]; then set_count=$((set_count + 1)); else missing="$missing $name"; fi
           done
           if [ "$set_count" -eq 0 ] && [ "$SILL_TESTFLIGHT_IN_CI" = true ] && [ "$PUBLISH" = true ]; then
-            echo "::error::SILL_TESTFLIGHT_IN_CI is true, but the App Store Connect API key is not set:$missing. docs/release-checklist.md, Nightlies."
+            echo "::error::SILL_TESTFLIGHT_IN_CI is true, but the environment nightly has no App Store Connect API key:$missing (gh secret set NAME --env nightly; docs/release-checklist.md, Nightlies)."
             exit 1
           fi
           if [ "$set_count" -ne 0 ] && [ "$set_count" -ne 3 ]; then
-            echo "::error::Only some of the App Store Connect API key's secrets are set; missing:$missing. Set all three, or none for an unsigned check."
+            echo "::error::Only some of the App Store Connect API key's secrets are set in the environment nightly; missing:$missing. Set all three (gh secret set NAME --env nightly), or none for an unsigned check."
             exit 1
           fi
           if [ "$set_count" -eq 0 ]; then
             mode=unsigned
-            echo "No App Store Connect API key: the archive is built without signing and checked; nothing is signed or uploaded."
+            echo "::notice::The environment nightly has no App Store Connect API key: the archive is built without signing and checked; nothing is signed or uploaded."
           elif [ "$SILL_TESTFLIGHT_IN_CI" = true ] && [ "$PUBLISH" = true ]; then
             mode=upload
             echo "Signed through the API key, exported, checked and uploaded to App Store Connect, then given to TestFlight's groups."
           else
             mode=export
-            echo "Signed through the API key, exported and checked; nothing is uploaded (SILL_TESTFLIGHT_IN_CI is not true, the run is verify only, or it is not on main)."
+            echo "Signed through the API key, exported and checked; nothing is uploaded (SILL_TESTFLIGHT_IN_CI is not true, or the run is verify only)."
           fi
           version="$(Scripts/release-ios.sh --print-version --build-number "$BUILD_NUMBER" | sed 's/ (.*//')"
           echo "Sill for iPhone and iPad $version ($BUILD_NUMBER)"
@@ -470,7 +482,7 @@ jobs:
           # Tested inside the if, so a secret that isn't base64 gets this message too.
           if ! printf '%s' "$SILL_TESTFLIGHT_KEY_P8" | base64 --decode > "$key" 2>/dev/null \
               || ! grep -q -e '-----BEGIN PRIVATE KEY-----' "$key"; then
-            echo "::error::SILL_TESTFLIGHT_KEY_P8 is not an App Store Connect key file in base64 (base64 -i AuthKey_<Key ID>.p8 | gh secret set SILL_TESTFLIGHT_KEY_P8)."
+            echo "::error::SILL_TESTFLIGHT_KEY_P8 is not an App Store Connect key file in base64 (base64 -i AuthKey_<Key ID>.p8 | gh secret set SILL_TESTFLIGHT_KEY_P8 --env nightly)."
             exit 1
           fi
           chmod 600 "$key"
@@ -514,7 +526,7 @@ jobs:
       # Store Connect already: it is exported for the artifact, not uploaded twice (App Store Connect
       # refuses a number it has), and the next step gives it its groups. A build with this number is
       # this commit's: only commits on main's first-parent line, where each count is one commit's, are
-      # uploaded with their commit count (here, and testflight.yml refuses any other branch).
+      # uploaded with their commit count (here, and in testflight.yml, which runs from main alone).
       - name: Archive, sign, export, check and upload (Scripts/release-ios.sh --sign-at-export --upload)
         if: steps.mode.outputs.mode == 'upload'
         env:

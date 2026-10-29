@@ -8,7 +8,11 @@
 #   no identity), makes the disk image with Scripts/make-dmg.sh (signed ad hoc too), and keeps the
 #   app, zipped, and the image as this run's two artifacts for 14 days. It uses no secret and
 #   creates no release.
-# - true: sign and publish. The same checks, then the Developer ID certificate goes into a
+# - true: sign and publish, in the environment release (Settings › Environments): only a tag v* may
+#   use it, the job waits for Noah's approval before it starts (Review deployments, on the run's
+#   page), and the secrets are that environment's, not the repository's. By hand, run it from the
+#   tag itself (Use workflow from › Tags), that tag as the input too: the environment refuses a run
+#   from a branch. The same checks, then the Developer ID certificate goes into a
 #   temporary keychain, the notary credentials into a profile in it, the Developer ID provisioning
 #   profile (the secret SILL_PROVISION_PROFILE) into Packaging/embedded.provisionprofile, so the
 #   release keeps its identity in the data-protection keychain as every release since 0.4.0 does,
@@ -17,9 +21,10 @@
 #   creates the GitHub Release v<version> with Sill.dmg, Sill.zip and their .sha256 files, the
 #   files the site's download page links. The keychain is deleted at the end, whatever happened.
 #
-# docs/release-checklist.md, "Releasing from GitHub Actions", lists every secret and variable, how
-# to make and rotate them, and what a run costs (free in a public repository; in a private one,
-# macOS minutes against the account's included minutes, then $0.062 a minute on 2026-09-25).
+# docs/release-checklist.md, "Releasing from GitHub Actions", lists every secret and variable, the
+# environments that hold the secrets (made once, before SILL_SIGN_IN_CI goes on), how to make and
+# rotate them, and what a run costs (free in a public repository; in a private one, macOS minutes
+# against the account's included minutes, then $0.062 a minute on 2026-09-25).
 name: Release
 
 on:
@@ -139,11 +144,43 @@ jobs:
   publish:
     name: Sign, notarize and publish
     if: vars.SILL_SIGN_IN_CI == 'true'
+    # The environment release (docs/release-checklist.md, "Secrets and variables"): only a tag v* may
+    # use it, so GitHub refuses a run from a branch before it starts; Noah approves each run before it
+    # starts; and the secrets below are its own, the repository keeps none. A run that names an
+    # environment that does not exist makes it, with no rule and no secret: the first step stops there.
+    environment: release
     runs-on: xcode-27
     timeout-minutes: 60
     permissions:
       contents: write # the GitHub Release, with this repository's own token
     steps:
+      # First, before anything is checked out or built. An environment without its secrets gives empty
+      # strings, not an error, so a missing one is named here. And a run by hand starts from the tag it
+      # releases, so the workflow that signs and publishes is that tag's own.
+      - name: Check the environment's secrets and the tag
+        env:
+          EVENT: ${{ github.event_name }}
+          SILL_DEVELOPER_ID_P12: ${{ secrets.SILL_DEVELOPER_ID_P12 }}
+          SILL_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.SILL_DEVELOPER_ID_P12_PASSWORD }}
+          SILL_NOTARY_KEY_ID: ${{ secrets.SILL_NOTARY_KEY_ID }}
+          SILL_NOTARY_ISSUER_ID: ${{ secrets.SILL_NOTARY_ISSUER_ID }}
+          SILL_NOTARY_KEY_P8: ${{ secrets.SILL_NOTARY_KEY_P8 }}
+          SILL_PROVISION_PROFILE: ${{ secrets.SILL_PROVISION_PROFILE }}
+        run: |
+          missing=""
+          for name in SILL_DEVELOPER_ID_P12 SILL_DEVELOPER_ID_P12_PASSWORD SILL_NOTARY_KEY_ID SILL_NOTARY_ISSUER_ID SILL_NOTARY_KEY_P8 SILL_PROVISION_PROFILE; do
+            if [ -z "$(printenv "$name")" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::These secrets of the environment release are not set:$missing (gh secret set NAME --env release; docs/release-checklist.md, Releasing from GitHub Actions, Secrets and variables)."
+            exit 1
+          fi
+          if [ "$EVENT" = workflow_dispatch ] && [ "$GITHUB_REF" != "refs/tags/$SILL_RELEASE_TAG" ]; then
+            echo "::error::A release by hand runs from the tag it releases: Run workflow › Use workflow from › Tags › $SILL_RELEASE_TAG, with $SILL_RELEASE_TAG as the tag too. This run is on $GITHUB_REF."
+            exit 1
+          fi
+          echo "The environment release has its six secrets; releasing $SILL_RELEASE_TAG from $GITHUB_REF."
+
       - name: Check out the tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -164,24 +201,6 @@ jobs:
       - name: Pure checks (Tests/checks/run-all.sh)
         run: Tests/checks/run-all.sh
 
-      - name: Check that every secret is set
-        env:
-          SILL_DEVELOPER_ID_P12: ${{ secrets.SILL_DEVELOPER_ID_P12 }}
-          SILL_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.SILL_DEVELOPER_ID_P12_PASSWORD }}
-          SILL_NOTARY_KEY_ID: ${{ secrets.SILL_NOTARY_KEY_ID }}
-          SILL_NOTARY_ISSUER_ID: ${{ secrets.SILL_NOTARY_ISSUER_ID }}
-          SILL_NOTARY_KEY_P8: ${{ secrets.SILL_NOTARY_KEY_P8 }}
-          SILL_PROVISION_PROFILE: ${{ secrets.SILL_PROVISION_PROFILE }}
-        run: |
-          missing=""
-          for name in SILL_DEVELOPER_ID_P12 SILL_DEVELOPER_ID_P12_PASSWORD SILL_NOTARY_KEY_ID SILL_NOTARY_ISSUER_ID SILL_NOTARY_KEY_P8 SILL_PROVISION_PROFILE; do
-            if [ -z "$(printenv "$name")" ]; then missing="$missing $name"; fi
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::These repository secrets are not set:$missing. docs/release-checklist.md, Releasing from GitHub Actions."
-            exit 1
-          fi
-
       - name: Put the Developer ID certificate in a temporary keychain
         env:
           SILL_DEVELOPER_ID_P12: ${{ secrets.SILL_DEVELOPER_ID_P12 }}
@@ -199,7 +218,7 @@ jobs:
           if ! printf '%s' "$SILL_DEVELOPER_ID_P12" | base64 --decode > "$p12" 2>/dev/null \
               || ! security import "$p12" -k "$keychain" -f pkcs12 -P "$SILL_DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign > /dev/null; then
             rm -f "$p12"
-            echo "::error::SILL_DEVELOPER_ID_P12 is not the Developer ID certificate and its key as a .p12 in base64, or SILL_DEVELOPER_ID_P12_PASSWORD is not its password (base64 -i DeveloperID.p12 | gh secret set SILL_DEVELOPER_ID_P12; docs/release-checklist.md, Releasing from GitHub Actions)."
+            echo "::error::SILL_DEVELOPER_ID_P12 is not the Developer ID certificate and its key as a .p12 in base64, or SILL_DEVELOPER_ID_P12_PASSWORD is not its password (base64 -i DeveloperID.p12 | gh secret set SILL_DEVELOPER_ID_P12 --env release; docs/release-checklist.md, Releasing from GitHub Actions)."
             exit 1
           fi
           rm -f "$p12"
@@ -228,7 +247,7 @@ jobs:
           if ! printf '%s' "$SILL_NOTARY_KEY_P8" | base64 --decode > "$key" 2>/dev/null \
               || ! grep -q -e '-----BEGIN PRIVATE KEY-----' "$key"; then
             rm -f "$key"
-            echo "::error::SILL_NOTARY_KEY_P8 is not an App Store Connect key file in base64 (base64 -i AuthKey_<Key ID>.p8 | gh secret set SILL_NOTARY_KEY_P8)."
+            echo "::error::SILL_NOTARY_KEY_P8 is not an App Store Connect key file in base64 (base64 -i AuthKey_<Key ID>.p8 | gh secret set SILL_NOTARY_KEY_P8 --env release)."
             exit 1
           fi
           # Validates the key with Apple before saving it, so a wrong key fails here.
@@ -254,7 +273,7 @@ jobs:
           if ! printf '%s' "$SILL_PROVISION_PROFILE_B64" | base64 --decode > "$profile" 2>/dev/null \
               || ! security cms -D -i "$profile" > "$RUNNER_TEMP/profile.plist" 2>/dev/null; then
             rm -f "$profile" "$RUNNER_TEMP/profile.plist"
-            echo "::error::SILL_PROVISION_PROFILE is not a provisioning profile in base64 (base64 -i Packaging/embedded.provisionprofile | gh secret set SILL_PROVISION_PROFILE)."
+            echo "::error::SILL_PROVISION_PROFILE is not a provisioning profile in base64 (base64 -i Packaging/embedded.provisionprofile | gh secret set SILL_PROVISION_PROFILE --env release)."
             exit 1
           fi
           echo "The profile: $(plutil -extract Name raw -o - "$RUNNER_TEMP/profile.plist"), until $(plutil -extract ExpirationDate raw -o - "$RUNNER_TEMP/profile.plist"). make-app.sh checks it against the app's entitlements and certificate."
@@ -264,7 +283,7 @@ jobs:
         env:
           # This repository's releases with its own token. For another repository's (the public
           # sill-site, while this one is private): the variable SILL_RELEASE_REPO and a token for
-          # it in the secret SILL_RELEASE_TOKEN.
+          # it in the environment release's secret SILL_RELEASE_TOKEN.
           SILL_RELEASE_REPO: ${{ vars.SILL_RELEASE_REPO || github.repository }}
           GH_TOKEN: ${{ secrets.SILL_RELEASE_TOKEN || github.token }}
         run: Scripts/release.sh --publish
