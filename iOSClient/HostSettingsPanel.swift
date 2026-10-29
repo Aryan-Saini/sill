@@ -943,6 +943,12 @@ private struct ThumbnailHoldRow: View {
             }
         }
         .padding(.vertical, 4)
+        // Never wider than the panel offers it. At the edge of fitting the title beside the stepper, its lines'
+        // widths, rounded to the pixel, can come to a third of a point more than the row was offered (the Duo's
+        // cover upright at xxLarge: 298.333 pt in 298), and `rowFrame`'s frame, a maximum alone, passes that on:
+        // every row of the panel grew by it and the panel's edge moved a pixel past main's (the review,
+        // 2026-10-29). With a minimum too, the frame takes what it is offered, whatever the row asks.
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         .rowFrame()
     }
 
