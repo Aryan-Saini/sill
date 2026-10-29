@@ -535,8 +535,9 @@ none (`ViewportBounds` in `Sources/StreamProtocol/Viewport.swift`, checked in
 `Tests/checks/viewport-bounds`). Any other, or a payload that does not decode,
 is refused whole and the last viewport stands, with one line naming the device
 ("Viewport from iPad (iPad14,1) refused: width 1e+300 (1 to 16384 points)", at
-most one a second per device; `vp.refused` in the stats line counts every
-one). Every device build sends a viewport within them, and a device holds what
+most one a second per connection, so a device on two at once, as during a move,
+can give two; `vp.refused` in the stats line counts every one). Every device
+build sends a viewport within them, and a device holds what
 it sends to them. Until 2026-10-29 a side of 1e300 points reached the fit
 above, whose log line made an Int of it, which traps: one message from any
 device a Mac admitted ended Sill and every device's session (security scan,
