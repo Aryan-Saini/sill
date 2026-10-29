@@ -81,7 +81,9 @@ struct HostSettingsPanel: View {
     /// photo of a short screen shows its switches and rows, which the footnote under them pushes out
     /// of `-SillSettingsEnd`'s view; `sound`, to the Send Audio row; `mute`, to the Mute row
     /// under it; `reverse`, to Reverse Scrolling's switch, so a photo of the panel in the lower half shows
-    /// it and its footnote, which the clipboard's rows above it push out of `gestures`' view there.
+    /// it and its footnote, which the clipboard's rows above it push out of `gestures`' view there;
+    /// `clipboard`, to the clipboard's Paste row, so that photo shows it and the group's footnote under
+    /// it (the review of #242: `gestures` shows only the two switches above them there).
     private static var startsAt: String? {
         #if DEBUG
         switch UserDefaults.standard.string(forKey: "SillSettingsScroll") {
@@ -89,6 +91,7 @@ struct HostSettingsPanel: View {
         case "sound"?: return sendAudioID
         case "mute"?: return muteID
         case "reverse"?: return reverseScrollRowID
+        case "clipboard"?: return clipboardRowsID
         default: return nil
         }
         #else
@@ -99,6 +102,7 @@ struct HostSettingsPanel: View {
     private static let sendAudioID = "sendAudio"
     private static let muteID = "mute"
     private static let reverseScrollRowID = "reverseScroll"
+    private static let clipboardRowsID = "clipboardPaste"
     /// `UIAccessibility.isVoiceOverRunning`; DEBUG `-SillVoiceOver 1` says it is, for the harness's
     /// photos of the group's VoiceOver footnote.
     static var voiceOverRunning: Bool {
@@ -573,6 +577,7 @@ struct HostSettingsPanel: View {
                     .rowFrame()
                     RowDivider()
                     ClipboardPasteRow(client: client, title: ClipboardPolicy.Copy.rowTitle(mac: mac))
+                        .id(Self.clipboardRowsID)
                 }
             }
             if clipboardOn, let note = client.clipboardNote {

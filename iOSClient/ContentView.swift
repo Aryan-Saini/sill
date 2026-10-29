@@ -195,7 +195,9 @@ struct ContentView: View {
 ///   iPad, Take the Tour). `-SillSettingsScroll gestures` starts them at the This iPad group
 ///   instead (its switches and rows, which the footnotes under them push out of the end's view on a
 ///   short screen), `-SillSettingsScroll sound` at the Send Audio row, `-SillSettingsScroll mute` at
-///   the Mute row under Send Audio, and `-SillSettingsScroll reverse` at its Reverse Scrolling switch.
+///   the Mute row under Send Audio, `-SillSettingsScroll reverse` at its Reverse Scrolling switch, and
+///   `-SillSettingsScroll clipboard` at the clipboard's Paste row (it and the group's footnote, which
+///   a short screen's `gestures` leaves under the two switches above them).
 /// * `-SillSettingsCase <case>` — what the mock Mac's settings look like: `default` (Sill.app),
 ///   `cli`, `software`, `custom`, `vdproblem`, `vdstream`, `legacy`, `pending`, `timeout`,
 ///   `direct`, `directlink` (connected over it), `nodirect` (a host without it), `wired` or
