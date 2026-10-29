@@ -825,8 +825,9 @@ final class StreamClient: ObservableObject {
         var lastRowDialAt: Double?
         /// An unsaved Mac on an open door (`p=0`): the key its lost session saw, which every dial of
         /// its row pins (DiscoveryPolicy.reconnectKey, reconnectTrust: the security scan's finding 3,
-        /// 2026-10-29); another key ends the reconnect, and a tap takes any key. Nil for a saved Mac
-        /// (pinned to its saved key), a plain door, and a session that never saw one.
+        /// 2026-10-29); another key ends the reconnect, and a tap takes any key. A plain door under the
+        /// name is never dialed while it is set (a DEBUG build's; the review of #255). Nil for a saved
+        /// Mac (pinned to its saved key), a plain door, and a session that never saw one.
         var openKey: Data?
     }
     var reconnect: Reconnect?

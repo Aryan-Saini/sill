@@ -174,9 +174,10 @@ func homePolicy() {
           && P.reconnectKey(lost: .plain) == nil && P.reconnectKey(lost: nil) == nil)
     func reconnectOracle(_ d: H, _ pin: Data?, _ seen: Data?) -> T? {
         if d == .anyKey, let seen { return .open(seen: seen) }
+        if d == .plain, seen != nil { return nil }   // never plain after it (DEBUG; the review of #255)
         return trustOracle(d, pin)
     }
-    var rt = 0, rtOK = 0, neverAnyKey = true, savedAsBefore = true, unseenAsBefore = true
+    var rt = 0, rtOK = 0, neverAnyKey = true, neverPlain = true, savedAsBefore = true, unseenAsBefore = true
     for d in doors { for bits in 0..<32 { for pin in [nil, k1] as [Data?] { for seen in [nil, k1, k2] as [Data?] {
         let b = { (i: Int) in bits & (1 << i) != 0 }
         let dial = P.homeDial(door: d, saved: b(0), revoked: b(1), homeTLS: b(2), debug: b(3), tap: b(4))
@@ -185,11 +186,13 @@ func homePolicy() {
         if t == reconnectOracle(dial, pin, seen) { rtOK += 1 }
         else { print("  reconnectTrust \(dial) \(String(describing: pin)) \(String(describing: seen)): \(String(describing: t))") }
         if seen != nil, let t, P.pin(t) == .anyKey { neverAnyKey = false }
-        if b(0), t != P.sessionTrust(dial, savedPin: pin) { savedAsBefore = false }
+        if seen != nil, let t, P.pin(t) == .plainTCP { neverPlain = false }
+        if b(0), dial != .plain || seen == nil, t != P.sessionTrust(dial, savedPin: pin) { savedAsBefore = false }
         if seen == nil, t != P.sessionTrust(dial, savedPin: pin) { unseenAsBefore = false }
     } } } }
-    check("reconnectTrust: \(rtOK) of \(rt) combinations (an open door's row pinned to the key the lost session saw, the rest as before)", rt == rtOK)
+    check("reconnectTrust: \(rtOK) of \(rt) combinations (an open door's row pinned to the key the lost session saw, a plain door not dialed after it, the rest as before)", rt == rtOK)
     check("reconnectTrust: once the lost session saw a key, the reconnect never dials with any key", neverAnyKey)
+    check("reconnectTrust: …nor plain (a DEBUG build's plain door under the name; the review of #255)", neverPlain)
     check("reconnectTrust: a saved Mac's reconnect as before, whatever the lost session saw", savedAsBefore)
     check("reconnectTrust: a lost session that never saw a key reconnects as its tap dialed", unseenAsBefore)
     check("homeEnd: another key at that pinned reconnect (-9808): otherKey; at a tap's open dial nothing to refuse",
@@ -243,29 +246,35 @@ func homePolicy() {
         level = level.flatMap { s in Look.allCases.map { s + [$0] } }
         sequences += level
     }
-    var models = 0, neverB = true, endsAtB = true, aTaken = true, plainOnlyDebug = true, mainGaveB = 0
+    var models = 0, neverB = true, endsAtB = true, aTaken = true, plainNever = true, mainGaveB = 0, headGavePlain = 0
     for debug in [false, true] { for s in sequences {
         models += 1
         let fixed = reconnect(s, debug: debug, rule: { d, seen in P.reconnectTrust(d, savedPin: nil, seen: seen) })
         let before = reconnect(s, debug: debug, rule: { d, _ in P.sessionTrust(d, savedPin: nil) })
-        if fixed.ends == .connected(k2) { neverB = false }
+        // #255 before its review: the open door pinned, but a plain door dialed as a tap's (a DEBUG build's).
+        let head = reconnect(s, debug: debug, rule: { d, seen in seen.flatMap { d == .anyKey ? T.open(seen: $0) : nil } ?? P.sessionTrust(d, savedPin: nil) })
+        // B's plain door has no key: connected(nil) is B too.
+        if fixed.ends == .connected(k2) || fixed.ends == .connected(nil) { neverB = false }
         if before.ends == .connected(k2) { mainGaveB += 1 }
+        if head.ends == .connected(nil) { headGavePlain += 1 }
         // The first look that is dialed or ends it decides: A's key connects, B's open door ends it with
-        // otherKey after one dial, B's required door ends it with no dial; Update Sill is looked past.
-        let first = s.first { !(debug == false && $0 == .bPlain) }
+        // otherKey after one dial, B's required door ends it with no dial; a plain door (Update Sill in
+        // Release, a plain dial a DEBUG build's tap makes) is looked past in both.
+        let first = s.first { $0 != .bPlain }
         switch first {
         case .aOpen?: if fixed.ends != .connected(k1) || fixed.dials != 1 { aTaken = false }
         case .bOpen?: if fixed.ends != .ended(.otherKey) || fixed.dials != 1 { endsAtB = false }
         case .bRequired?: if fixed.ends != .ended(nil) || fixed.dials != 0 { endsAtB = false }
-        case .bPlain?: if fixed.ends != .connected(nil) || !debug { plainOnlyDebug = false }   // DEBUG's plain door, as a tap's
+        case .bPlain?: break   // never the first: looked past
         case nil: if fixed.ends != .waiting || fixed.dials != 0 { endsAtB = false }
         }
-        if !debug, fixed.ends == .connected(nil) { plainOnlyDebug = false }
+        if fixed.ends == .connected(nil) { plainNever = false }
     } }
-    check("model (\(models) reconnects): never connected to B's key", neverB)
+    check("model (\(models) reconnects): never connected to B, by its key or by its plain door", neverB)
     check("model: the first row dialed with B's key ends the reconnect (otherKey) after that one dial; B's door that requires pairing ends it with none",
           endsAtB)
     check("model: A answering under its name with its key reconnects, at the first dial", aTaken)
-    check("model: a plain door under the name is dialed plain only by a DEBUG build, as a tap's (Release: Update Sill, looked past)", plainOnlyDebug)
-    check("model: before the fix (sessionTrust), \(mainGaveB) of the \(models) gave B the session", mainGaveB > 0)
+    check("model: a plain door under the name is never dialed after the TLS session, DEBUG or Release: looked past (the review of #255)", plainNever)
+    check("model: before the fix (sessionTrust), \(mainGaveB) of the \(models) gave B's key the session", mainGaveB > 0)
+    check("model: before the review (a plain door dialed as a DEBUG tap's), \(headGavePlain) of the \(models) gave B's plain door the session", headGavePlain > 0)
 }

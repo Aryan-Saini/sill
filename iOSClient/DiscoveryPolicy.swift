@@ -1239,9 +1239,14 @@ enum DiscoveryPolicy {
     /// Another key answering ends the reconnect (`homeEnd`'s `.otherKey`), and a tap connects with
     /// any key, as a tap on an open door always has. A lost session that never saw a key (a tap's
     /// dial that ended before its handshake) is reconnected as that tap was, with any key. A saved
-    /// Mac, pinned to its saved key, is unchanged.
+    /// Mac, pinned to its saved key, is unchanged. Nor is a plain door (no `p`) under the name dialed
+    /// once the lost session saw a key (`homeDial`'s `.plain`, a DEBUG build's: Release dials none):
+    /// with no key to check, whatever advertised the name without `p` got the session, as a tap of a
+    /// DEBUG build's would (the review of #255, 2026-10-29). The reconnect looks past it, as Release
+    /// does, and a tap still dials it.
     static func reconnectTrust(_ dial: HomeDial, savedPin: Data?, seen: Data?) -> HomeTrust? {
         if dial == .anyKey, let seen { return .open(seen: seen) }
+        if dial == .plain, seen != nil { return nil }
         return sessionTrust(dial, savedPin: savedPin)
     }
 

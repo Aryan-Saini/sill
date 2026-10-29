@@ -51,5 +51,7 @@ M = [
     ("reconnectTrust: any key again (as before the fix)", F, "        if dial == .anyKey, let seen { return .open(seen: seen) }\n", ""),
     ("reconnectKey: the lost session's key forgotten", F, "        if case .open(let seen?) = trust { return seen }\n        return nil", "        return nil"),
     ("homeEnd: another key at the pinned reconnect read as the ordinary end", F, "            if seen != nil, tls == pinRefused { return .otherKey }\n", ""),
+    ("reconnectTrust: a plain door dialed plain after the session saw a key (the review of #255)", F,
+     "        if dial == .plain, seen != nil { return nil }\n", ""),
 ]
 sys.exit(0 if module.mutate("home-model", M, sys.argv[1]) else 1)

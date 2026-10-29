@@ -191,6 +191,11 @@ M = [
      "        if dial == .anyKey, let seen { return .open(seen: seen) }", "        if dial == .anyKey, seen != nil { return nil }"),
     ("reconnectTrust: no key seen, no reconnect at an open door", F,
      "        if dial == .anyKey, let seen { return .open(seen: seen) }", "        if dial == .anyKey { return seen.map { .open(seen: $0) } }"),
+    # The review of #255 (2026-10-29): a plain door under the name not dialed by the reconnect after a session that saw a key.
+    ("reconnectTrust: a plain door dialed plain after the session saw a key (DEBUG; as before the review)", F,
+     "        if dial == .plain, seen != nil { return nil }\n", ""),
+    ("reconnectTrust: a plain door never dialed by any reconnect, a plain session's too", F,
+     "        if dial == .plain, seen != nil { return nil }", "        if dial == .plain { return nil }"),
     ("reconnectKey: never a key", F, "        if case .open(let seen?) = trust { return seen }\n        return nil", "        return nil"),
     ("reconnectKey: a saved Mac's pin carried as the seen key", F, "        if case .open(let seen?) = trust { return seen }\n        return nil",
      "        if case .open(let seen?) = trust { return seen }\n        if case .saved(let pin) = trust { return pin }\n        return nil"),

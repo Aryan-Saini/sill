@@ -1,4 +1,4 @@
-"""(integrate-12: follow-best-path's 61 mutants, unchanged, and R1-R9 of the merge's remote rule, against the merged file and policy-merge/main.swift.) Each mutant of DiscoveryPolicy's session route (P: route, S: sessionRoute/describesFlow), of the wired dial (D: dialInterface, W: wiredWait), of following the best path (F: pathPlan, pathGone, PathSightings, freshWifi, wifiInterface, rank) and of its review fixes (G: the reconnect over the cable, the refused listing, upWait), and of a row's kept TXT record (T: rowRecords, records.swift: the cable pulled; a browser made again starts afresh), and of the reconnect of an unsaved open door pinned to the key its lost session saw (O: reconnectTrust, reconnectKey, homeEnd's otherKey, home.swift: the security scan's finding 3) must fail the policy check. usage: mutants.py"""
+"""(integrate-12: follow-best-path's 61 mutants, unchanged, and R1-R9 of the merge's remote rule, against the merged file and policy-merge/main.swift.) Each mutant of DiscoveryPolicy's session route (P: route, S: sessionRoute/describesFlow), of the wired dial (D: dialInterface, W: wiredWait), of following the best path (F: pathPlan, pathGone, PathSightings, freshWifi, wifiInterface, rank) and of its review fixes (G: the reconnect over the cable, the refused listing, upWait), and of a row's kept TXT record (T: rowRecords, records.swift: the cable pulled; a browser made again starts afresh), and of the reconnect of an unsaved open door pinned to the key its lost session saw (O: reconnectTrust, reconnectKey, homeEnd's otherKey, home.swift: the security scan's finding 3; O7–O8 the review of #255's plain door) must fail the policy check. usage: mutants.py"""
 import os, subprocess, sys
 SP = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(SP, "..", "..", ".."))   # the repository
@@ -256,6 +256,11 @@ MUTANTS = {
         "            if seen != nil, tls == pinRefused { return .otherKey }", "            if tls == pinRefused { return .otherKey }"),
     "O6 homeEnd: otherKey read as pairingRequired": (
         "            if seen != nil, tls == pinRefused { return .otherKey }", "            if seen != nil, tls == pinRefused { return .pairingRequired }"),
+    # The review of #255 (2026-10-29): a plain door under the name not dialed after a session that saw a key.
+    "O7 reconnectTrust: a plain door dialed plain after the session saw a key (DEBUG; as before the review)": (
+        "        if dial == .plain, seen != nil { return nil }\n", ""),
+    "O8 reconnectTrust: a plain door never dialed by any reconnect, a plain session's too": (
+        "        if dial == .plain, seen != nil { return nil }", "        if dial == .plain { return nil }"),
     # A row keeps its TXT record while its result stays listed (records.swift: the cable pulled, 2026-10-27);
     # a browser made again starts afresh (the review of #232); each result of a name keeps its own.
     "T1 rowRecords: a result without a record reads as none (the rule undone, as before the fix)": (

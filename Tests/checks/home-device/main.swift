@@ -527,9 +527,10 @@ check("reconnectKey: none from an open session that saw none, a saved Mac's, a p
 // Every reconnect: each homeDial answer, each saved pin, no key seen or one of two.
 func reconnectOracle(_ d: H, _ pin: Data?, _ seen: Data?) -> T? {
     if d == .anyKey, let seen { return .open(seen: seen) }       // pinned to the key the lost session saw
+    if d == .plain, seen != nil { return nil }                     // never plain after it (DEBUG; the review of #255)
     return trustOracle(d, pin)                                     // everything else as before
 }
-var rt = 0, rtOK = 0, neverAnyKey = true, savedAsBefore = true, unseenAsBefore = true
+var rt = 0, rtOK = 0, neverAnyKey = true, neverPlain = true, savedAsBefore = true, unseenAsBefore = true
 for d in doors { for bits in 0..<32 { for pin in [nil, kA] as [Data?] { for seen in [nil, kA, kB] as [Data?] {
     let b = { (i: Int) in bits & (1 << i) != 0 }
     let dial = P.homeDial(door: d, saved: b(0), revoked: b(1), homeTLS: b(2), debug: b(3), tap: b(4))
@@ -538,11 +539,13 @@ for d in doors { for bits in 0..<32 { for pin in [nil, kA] as [Data?] { for seen
     if t == reconnectOracle(dial, pin, seen) { rtOK += 1 }
     else { print("  reconnectTrust \(dial) \(String(describing: pin)) \(String(describing: seen)): \(String(describing: t))") }
     if seen != nil, let t, P.pin(t) == .anyKey { neverAnyKey = false }
-    if b(0), t != P.sessionTrust(dial, savedPin: pin) { savedAsBefore = false }
+    if seen != nil, let t, P.pin(t) == .plainTCP { neverPlain = false }
+    if b(0), dial != .plain || seen == nil, t != P.sessionTrust(dial, savedPin: pin) { savedAsBefore = false }
     if seen == nil, t != P.sessionTrust(dial, savedPin: pin) { unseenAsBefore = false }
 } } } }
-check("reconnectTrust: \(rtOK) of \(rt) combinations (an open door's row pinned to the key the lost session saw, the rest as before)", rt == rtOK)
+check("reconnectTrust: \(rtOK) of \(rt) combinations (an open door's row pinned to the key the lost session saw, a plain door not dialed after it, the rest as before)", rt == rtOK)
 check("reconnectTrust: once the lost session saw a key, the reconnect never dials with any key", neverAnyKey)
+check("reconnectTrust: …nor plain: a plain door under the name, which a DEBUG build dials, is not dialed after that session (the review of #255)", neverPlain)
 check("reconnectTrust: a saved Mac's reconnect as before, pinned to its saved key whatever the lost session saw", savedAsBefore)
 check("reconnectTrust: a lost session that never saw a key reconnects as its tap dialed (any key at an open door)", unseenAsBefore)
 check("reconnectTrust: an open door's row pinned to that key exactly", P.reconnectTrust(.anyKey, savedPin: nil, seen: kA) == .open(seen: kA)
@@ -568,6 +571,16 @@ check("walk: B answering under A's name is refused (-9808) and ends the reconnec
       openAgain.map { P.homeEnd(trust: $0, goodbye: nil, tls: P.pinRefused) } == .otherKey && openAgain.map { P.trust($0, readyWith: kA) } == .open(seen: kA))
 check("walk: the reconnect's own session, lost too, pins A again", openAgain.map { P.reconnectKey(lost: P.trust($0, readyWith: kA)) } == kA)
 check("walk: that session's moves (to the cable, to Wi-Fi) were pinned to A already", P.pin(openSession) == .key(kA))
+// The review of #255 (2026-10-29): a DEBUG build dials a plain door (no `p`), and so its reconnect took a plain door
+// that advertised the lost Mac's name, no key to check (Release says Update Sill and dials none).
+let plainRow = { (debug: Bool, tap: Bool) in P.homeDial(door: .plain, saved: false, revoked: false, homeTLS: false, debug: debug, tap: tap) }
+check("walk (DEBUG): a plain door under A's name is not dialed by the reconnect after A's session, nor in Release",
+      plainRow(true, false) == .plain && P.reconnectTrust(plainRow(true, false), savedPin: nil, seen: P.reconnectKey(lost: openSession)) == nil
+      && plainRow(false, false) == .updateSill && P.reconnectTrust(plainRow(false, false), savedPin: nil, seen: P.reconnectKey(lost: openSession)) == nil)
+check("walk (DEBUG): the reconnect after a plain session still dials a plain door, and a tap dials one, as before",
+      P.reconnectTrust(plainRow(true, false), savedPin: nil, seen: P.reconnectKey(lost: .plain)) == .plain
+      && P.sessionTrust(plainRow(true, true), savedPin: nil) == .plain)
+check("walk: that plain door looked past, the reconnect goes on (it does not wait for a tap)", P.reconnectEnd(plainRow(true, false), saved: false) == nil)
 
 // MARK: Kind 18 and a goodbye "removed" speak for the Mac whose key the session has (the security
 // review, 2026-09-27)

@@ -723,7 +723,8 @@ extension StreamClient {
             // never an ask): a Mac that removed this device, or an unsaved one that requires
             // pairing, waits for a tap, and one whose Sill is too old for this build is not dialed.
             // An unsaved one on an open door is dialed pinned to the key its lost session saw
-            // (DiscoveryPolicy.reconnectTrust): another key ends the reconnect (homeSessionEnded).
+            // (DiscoveryPolicy.reconnectTrust): another key ends the reconnect (homeSessionEnded); a
+            // plain door after that session is not dialed (a DEBUG build's), and the reconnect looks on.
             let id = mac.macID ?? r.macID
             let decision = homeDecision(mac, macID: id, tap: false)
             if DiscoveryPolicy.reconnectTrust(decision, savedPin: id.flatMap { savedMac($0)?.fingerprintData }, seen: r.openKey) != nil {
@@ -777,6 +778,14 @@ extension StreamClient {
                 return true
             }
             if decision == .updateSill { status = DiscoveryPolicy.updateSillStatus(mac: mac.name) }
+            #if DEBUG
+            // A plain door under the name after a session that saw a key over TLS: never dialed by the
+            // reconnect (DiscoveryPolicy.reconnectTrust, the review of #255), which looks on; a tap dials it.
+            if decision == .plain, r.openKey != nil, lastRedialNote != "plain \(mac.name)" {
+                lastRedialNote = "plain \(mac.name)"
+                print("reconnect: \(mac.name) is a plain door now, and its last session saw a key over TLS: not dialed (a tap dials it)")
+            }
+            #endif
             // A row that waits for a tap (an unsaved Mac that now asks devices to pair, a saved one
             // that removed this device): the reconnect never asks, so it ends here, with the words
             // a goodbye would have brought, rather than "…reconnects when it's back" for ever.

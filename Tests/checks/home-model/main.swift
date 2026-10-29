@@ -406,6 +406,14 @@ if let keyS = RemoteKey.generate(), let idS = RemoteIdentity(privateKey: keyS), 
           pinned.map { P.trust($0, readyWith: fS) } == .open(seen: fS))
     check("14 Studio back with Require pairing on: the reconnect waits for a tap and ends with \"now asks devices to pair\"",
           P.reconnectEnd(P.homeDial(door: .pairingRequired, saved: false, revoked: false, homeTLS: false, debug: false, tap: false), saved: false) == .pairingRequired)
+    // The review of #255 (2026-10-29): the name taken by a plain door (no p: no TXT record at all, as the CLI's or an
+    // older Sill.app's), which a DEBUG build dials. After Studio's session, no build's reconnect dials it, and the
+    // reconnect goes on looking; a DEBUG build's tap still dials it plain.
+    let plainDial = { (debug: Bool, tap: Bool) in P.homeDial(door: mapped(HomeDoorTXT.door([:])), saved: false, revoked: false, homeTLS: false, debug: debug, tap: tap) }
+    check("14 a plain door under Studio's name: not dialed by the reconnect, DEBUG or Release; the reconnect looks on; a DEBUG tap dials it plain",
+          [true, false].allSatisfy { P.reconnectTrust(plainDial($0, false), savedPin: nil, seen: P.reconnectKey(lost: studio)) == nil
+                                     && P.reconnectEnd(plainDial($0, false), saved: false) == nil }
+          && P.sessionTrust(plainDial(true, true), savedPin: nil) == .plain)
 } else {
     check("14 two P-256 keys", false)
 }
