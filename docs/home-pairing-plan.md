@@ -662,6 +662,33 @@ enum CableLink {
   (`SILL_TEST_ENCODER_HANG`, `SILL_TEST_PROBE_*`, `SILL_TEST_RECHECK_SECONDS`,
   `SILL_TEST_SOFTWARE_ENCODER`) let nobody in and stay as they are: Noah runs the first on Sill.app
   itself.
+- **As fixed (2026-10-29, the security scan of 2026-10-18, finding 1).** "Not a `.app`'s
+  executable" was `Bundle.main.bundleURL.pathExtension == "app"`, the folder's name, and the grants
+  are not the folder's: TCC keeps them with the bundle ID and the designated requirement. So Sill.app
+  copied to a folder named Sill.bin read as the bare binary and took every hook above, with Sill's
+  grants (the scan's premise; no grant was tried here), and so did Sill.app's own executable started
+  through a symlink or a hard link: Foundation then finds no bundle around it, and its bundle
+  identifier reads nil (measured on 2026-10-29: the check's own copies, and the bare binary in a
+  scratch bundle started through a symlink). `bundled` is now
+  `AppIdentity.isSillApp` (Sources/SillMenuBar/AppIdentity.swift) of four facts read once at launch:
+  Sill.app when its signing identifier is `me.saffer.sill.mac` (the kernel's copy,
+  SecTaskCopySigningIdentifier: every copy of the code that can satisfy Sill's designated requirement
+  carries it, whatever its folder, file name or link, and a file replaced on disk after the launch
+  does not change it), when it is signed with any certificate, when its signature cannot be read,
+  when its bundle's CFBundleIdentifier is Sill's (Foundation reads Contents/Info.plist whatever the
+  folder is called), or, as before, in a `.app`. Only the bare binary as `swift build` makes it (the
+  linker's ad hoc signature, or none on Intel, no Info.plist, a build folder) is a test host, so the
+  harness, the previews and every `--synthetic` recipe are as they were. Sill.app's code in a folder
+  that is not a `.app` says so in one line ("Running from …/Sill.bin, which is not a .app, as
+  Sill.app itself (signed me.saffer.sill.mac): it takes no test hook."), then each hook's "ignored"
+  line as before. `Tests/checks/test-host` checks the rule, the line and the reader, on copies of its
+  own binary signed and linked in each of those ways. Live (2026-10-29), the bare binary in a scratch
+  bundle with Sill's Info.plist in a folder named Sill.bin, started only under `sandbox-exec` (no
+  network, no LaunchServices database write, no TCC, no preference write, nothing written in the
+  home folder) with `--synthetic`, `SILL_TEST_REMOTE_DIR`, the doors' variables, `-requirePairing
+  NO` and `-SillSetAfter`: the line, every hook "ignored" and "Home door: TLS, pairing required (0
+  paired)."; the same signed ad hoc as a bundle, and through a symlink, the same with "signed
+  me.saffer.sill.mac"; origin/main's build in that bundle took every hook.
 
 #### 4.4 `Door.swift` (new, from RemoteServer.swift) and `RemoteServer.swift`
 

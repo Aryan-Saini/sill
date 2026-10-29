@@ -1418,7 +1418,17 @@ settings in the defaults domain `SillMenuBar` (delete it after), and takes:
   ```
 
 Sill.app itself ignores every `-Sill…After` argument, `-SillTestScreenHeight`,
-`-SillSettingsShot` and `-requirePairing`, with one line each.
+`-SillSettingsShot` and `-requirePairing`, with one line each. Sill.app here is
+its code wherever it runs from, known by what it is, not by its folder's name
+(`AppIdentity`, `Tests/checks/test-host`): signed as `me.saffer.sill.mac` or
+with any certificate (or a signature it can't read), a bundle whose identifier
+is Sill's, or a `.app`. Only the bare binary as `swift build` makes it (the
+linker's ad hoc signature, no Info.plist) takes the hooks; a copy of it in a
+scratch bundle with Sill's Info.plist ignores them too. Sill.app's code in a
+folder that is not a `.app` (a renamed copy, a link to its executable, that
+scratch bundle) says why first, a renamed copy of Sill.app as: "Running from
+…/Sill.bin, which is not a .app, as Sill.app itself (signed
+me.saffer.sill.mac): it takes no test hook."
 
 `--encoder-selftest` and `--virtual-display-selftest` work in the app too.
 

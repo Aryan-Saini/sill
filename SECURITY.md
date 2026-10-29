@@ -24,6 +24,9 @@ who has it, and the newest iPhone and iPad app.
 - Remote Access's connection, and pairing, at home and away: the QR code, the
   typed code, `sill://pair` links, a USB cable's automatic pairing, Require
   pairing, and the paired devices and keys Sill for Mac keeps in the keychain.
+- What another app on the Mac can make Sill for Mac do by starting it, or a
+  copy of it, with arguments and an environment of its own: it then runs with
+  Sill's Screen Recording and Accessibility permissions.
 - The update check, which asks GitHub's releases feed about once a day and
   downloads nothing.
 - The website, getsill.app.
@@ -38,3 +41,11 @@ code. `SillHost`, the command-line host for development, keeps a plain
 home door, with no pairing and no encryption, unless it runs with
 `--pairing`. Sill for Mac 0.3.1 and earlier had no pairing and no encryption
 at home: update to the newest release.
+
+The development builds made from source, `SillHost` and the bare `SillMenuBar`
+binary that `swift build` makes, take test settings that change who gets in
+and what pairing needs (`SILL_TEST_…` variables, and the bare binary's
+`-Sill…After` arguments and `-requirePairing`). Sill for Mac takes none of
+them, whatever its folder is called and however it is started (a renamed copy,
+a link to its executable): it knows itself by its code signature and its
+bundle.
