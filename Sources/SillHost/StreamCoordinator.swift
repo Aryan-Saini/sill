@@ -69,9 +69,16 @@ package final class StreamCoordinator {
     /// encoder, the launch probe never runs and the re-check never starts, so no test touches the
     /// Mac's one hardware encoder while Noah streams (PointerTestHooks).
     private let softwareOnly: Bool
-    /// The TEST ONLY hooks' lines (PointerTestHooks, InputInjector.testInputLog, `keyframeIgnoreHook`),
-    /// printed as `start` begins; empty without them.
+    /// The TEST ONLY hooks' lines (PointerTestHooks, InputInjector.testInputLog, `keyframeIgnoreHook`,
+    /// FirewallCheck.TestHook), printed as `start` begins; empty without them.
     private let testHookLines: [String]
+    /// The macOS firewall (FirewallRule, a user's report of 2026-10-29): the paths a rule may name
+    /// for this process, the TEST ONLY answers a test host takes instead of asking, and one check at
+    /// a time (`checkFirewall`), with one more after it when asked meanwhile.
+    private let firewallPaths: FirewallRule.Paths
+    private let firewallHook: FirewallCheck.TestHook?
+    private var firewallChecking = false
+    private var firewallAgain = false
     /// A picked window streams from its own HiDPI display (see VirtualStage): the CLI's
     /// `--virtual-display`, or the app's setting. Every branch this adds is behind this flag;
     /// without it the coordinator behaves as before. It changes only inside `select` (`adopt`).
@@ -342,7 +349,13 @@ package final class StreamCoordinator {
         let userActive = DisplayWake.userActive(environment: env, testHost: synthetic)
         displayActivity = DisplayActivity(remote: userActive.remote)
         keyframeRequestsToIgnore = keyframeIgnore.count
-        testHookLines = [path.line, software.line, inputLog.line, userActive.line, keyframeIgnore.line, noScreen.line].compactMap { $0 }
+        // The firewall's TEST ONLY answers, for a test host alone (StreamServer's own rule).
+        let firewallTest = FirewallCheck.TestHook.read(testHost: DoorPolicy.isTestHost(advertises: !synthetic, bundled: !testHooks),
+                                                       environment: env)
+        firewallHook = firewallTest.hook
+        firewallPaths = FirewallRule.paths(executable: FirewallCheck.executablePath())
+        testHookLines = [path.line, software.line, inputLog.line, userActive.line, keyframeIgnore.line, noScreen.line,
+                         firewallTest.line].compactMap { $0 }
         status = HostStatus()
         var home = StreamServer.HomeDoorMode.plain
         if homePairing, let remote {
@@ -427,6 +440,11 @@ package final class StreamCoordinator {
                 if let fp = route.fingerprint, route.pairedName != nil {
                     let words = route.label ?? Self.homeRouteWords(route, link: link)
                     self.remote?.sessionStarted(fingerprint: fp, route: words, cableDevice: route.cableDevice)
+                }
+                // A device got in from the network while the firewall's verdict said none could:
+                // that verdict is stale (FirewallRule.asksAgain).
+                if FirewallRule.asksAgain(after: self.status.snapshot.firewall, fromLoopback: route.origin == .loopback) {
+                    self.checkFirewall()
                 }
                 // Home or away before its catalog: its settings state says which quality it sets.
                 self.routesChanged(joined: id, endpoint: "\(connection.endpoint)")
@@ -617,6 +635,9 @@ package final class StreamCoordinator {
                 $0.network = .registering
             }
         }
+        // The listener is up, at launch or replaced (Direct Wireless): whether the macOS firewall
+        // lets devices reach it.
+        if network == .registering { checkFirewall() }
     }
 
     /// Bonjour registered this name (nil: the registration went away, to come back).
@@ -630,6 +651,32 @@ package final class StreamCoordinator {
         }
     }
 
+    // MARK: The macOS firewall
+
+    /// Asks the macOS firewall, read-only, whether it blocks this process (FirewallCheck, then
+    /// FirewallRule's verdict into the status: Sill.app's Settings › General and its menu say so), and
+    /// prints one line when the verdict changes (none for a first one that blocks nothing). At launch,
+    /// whenever the listener comes up, when Sill.app's Settings › General opens or Sill becomes
+    /// active over it, and when a device gets in from the network while the verdict says none can;
+    /// never on a timer. One check at a time: one asked for meanwhile runs once more after it, so its
+    /// answer is never older than the request.
+    package func checkFirewall() {
+        guard !firewallChecking else { firewallAgain = true; return }
+        firewallChecking = true
+        let paths = firewallPaths, hook = firewallHook
+        Task { @MainActor in
+            let raw = await FirewallCheck.read(paths, hook: hook)
+            let verdict = FirewallRule.verdict(raw, paths: paths)
+            if let line = FirewallRule.Copy.logLine(from: status.snapshot.firewall, to: verdict) { print(line) }
+            status.update { $0.firewall = verdict }
+            firewallChecking = false
+            if firewallAgain {
+                firewallAgain = false
+                checkFirewall()
+            }
+        }
+    }
+
     /// `preselect` is the optional command-line match; without it nothing streams until a client picks.
     /// `promptForPermissions: false` (the app) asks for nothing at launch: no Accessibility alert,
     /// and no window list before Screen Recording is granted, because the first ScreenCaptureKit
@@ -638,6 +685,7 @@ package final class StreamCoordinator {
     package func start(preselect: String?, promptForPermissions: Bool = true) async {
         for line in testHookLines { print(line) }
         if let line = clipboard.testHookLine { print(line) }   // TEST ONLY, and only with one of its variables set
+        checkFirewall()                                         // at launch, beside the listener's own check
         if !synthetic, promptForPermissions { InputInjector.ensureAccessibility() }   // prompts once; input is dropped silently without it
         if softwareOnly {
             // TEST ONLY: a gate that must never touch the Mac's one hardware encoder (Noah may be
