@@ -240,6 +240,26 @@ same(R.answers(raw(exe: "blocked", app: "blocked", list: [(app, true)]), paths: 
 same(R.answers(R.Raw(), paths: bundled), R.Answers(state: .unknown), "nothing answered")
 same(R.answers(raw(list: [(exe, true)]), paths: bundled).listed, [R.Listed(path: exe, blocks: true)], "the list is read")
 
+// What FirewallCheck asks after the state: only while the firewall is on. Off, Block all and a state that
+// doesn't read decide the verdict alone, whatever the rest would have said (the second review, 2026-10-29:
+// a tool that never answered was asked all five questions, 10 s a check, and one that ignored SIGTERM left
+// five processes running).
+check(R.asksRules(afterState: "Firewall is enabled. (State = 1)\n"), "on: the rules are asked")
+check(R.asksRules(afterState: "Firewall is enabled. (State = 1) \n"), "on, the legacy form: the rules are asked")
+for text: String? in [nil, "", "Firewall is disabled. (State = 0)\n", "Firewall is blocking all non-essential incoming connections. (State = 2)\n",
+                      "Firewall is set to block all non-essential incoming connections \n", "Firewall is in bootstrap mode. (State = 3)\n",
+                      "Firewall is enabled. (State = 12)", "zsh: command not found: socketfilterfw"] {
+    check(!R.asksRules(afterState: text), "\(text.debugDescription): nothing more is asked")
+    for rest in [raw(exe: "blocked", app: "blocked", list: [(app, true), (exe, true)]),
+                 raw(all: "Firewall is blocking all non-essential incoming connections.\n"), raw(), raw(list: nil),
+                 raw(exe: nil, app: nil, list: nil, problem: "socketfilterfw --getglobalstate didn’t answer in 2 s")] {
+        var full = rest
+        full.globalState = text
+        same(R.verdict(R.Raw(globalState: text, problem: full.problem), paths: bundled), R.verdict(full, paths: bundled),
+             "\(text.debugDescription): the verdict without the rest is the verdict with it")
+    }
+}
+
 for v: R.Verdict in [.blocks(executable: exe, bundle: nil), .blocks(executable: nil, bundle: app), .blocksAll] {
     check(v.blocksDevices, "\(v) keeps devices out")
     // A device that got in from the network says the verdict is stale: asked again. Over loopback,

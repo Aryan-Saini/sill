@@ -14,14 +14,16 @@ rule per path, and a Mac held `/Applications/Sill.app` allowed and `…/Contents
 (`socketfilterfw --listapps`): nothing reached Sill from the network, System Settings showed it allowed, and
 `--getappblocked` on the bundle said "permitted"; `sudo socketfilterfw --unblockapp` on the executable fixed it.
 No wire change.
-- `FirewallCheck` asks `/usr/libexec/ApplicationFirewall/socketfilterfw` `--getglobalstate`, then unless it is
-  off `--getblockall`, `--getappblocked` for the running executable (`proc_pidpath`) and its bundle, and
-  `--listapps`: a process each, read-only, no privileges (macOS 27.0.1: 4–8 ms each, no prompt, no Full Disk
-  Access needed; asked in one run the tool is killed, 137, when `--getstealthmode` or `--getallowsigned` follows
-  `--getappblocked`, or `--listapps` follows it with a bundle's path; no `com.apple.alf.plist` there). At launch, when the listener comes up, when Sill.app's status menu opens (the
-  glyph at once, its item from the next opening), when its General opens or Sill becomes active over it, and
-  when a device gets in from the network while the verdict says none can (`asksAgain`); never on a timer.
-- `FirewallRule` (pure, `Tests/checks/firewall`, 340 checks, 67 mutants): off, allows (only once `--listapps`
+- `FirewallCheck` asks `/usr/libexec/ApplicationFirewall/socketfilterfw` `--getglobalstate`, then only while it is
+  on (`asksRules`) `--getblockall`, `--getappblocked` for the running executable (`proc_pidpath`) and its bundle,
+  and `--listapps`: a process each with 2 s (then SIGTERM, SIGKILL a second later), read-only, no privileges
+  (macOS 27.0.1: 4–8 ms each, no prompt, no Full Disk Access needed; asked in one run the tool is killed, 137,
+  when `--getstealthmode` or `--getallowsigned` follows `--getappblocked`, or `--listapps` follows it with a
+  bundle's path; no `com.apple.alf.plist` there). At launch, when the listener comes up, when Sill.app's status
+  menu opens (the glyph at once, its item from the next opening), when its General opens or Sill becomes active
+  over it, and when a device gets in from the network while the verdict says none can (`asksAgain`); never on a
+  timer.
+- `FirewallRule` (pure, `Tests/checks/firewall`, 390 checks, 69 mutants): off, allows (only once `--listapps`
   was read), `blocks(executable:bundle:)` (its own answer or its rule in the list, either enough), `blocksAll`,
   unknown (with why, in the log).
   While it blocks: General's line in the Permissions style with `sudo …/socketfilterfw --unblockapp <the running

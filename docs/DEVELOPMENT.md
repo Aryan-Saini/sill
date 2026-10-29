@@ -1710,9 +1710,11 @@ AirDrop, Sidecar and Universal Control can hold AWDL on too.
   once, Devices Can’t Connect from the menu's next opening, as the menu is
   built before the answer) and whenever Settings › General opens or Sill
   becomes active over it; never on a timer. FirewallCheck asks
-  `--getglobalstate`, then, unless the firewall is off, `--getblockall`,
-  `--getappblocked` for the running executable and for its bundle, and
-  `--listapps`, each in a process of its own: read-only, no privileges, nothing
+  `--getglobalstate`, then, only while the firewall is on (off, Block all and a
+  state that doesn't read decide alone), `--getblockall`, `--getappblocked` for
+  the running executable and for its bundle, and `--listapps`, each in a
+  process of its own given 2 s (then SIGTERM, and SIGKILL a second later, so a
+  tool that hangs leaves nothing running): read-only, no privileges, nothing
   changed. FirewallRule (pure, `Tests/checks/firewall`) reads the answers: on,
   with a rule that blocks the executable or its bundle (its own answer or the
   list's, either one enough) or with Block all incoming connections, devices on

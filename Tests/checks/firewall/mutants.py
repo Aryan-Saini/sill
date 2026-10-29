@@ -52,6 +52,8 @@ MUTANTS = {
     "N1 the list never read": ("listed: raw.listApps.flatMap(listed),", "listed: nil,"),
     "N2 the bundle's answer from the executable's text": ("raw.bundle.map { appAnswer($0, path: bundle) }",
                                                           "raw.executable.map { appAnswer($0, path: bundle) }"),
+    "N3 the rules asked unless off": ("text.map(state) == .on", "text.map(state) != .off"),
+    "N4 the rules never asked": ("text.map(state) == .on", "text.map(state) == .off"),
     # the verdict
     "V1 off still judged": ("        case .off: return .off\n        case .blockAll", "        case .off: break\n        case .blockAll"),
     "V2 block all from the state ignored": ("        case .blockAll: return .blocksAll\n        case .unknown",

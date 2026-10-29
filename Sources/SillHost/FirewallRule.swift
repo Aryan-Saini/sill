@@ -217,6 +217,14 @@ package enum FirewallRule {
         return name.isEmpty ? nil : name
     }
 
+    /// Whether FirewallCheck asks anything after `--getglobalstate` (`text`, its answer; nil when it
+    /// gave none): only while the firewall is on. Off, Block all and a state that doesn't read decide
+    /// the verdict alone (`verdict`), so nothing more is asked then, and a tool that doesn't answer
+    /// costs one question's wait, not five (the second review, 2026-10-29).
+    package static func asksRules(afterState text: String?) -> Bool {
+        text.map(state) == .on
+    }
+
     /// Every answer read; `paths` says which of them are about this process.
     package static func answers(_ raw: Raw, paths: Paths) -> Answers {
         Answers(state: raw.globalState.map(state) ?? .unknown,

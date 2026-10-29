@@ -3,9 +3,11 @@ import Foundation
 
 /// Asks the macOS Application Firewall what it holds for this process, read-only and without
 /// privileges; FirewallRule decides what that means. Five questions to `socketfilterfw`, each in a
-/// process of its own and given 2 s: `--getglobalstate` (nothing else is asked while the firewall
-/// is off), `--getblockall`, `--getappblocked` for the executable and for its bundle, and
-/// `--listapps`. Never a question that changes anything, never sudo.
+/// process of its own and given 2 s (then stopped: SIGTERM, and SIGKILL a second later):
+/// `--getglobalstate` (nothing else is asked unless the firewall is on: off, Block all and a state
+/// that doesn't read decide alone, FirewallRule.asksRules), `--getblockall`, `--getappblocked` for
+/// the executable and for its bundle, and `--listapps`. Never a question that changes anything,
+/// never sudo.
 ///
 /// Measured on macOS 27.0.1 (2026-10-29), as an ordinary user with no privileges and no Full Disk
 /// Access (Sill.app has none): each question answers in 4–8 ms, exit status 0, no prompt. Asked in
@@ -55,7 +57,12 @@ package enum FirewallCheck {
             }
         }
         raw.globalState = ask(["--getglobalstate"])
-        if let state = raw.globalState, FirewallRule.state(state) == .off { return raw }
+        // Off, Block all, or no state that reads: the verdict is decided (FirewallRule.asksRules), so
+        // nothing more is asked, and a tool that doesn't answer costs one question's wait, not five.
+        guard FirewallRule.asksRules(afterState: raw.globalState) else {
+            raw.problem = problems.first
+            return raw
+        }
         raw.blockAll = ask(["--getblockall"])
         raw.executable = ask(["--getappblocked", paths.executable])
         if let bundle = paths.bundle { raw.bundle = ask(["--getappblocked", bundle]) }
@@ -67,7 +74,8 @@ package enum FirewallCheck {
     private enum Outcome { case answer(String), failed(String) }
 
     /// Runs `tool` with `arguments`, its standard output and error read together, for at most
-    /// `timeout` seconds (then it is stopped: a question has nothing to undo).
+    /// `timeout` seconds (then it is stopped, SIGTERM and a second later SIGKILL: a question has
+    /// nothing to undo).
     private static func run(_ tool: String, _ arguments: [String], timeout: TimeInterval = 2) -> Outcome {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: tool)
@@ -93,7 +101,12 @@ package enum FirewallCheck {
         }
         if exited.wait(timeout: .now() + timeout) == .timedOut {
             process.terminate()
-            _ = exited.wait(timeout: .now() + 1)
+            // A tool that ignores SIGTERM is killed a second later, so nothing is left running, nor a
+            // thread blocked on its pipe, however often Sill asks (the second review, 2026-10-29).
+            if exited.wait(timeout: .now() + 1) == .timedOut, process.isRunning {
+                kill(process.processIdentifier, SIGKILL)
+                _ = exited.wait(timeout: .now() + 1)
+            }
             _ = read.wait(timeout: .now() + 1)
             return .failed("socketfilterfw \(question) didn’t answer in \(Int(timeout)) s")
         }
