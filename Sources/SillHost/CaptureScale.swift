@@ -164,6 +164,20 @@ enum VirtualDisplaySize {
         let side = ceil(max(panel.width, panel.height) / 0.5)
         return clamp(CGSize(width: side, height: side))
     }
+
+    /// The size a window should have on the virtual display, in Mac points: a device's panel of `panel`
+    /// points divided by its text scale (none, or one that is not a positive number, counts as 1), each
+    /// side held to 1…`maxSide`, as the envelope is (VirtualStage.windowSize). No display holds more,
+    /// and until 2026-10-29 nothing held it: a viewport of 1e300 points, or a scale of 1e-300, gave a
+    /// side no Int holds, and the "insists on …" line's Int() trapped (security scan, finding 4; hosts
+    /// now refuse such a viewport, ViewportBounds). No panel, or one whose sides are not positive
+    /// numbers: the window's own size, as before.
+    static func windowSize(panel: CGSize?, scale: CGFloat?, own: CGSize) -> CGSize {
+        guard let panel, panel.width.isFinite, panel.height.isFinite, panel.width > 0, panel.height > 0 else { return own }
+        let s = scale.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } ?? 1
+        return CGSize(width: min(max((panel.width / s).rounded(), 1), maxSide),
+                      height: min(max((panel.height / s).rounded(), 1), maxSide))
+    }
 }
 
 /// HEVC wants even sides: a capture's size in pixels rounded down to even. Every capture's rule until

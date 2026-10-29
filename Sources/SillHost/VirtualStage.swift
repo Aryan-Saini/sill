@@ -192,12 +192,12 @@ final class VirtualStage {
     // MARK: Geometry (pure; the numbers in CLAUDE.md come from these)
 
     /// The size the window should have on the virtual display, in Mac points: the client's panel
-    /// divided by its text scale (Aa Off or a bad scale count as 1.0), or the window's own size
-    /// when no viewport has arrived yet.
+    /// divided by its text scale (Aa Off or a bad scale count as 1.0), each side held to 1…4096 as
+    /// the envelope is (VirtualDisplaySize, pure, where the rule is), or the window's own size when
+    /// no viewport has arrived yet.
     static func windowSize(for v: Viewport?, own: CGSize) -> CGSize {
-        guard let v, v.width > 0, v.height > 0 else { return own }
-        let s = (v.scale ?? 1) > 0 ? (v.scale ?? 1) : 1
-        return CGSize(width: (v.width / s).rounded(), height: (v.height / s).rounded())
+        VirtualDisplaySize.windowSize(panel: v.map { CGSize(width: $0.width, height: $0.height) },
+                                      scale: v?.scale.map { CGFloat($0) }, own: own)
     }
 
     /// The display size (without the menu bar) that fits this panel at every Aa scale and in both
