@@ -1132,17 +1132,17 @@ first. Wire, host and device; additive.
   device's clipboard, and that clipboard empty 10 minutes later (say whether either should change).
 - **Paste right away (2026-10-29, branch `clipboard-autopaste` from main at 35a9c47, PR #242; the
   plan's "Paste right away").** Noah, trying #241: "still doesn't automatically Cmd+V is that coming
-  later?". No wire change, the device's but for one line on the Mac since the review: with Settings ›
-  This iPad's "Paste on ‹Mac› Right Away" on
-  (under Share Clipboard; `Sill.pasteRightAway`, on by default, never sent), a Paste's receipt also
-  presses ⌘V on the Mac (`ClipboardPolicy.pastesOnReceipt`: only a receipt in time, only while
-  something streams, only while the Mac's last list says it shares its clipboard, never while the tour
-  shows; `KeyChord.paste`, ⌘'s own key around V, through
-  `sendFromKeyRow`), 50 ms after the receipt (`pasteDelay`: the host writes the text on its Board
-  queue while it echoes the ping at once; on loopback a ⌘V right behind the receipt came before the
-  write in 99 of 100 of a test client's pastes and 21 of 25 of the app's, up to 14 ms early, and with
-  50 ms in none of 125); then "Pasted on ‹Mac›.", without ⌘V today's words; the chip "Where the cursor
-  is.". The other way stays the person's (no iOS app pastes into another). Harness:
+  later?". No wire change; the device's alone but for one change on the Mac since the review (below):
+  with Settings › This iPad's "Paste on ‹Mac› Right Away" on (under Share Clipboard;
+  `Sill.pasteRightAway`, on by default, never sent), a Paste's receipt also presses ⌘V on the Mac
+  (`ClipboardPolicy.pastesOnReceipt`: only a receipt in time, only while something streams, only while
+  the Mac's last list says it shares its clipboard, never while the tour shows; `KeyChord.paste`, ⌘'s
+  own key around V, through `sendFromKeyRow`), 50 ms after the receipt (`pasteDelay`: the host
+  writes the text on its Board queue while it echoes the ping at once; on loopback a ⌘V right behind
+  the receipt came before the write in 99 of 100 of a test client's pastes and 21 of 25 of the app's,
+  up to 14 ms early, and with 50 ms in none of 125); then "Pasted on ‹Mac›.", without ⌘V today's
+  words; the chip "Where the cursor is.". The other way stays the person's (no iOS app pastes into
+  another). Harness:
   `-SillClipboardNote pasted`, `-Sill.pasteRightAway 0`, DEBUG `-SillPasteDelay <s>`. Verified:
   `Tests/checks/clipboard` 285 checks and 91 of 91 mutants, `key-strokes` 359 (`KeyChord.paste` leaves
   nothing held) and 86 of 86; `run-all.sh` all 56; the three iOS builds and `swift build -c
@@ -1164,9 +1164,10 @@ first. Wire, host and device; additive.
   text before `received` returns (f15675b): a main actor busy as the text arrived (a stream's start,
   150 ms) took the text and the keys back to back and V came within half a millisecond of the write's
   end, before it in 4 of 25, now never. Re-run: `clipboard` 285 and 91 of 91 at the head, 342 and 94 of
-  94 after; `key-strokes` 359 and 86 of 86; the three iOS builds, `swift build -c release` (from `git
-  archive` of the head: 46.7 s, the CaptureProbe warning), the PR's live runs, the race (the app at 50 ms
-  0 of 25, at 0 ms 15 of 25), 11 of the 12 photos byte for byte; the review's photos in `review/`.
+  94 after; `key-strokes` 359 and 86 of 86; `run-all.sh` all 56 after; the three iOS builds, `swift
+  build -c release` (from `git archive` of the head: 46.7 s, the CaptureProbe warning), the PR's live
+  runs, the race (the app at 50 ms 0 of 25, at 0 ms 15 of 25), 11 of the 12 photos byte for byte; the
+  review's photos in `review/`.
   **Untested, for Noah** (the plan's ten): a paste into TextEdit, Notes and a Terminal at their
   cursor, the switch off, a paste with no text field in front, VoiceOver's words, Universal Clipboard
   on, through Tailscale, the Settings panel's Paste row, a Paste right after a pick or a turn, a Mac
