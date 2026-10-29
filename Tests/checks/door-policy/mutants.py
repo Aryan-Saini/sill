@@ -132,7 +132,7 @@ M = [
     ("places: an unpaired key admitted makes its address known", F,
      "                if paired { proved(e.source.address, now: now) }", "                proved(e.source.address, now: now)"),
     ("places: a connection that ends by itself costs nothing (the rule before)", F,
-     "                return charge(e.source, DoorPolicy.charge(held: now - e.acceptedAt, refused: end == .refused), now: now)",
+     "                return charge(e.source, DoorPolicy.charge(held: Self.held(e, now: now), refused: end == .refused), now: now)",
      "                return end == .refused ? charge(e.source, 1, now: now) : []"),
     ("places: Direct Wireless turned off charges the device", F,
      ["            case .dropped:\n                return []\n", "            case .refused, .ended, .request:"],
