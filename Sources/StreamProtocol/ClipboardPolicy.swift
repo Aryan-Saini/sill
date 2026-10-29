@@ -360,10 +360,12 @@ public enum ClipboardPolicy {
     /// (HostClipboard), yet echoes the ping after it all the same, so the receipt comes for a text it
     /// never wrote, and ⌘V would paste what its clipboard held before; the list that says it stopped
     /// sharing comes before that receipt whenever the switch went off before the Mac read the ping
-    /// (found in review: the switch turned off while a Paste was on its way, and ⌘V went). Without
-    /// all of these, today's Paste: the text on the Mac's clipboard and "Press ⌘V there".
-    public static func pastesOnReceipt(rightAway: Bool, late: Bool, streaming: Bool, hostClipboard: Int?) -> Bool {
-        rightAway && !late && streaming && hostTakes(hostClipboard)
+    /// (found in review: the switch turned off while a Paste was on its way, and ⌘V went). Never while
+    /// the first-run tour shows (`tourShows`, the device's `inputPaused`), which keeps every input from
+    /// the Mac. Without all of these, today's Paste: the text on the Mac's clipboard and "Press ⌘V
+    /// there".
+    public static func pastesOnReceipt(rightAway: Bool, late: Bool, streaming: Bool, hostClipboard: Int?, tourShows: Bool) -> Bool {
+        rightAway && !late && streaming && hostTakes(hostClipboard) && !tourShows
     }
 
     /// The key ⌘V presses: V's HID usage (the keyboard page's 0x19), virtual key 9 on the Mac.
