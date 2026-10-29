@@ -46,7 +46,7 @@ out in Insiders first tomorrow". Merge "Version 0.6.0 for both apps" (PR #244, b
   statuses and gh calls); release-ios.sh against a stand-in xcodebuild playing run 40843967209's real
   .ipa, 48 of 48 (its App Store path identical to origin/main's); 30 of 30 mutants of the new shell paths caught (15 in release.sh's nightly mode and its release path, 7 in nightly-notes.sh, 8 in release-ios.sh's flags); the workflows: 5 files
   parse (PyYAML), 44 run blocks under /bin/bash -n, 194 structural checks (actions pinned by the commits
-  already used, no expression in a run script, secrets only in env, the gates); a 12-minute real-time wait (the build listed after 11.5 min, a look a minute): 20 requests, every token valid, renewed once at 600 s; on GitHub
+  already used, no expression in a run script, secrets only in env, the gates); nightly.yml's run blocks executed under /bin/bash 3.2 -eo pipefail with GitHub's output, env and summary files and the stand-ins, 41 of 41 (decide's skip rule on a schedule only, publishing only from main and not verify only, the notes through the outputs, the Mac's and the iOS mode matrices, `--public-beta` only for exactly `true`), and 8 of 8 mutants of its gates caught; a 12-minute real-time wait (the build listed after 11.5 min, a look a minute): 20 requests, every token valid, renewed once at 600 s; on GitHub
   `gh workflow run testflight.yml --ref nightly-builds` with `SILL_TESTFLIGHT_IN_CI` unset (`gh variable
   list` empty) → run 40843967209 passed: Xcode_27.1.app 27A9275, archived with CURRENT_PROJECT_VERSION=987,
   exported through the key; the downloaded .ipa says 0.5.1 (987) while the project says 4, signed "Apple
