@@ -929,12 +929,22 @@ near the bar offers "Paste on ‹Mac›" with the system's Paste control
 (UIPasteControl), whose tap reads it without asking; the Settings group has the
 same button. The Mac writes it for this Mac only (`.currentHostOnly`), marked
 with its launch ID so it never sends it back, and passes it to its other
-subscribers; the person presses ⌘V. The device says "Sent to ‹Mac›’s
-clipboard" only once the Mac has read it: a ping with a 16-byte random payload
-goes after the text through the same door, and its pong is the receipt (the Mac
-echoes a ping only after reading all before it); none within max(4 s, 4 × the
-worst round trip) says "Didn’t reach ‹Mac›. Try Paste again." and offers the
-chip again. The chip's 20 s run only while it is on screen with Sill active,
+subscribers. The device counts it as sent only once the Mac has read it: a ping
+with a 16-byte random payload goes after the text through the same door, and
+its pong is the receipt (the Mac echoes a ping only after reading all before
+it); none within max(4 s, 4 × the worst round trip) says "Didn’t reach ‹Mac›.
+Try Paste again." and offers the chip again. With the device's Paste on ‹Mac›
+Right Away on (Settings › This iPad, under Share Clipboard;
+`Sill.pasteRightAway`, on by default, never sent), the receipt also presses ⌘V
+on the Mac 50 ms later (`ClipboardPolicy.pastesOnReceipt` and `pasteDelay`;
+`KeyChord.paste`, ⌘'s own key around V, so nothing stays held there), only for
+a receipt in time and while something streams, and the device says "Pasted on
+‹Mac›."; the wait lets the Mac's write, on a queue of its own, finish first (on
+loopback a ⌘V right behind the receipt beat it in 120 of 125 pastes:
+docs/clipboard-plan.md, "Paste right away"). Off, the device says "Sent to
+‹Mac›’s clipboard" and the person presses ⌘V. The other way stays the
+person's: no iOS app pastes into another. The chip's 20 s run only while it is
+on screen with Sill active,
 never under VoiceOver, and VoiceOver is told when it first shows. Text is capped
 at 256 KB. A device's subscriptions and texts are limited to four a second; its
 stop never is. The log says "Clipboard: iPad (iPad14,1) shares the clipboard."
@@ -965,13 +975,17 @@ subscribes and prints each kind 32, `--copy=TEXT@T` (or `--copy-bytes=N@T`)
 sends text as a device's Paste does, `--raw32='{"stop":true}@T'` stops, and
 `--expect=clipboard=TEXT` (or `none`) checks the last one at exit. In the
 harness, `-SillClipboardChip 1` puts the chip on the mock's stream and
-`-SillClipboardNote sent|long|notsent` its note; `-Sill.shareClipboard 0` turns
-the device's switch off for one run. Live against a synthetic host on loopback,
+`-SillClipboardNote sent|long|notsent|pasted` its note; `-Sill.shareClipboard 0`
+turns the device's switch off for one run, and `-Sill.pasteRightAway 0` its
+Paste on ‹Mac› Right Away. Live against a synthetic host on loopback,
 `-SillSettingsScript '3 paste TEXT'` sends TEXT as the Paste control hands it
-over (the receipt and its note included; through `sillrelay.py
---blackhole-after S` it never comes), and `-SillSettings 1 -SillSettingsCloseAt
-<s>` holds the Settings panel over the chip until then; the console's
-"clipboard: …" lines say what happened.
+over (the receipt, the ⌘V after it and the note included; through
+`sillrelay.py --blackhole-after S` the receipt never comes, nor the ⌘V); with
+`SILL_TEST_INPUT_LOG=1` and `SILL_TEST_POINTER_PATH` (a synthetic Desktop takes
+input only with a scripted pointer) the host prints the ⌘V it would post, and
+DEBUG `-SillPasteDelay <s>` moves it after the receipt (0: right behind it);
+`-SillSettings 1 -SillSettingsCloseAt <s>` holds the Settings panel over the
+chip until then; the console's "clipboard: …" lines say what happened.
 
 ## The Mac's menus on the device
 

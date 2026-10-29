@@ -1130,6 +1130,28 @@ first. Wire, host and device; additive.
   orange line, Allow in System Settings…, Allow and Deny, then `defaults delete` it); Paste right
   after 10 s away from Sill ("Sent" only when ⌘V pastes it); on by default replacing a photo on the
   device's clipboard, and that clipboard empty 10 minutes later (say whether either should change).
+- **Paste right away (2026-10-29, branch `clipboard-autopaste` from main at 35a9c47, PR #242; the
+  plan's "Paste right away").** Noah, trying #241: "still doesn't automatically Cmd+V is that coming
+  later?". Device only, no wire change: with Settings › This iPad's "Paste on ‹Mac› Right Away" on
+  (under Share Clipboard; `Sill.pasteRightAway`, on by default, never sent), a Paste's receipt also
+  presses ⌘V on the Mac (`ClipboardPolicy.pastesOnReceipt`: only a receipt in time, only while
+  something streams, never while the tour shows; `KeyChord.paste`, ⌘'s own key around V, through
+  `sendFromKeyRow`), 50 ms after the receipt (`pasteDelay`: the host writes the text on its Board
+  queue while it echoes the ping at once; on loopback a ⌘V right behind the receipt came before the
+  write in 99 of 100 of a test client's pastes and 21 of 25 of the app's, up to 14 ms early, and with
+  50 ms in none of 125); then "Pasted on ‹Mac›.", without ⌘V today's words; the chip "It goes where
+  the cursor is.". The other way stays the person's (no iOS app pastes into another). Harness:
+  `-SillClipboardNote pasted`, `-Sill.pasteRightAway 0`, DEBUG `-SillPasteDelay <s>`. Verified:
+  `Tests/checks/clipboard` 285 checks and 91 of 91 mutants, `key-strokes` 359 (`KeyChord.paste` leaves
+  nothing held) and 86 of 86; `run-all.sh` all 56; the three iOS builds and `swift build -c
+  release`, only the known warnings; live on a private iPad simulator against a loopback synthetic host:
+  the write, then "key 55 flags changed (command)", "key 9 down (command)", "key 9 up (command)", "key
+  55 flags changed (none)"; the switch off, the write and no key; through a relay that stops
+  forwarding, neither and "Didn’t reach"; harness photos in
+  `~/Downloads/sill-handoff/device-tests/2026-10-29/autopaste/`.
+  **Untested, for Noah** (the plan's eight): a paste into TextEdit, Notes and a Terminal at their
+  cursor, the switch off, a paste with no text field in front, VoiceOver's words, Universal Clipboard
+  on, through Tailscale.
 
 **A hardware keyboard and trackpad on the device (2026-10-14, branch `hardware-keyboard` from main at
 985a733, PR #80; issues #67 and #68; the plan, its eleven open questions with the defaults taken, and the

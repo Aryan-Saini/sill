@@ -85,8 +85,9 @@ Sill has layouts of its own.
   picture; with it off, once you set the window's text size with Aa.
 - **The clipboard** goes both ways while Share Clipboard is on, in both apps:
   text you copy on your Mac is ready to paste on your device, and Paste in
-  Sill sends what you copied on your device to your Mac's clipboard, where you
-  press ⌘V. Sill never reads your device's clipboard by itself, and copies a
+  Sill pastes what you copied on your device where your Mac's cursor is (with
+  Paste on … Right Away off, it only goes to your Mac's clipboard, where you
+  press ⌘V). Sill never reads your device's clipboard by itself, and copies a
   password manager marks as concealed stay on your Mac.
 - **Sound from your Mac** is a beta, on by default; Send Audio (Beta) in the
   Sill menu or Sill's Settings on your Mac, or in the settings panel of Sill on

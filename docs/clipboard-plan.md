@@ -166,7 +166,8 @@ dependency, the device through the local package).
   near the bar.").
   A tap on Paste sends the text as kind 32, then a ping with a random 16-byte payload through the same
   door; its pong (the receipt) shows "Sent to ‹Mac›’s clipboard. Press ⌘V there." for 3 s (spoken by
-  VoiceOver) and counts the copy as dealt with; no receipt within max(4 s, 4 × the worst round trip)
+  VoiceOver) and counts the copy as dealt with (since 2026-10-29, with Paste on ‹Mac› Right Away on,
+  the receipt also presses ⌘V there and the note says "Pasted on ‹Mac›.": "Paste right away", below); no receipt within max(4 s, 4 × the worst round trip)
   shows "Didn’t reach ‹Mac›. Try Paste again." and offers the chip again. Text over 256 KB is not sent
   ("Too long to send…"). The same Paste is in the Settings group whenever it shows.
 - **Subscription.** An empty kind 32 at the session's first window list that says 1 or more (and on a
@@ -191,7 +192,9 @@ dependency, the device through the local package).
    the Mac's copies would still travel to a device that only drops them.
 4. **Which markers.** The two the task names, plus the three older ones clipboard managers skip.
 5. **⌘V.** Not sent for the person: the text goes to the Mac's clipboard and they paste where they
-   want (a paste sent with it could land in the wrong window).
+   want (a paste sent with it could land in the wrong window). Changed on 2026-10-29 at Noah's word:
+   with Paste on ‹Mac› Right Away on (the default), the receipt also presses ⌘V ("Paste right away",
+   below).
 6. **Universal Clipboard.** Both of Sill's writes are local (`.currentHostOnly`, `.localOnly`), so neither
    bounces. What reaches the Mac through Universal Clipboard is not sent on (found while building:
    reading it would fetch it from the other device for every copy made there). A Mac copy that also
@@ -406,6 +409,167 @@ Verified after the fixes (the code at a371cb6):
 - Not rerun: the XCUITest tap on the system Paste control (the receipt was driven through
   `sendClipboard`, the code the control's tap reaches), the bare app's switch, the phone's arrangement
   and the Duo's poses (no layout changed). macOS's alert itself: nothing here reads the real clipboard.
+
+## Paste right away (2026-10-29)
+
+Noah, trying pull request #241's build (a password manager's copies go too) on his iPad and Mac on
+2026-10-29: "#241 seems to work but still doesn't automatically Cmd+V is that coming later?"; the day
+before he had asked what the chip gave over pasting on the Mac right away. Open question 5 had taken
+"⌘V not sent for the person"; his comments are requirements, so Paste now pastes. Branch
+`clipboard-autopaste` from main at 35a9c47 (worktree `/Users/noah/Downloads/wt-autopaste`), pull
+request #242. Device only: no wire change (⌘V is kind 8's keys, which every Mac takes), and nothing
+on the Mac changes.
+
+### The decision
+
+- With this device's switch on, Paste (the chip's, or the Settings group's) also presses ⌘V on the Mac
+  once the Mac has the text, so the text lands where the Mac's cursor is: in the streamed window's app,
+  which the Mac brings forward for a key as for any input, or on the Desktop in the app in front.
+- The switch: Settings › This iPad (This iPhone), right under Share Clipboard and shown with the Paste on
+  ‹Mac› row (while Share Clipboard is on and the Mac shares its clipboard): "Paste on ‹Mac› Right Away",
+  `Sill.pasteRightAway`, on unless turned off, never sent to the Mac. Off, Paste is what it was: the
+  text on the Mac's clipboard, "Press ⌘V there".
+- ⌘V goes as the Spotlight key's ⌘Space goes (`KeyChord.paste`: ⌘'s own key down, V down and up with
+  command, ⌘ up), through `sendFromKeyRow`, so nothing stays held on the Mac (on this Mac's
+  KeyStrokes and on one from before 2026-09-27) and the pointer sprite keeps what it shows: a paste
+  moves no pointer.
+- The other way cannot be automatic: iOS lets no app paste into another app, so the Mac's text waits on
+  the device's clipboard (local only, 10 minutes) for the person to paste.
+
+### The rule (`ClipboardPolicy.pastesOnReceipt`, pure)
+
+- Only on the receipt: the pong of the 16-byte ping that follows the text, which the Mac echoes only
+  once it has read the text. Before it the Mac may not have the text, and ⌘V would paste what its
+  clipboard held before (a password copied an hour ago, say). No receipt in time: no ⌘V, and "Didn’t
+  reach ‹Mac›. Try Paste again." as before.
+- Only for a receipt that came in time (max(4 s, 4 × the worst round trip)): a late one still counts as
+  sent, with today's note, but a ⌘V seconds after the tap could land where the person has gone since.
+- Only while something streams: the Mac drops input with nowhere to land (StreamCoordinator's `.input`
+  case), so the note would promise a paste that never came; then today's note.
+- Never while the tour shows, which keeps every input from the Mac (the chip and the Settings panel are
+  hidden then anyway).
+- `pasteDelay`: ⌘V 50 ms after the receipt (the race, below). The session's end cancels a ⌘V still
+  waiting, and one whose session lost what streams meanwhile goes out as today's note instead.
+- The note (`receiptNote`): "Pasted on ‹Mac›." with ⌘V (spoken the same), else "Sent to ‹Mac›’s
+  clipboard. Press ⌘V there." (spoken "Press Command-V there."), as the haptic and VoiceOver had it.
+
+### The words
+
+With the switch on: the chip "Paste on ‹Mac›" over "It goes where the cursor is."; its VoiceOver label
+"Paste on ‹Mac›. Pastes the text you copied on this iPad where ‹Mac›’s cursor is."; the Paste button's
+hint "Pastes the text you copied on this iPad where ‹Mac›’s cursor is."; the note "Pasted on ‹Mac›.";
+the group's footnote "Text you copy on ‹Mac› is ready to paste on this iPad. To paste on ‹Mac›, copy
+text here and tap Paste: it goes where ‹Mac›’s cursor is. With Paste on ‹Mac› Right Away off, Paste
+only puts it on ‹Mac›’s clipboard." With it off (`-Sill.pasteRightAway 0`), every word as before
+("Then press ⌘V there."); the announcement when the chip shows is the same either way.
+
+### The race: the Mac's write against ⌘V
+
+HostClipboard writes a device's text to the pasteboard on a queue of its own (`Board`) once its main
+actor has taken the message, while StreamServer echoes the ping that brings the receipt from the network
+queue as it reads it. So the receipt can come back before the write is done, and a ⌘V right behind it
+can reach the pasteboard first. Measured on a loopback synthetic host built from this branch (its host
+is main's: nothing under `Sources/SillHost` or `Sources/SillHostCLI` changed), with `SILL_TEST_LOOPBACK=1
+SILL_TEST_SOFTWARE_ENCODER=1 SILL_TEST_NO_ROUTER=1 SILL_TEST_NO_SCREEN=1
+SILL_TEST_PASTEBOARD=me.saffer.sill.test.autopaste SILL_TEST_CLIPBOARD_LOG=1 SILL_TEST_INPUT_LOG=1` and
+`SILL_TEST_POINTER_PATH` (without a scripted pointer a synthetic Desktop has nowhere for input to land).
+Neither test log gives the times needed (the input log prints no time, and the clipboard log's "set on
+the pasteboard" comes as the write is queued, not done), so a scratch script read the host's
+line-buffered stdout through a pipe and stamped each line with the monotonic clock as it came, and a
+scratch watcher polled that pasteboard (`NSPasteboard(name:)`, never the general one) every 0.15 ms for
+when its change count moved and when the text first read back. "V's down" is the dry run's "Test input:
+key 9 down (command)", printed where a real host posts. Both stamps come late, the watcher's by up to
+about 0.25 ms (a poll and a read), so a ⌘V measured as more than 0.25 ms early was early.
+
+- A scratch client sending ⌘V the moment the pong came (the device at its fastest), 100 pastes 0.3 s
+  apart: V's down before the text read back in **99 of 100** (95 by more than 0.25 ms; median 0.45 ms
+  early, at most 1.12 ms).
+- The app on a private iPad simulator with `-SillPasteDelay 0`, 25 pastes by `-SillSettingsScript` 0.6 s
+  apart: **21 of 25** (20 by more than 0.25 ms; median 0.58 ms early, at most 14.2 ms). The text read back 0.8 to 16.0 ms after
+  the host's line for it (median 1.8), V's down came 0.0 to 23.6 ms after that line (median 0.7): the
+  host's main actor took the text and the keys back to back at times.
+- With ⌘V 50 ms after the receipt (`pasteDelay`): the client **0 of 100** (V's down 48.4 to 54.9 ms after
+  the text read back, median 52.6), the app **0 of 25** (48.8 to 56.4, median 52.2).
+
+So ⌘V goes 50 ms after the receipt, a few tens of milliseconds as planned: nothing a person sees beside
+a frame's way to the device. Over Wi-Fi the round trip (5 to 10 ms at home, more through Tailscale)
+narrows the race but does not close it, since the host can take the text and the keys back to back.
+Known: a write held up longer than that (the Board's queue busy reading text another app only promised)
+still loses, and ⌘V then pastes what the Mac's clipboard held before; nothing on the device can tell.
+
+### Results
+
+- `Tests/checks/clipboard`: 285 checks (259 before; the rule's eight cases, the key, the delay, the
+  note, every word with the switch on and off, typographic quotes, and model 3: 5,000 random runs of
+  Pastes with the switch moving and receipts in time, late or never) and 91 of 91 mutants caught (the
+  72 before and 19 new: each of the rule's conditions, the key, the delay at 0 and at 1 s, the note both
+  ways, the words). `Tests/checks/key-strokes`: 359 checks (6 new: `KeyChord.paste` is ⌘'s key
+  around V, on this Mac and on one from before 2026-09-27 nothing stays held and the next tap is no
+  ⌘-click, and ⌘'s up is the one checked) and 86 of 86 mutants caught (3 new).
+  `Tests/checks/run-all.sh`: all 56 passed (8 min 28 s, beside the mutants' runs).
+- Builds: `swift build -c release` in the worktree (42 s, only the CaptureProbe warning; the host's sources
+  are main's); the iOS app Debug and Release for the generic simulator and Debug for a generic device
+  (`CODE_SIGNING_ALLOWED=NO`, arm64): BUILD SUCCEEDED, only the known StreamClient capture warning
+  (StreamClient.swift:4113, main's code); the Release binary holds the new words and not the harness's
+  `SillPasteDelay`.
+- Live on a private iPad Pro 13-inch simulator (iOS 27.0, deleted after) against a loopback synthetic
+  host (the variables above), the app launched with `-SillConnect 127.0.0.1:PORT -SillServiceType
+  _silltest._tcp -SillSettingsScript '3 paste …'`:
+  - The switch on (the default), `3 paste Hello from the iPad`: the host printed, in this order, "Test
+    clipboard: 19 bytes from Sill autopaste (iPad17,4 simulator) set on the pasteboard, sent to 0 other
+    devices.", then 68 ms later "Test input: key 55 flags changed (command)", "Test input: key 9 down
+    (command)", "Test input: key 9 up (command)", "Test input: key 55 flags changed (none)" and "Test
+    input: key 55 up: the table read again in 0.25 s for command" (⌘'s own key on the Mac is a
+    flags-changed event, and nothing stays held); the app's console "clipboard: sent 30 bytes of JSON
+    to the Mac (change 5), its receipt awaited for 4.0 s", "clipboard: the Mac has read it (its
+    receipt)", "clipboard: ⌘V in 0.050 s", "clipboard: ⌘V sent to the Mac", "clipboard: the note:
+    Pasted on ‹Mac›." (the synthetic host gives this Mac's name).
+  - `-Sill.pasteRightAway 0`, `3 paste Hello again, switch off`: the host's "… 23 bytes … set on the
+    pasteboard …" and no "Test input" line; the app "clipboard: no ⌘V: Paste on the Mac Right Away is
+    off" and "clipboard: the note: Sent to ‹Mac›’s clipboard. Press ⌘V there."
+  - Through `Scripts/sillrelay.py --blackhole-after 3`, `3.5 paste Lost on the way`: the host got neither
+    the text nor a key; the app "clipboard: no receipt in time: did not reach the Mac" and "clipboard:
+    the note: Didn’t reach ‹Mac›. Try Paste again.", no ⌘V (then "connection silent for 6 s: lost").
+  - The race's runs above (25 pastes each, with and without the delay): every Paste's ⌘V went, in order,
+    one chord each.
+  - Not run: a real tap on the system's Paste control (XCUITest, as before the review of #78): the script
+    calls `sendClipboard`, which the control's tap reaches, and everything after it is this change's.
+- Photos (harness, no personal data) in `~/Downloads/sill-handoff/device-tests/2026-10-29/autopaste/`
+  (INDEX.md): the chip with the switch on ("It goes where the cursor is.") and off ("Then press ⌘V
+  there."), the notes "Pasted on Mac mini." and, without ⌘V, "Sent to Mac mini’s clipboard. Press ⌘V
+  there.", and Settings › This iPad with the switch on and off, each at 1000x710 and 500x710 (an iPad
+  window that narrow keeps the compact halves), on the same private simulator with "A sentence copied
+  on the iPad" on its own pasteboard (`simctl pbcopy`; no Simulator.app running, so nothing synced).
+
+### Untested, for Noah
+
+On the iPad (and the iPhone) with this branch's build, against Sill.app from main (nothing on the Mac
+changed; any Sill for Mac with the clipboard, #78 on):
+1. Copy a sentence in Notes on the iPad, come back to Sill streaming TextEdit with the cursor in a
+   document: the chip says "It goes where the cursor is."; tap Paste: the sentence appears in TextEdit
+   at the cursor, the chip's place says "Pasted on ‹Mac›.", and nothing stays held on the Mac (a click
+   after it is a plain click, no ⌘-click).
+2. The same into Notes on the Mac, into a Terminal window (the shell's line), and on the Desktop with
+   another app in front: the text lands in that app.
+3. Settings › This iPad: "Paste on ‹Mac› Right Away" under Share Clipboard, its footnote; off, Paste only
+   puts the text on the Mac's clipboard ("Sent to ‹Mac›’s clipboard. Press ⌘V there.", "Then press ⌘V
+   there." on the chip) and ⌘V on the Mac pastes it; on again, it pastes.
+4. A paste with no text field focused on the Mac (Finder in front, or a window whose app has no text
+   field): whatever ⌘V does there (Finder may beep or paste a file name); say whether that is all right.
+5. VoiceOver: the chip's label ("Pastes the text you copied on this iPad where ‹Mac›’s cursor is."),
+   Paste's hint, "Pasted on ‹Mac›." spoken once the paste went.
+6. Universal Clipboard on (the same Apple Account): a Paste pastes the iPad's text once, as with it off.
+7. Through Tailscale away from home: Paste pastes, a moment later than at home.
+8. Paste in the Settings panel's row while a window streams: the text lands in that window under the
+   panel (nothing on the Mac changes focus for it).
+
+### Progress
+
+- 2026-10-29: the rule and words (f345eb6), the device (46b8a47), the panel (c641e9a), the harness
+  (63241e4), the note on the DEBUG console (4a8deed), the checks (7b877f6), then these docs.
+  Decided: on by default, ⌘V only on a receipt in time while something streams, 50 ms after it.
+  Verified: the race and the delay above, the checks, the builds, the live runs. Left: Noah's steps
+  above, on his devices.
 
 ## Untested, for Noah
 
