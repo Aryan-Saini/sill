@@ -1777,6 +1777,8 @@ package final class StreamCoordinator {
 
     private func markRevoked(_ id: ObjectIdentifier) {
         guard revoked.insert(id).inserted else { return }
+        // A menu choice or fetch of it still waiting for its turn is neither made nor read.
+        menus.clientRevoked(id)
         // TEST ONLY (SILL_TEST_INPUT_LOG, a synthetic host): where its input stops landing, so a test
         // reads what was posted for it after this line.
         if injector.testLog {
