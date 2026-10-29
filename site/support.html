@@ -78,6 +78,11 @@
     <li>Put your Mac and your iPhone or iPad on the same Wi-Fi network. Guest networks, and many office and hotel networks, keep devices apart. There, use a USB cable or <a href="#direct-wireless">Direct Wireless Connection</a>.</li>
     <li>Connect your iPhone or iPad to your Mac with a USB cable. Your Mac then shows as Wired.</li>
     <li>Check that Local Network is on for Sill on both, as below.</li>
+    <li class="command">If your iPhone or iPad lists your Mac but can’t connect to it, and the firewall is on in System Settings › Network › Firewall on your Mac, the firewall may be blocking Sill even though it shows Sill as allowed: it can keep one rule for Sill and another for the program inside it. To unblock that program, open Terminal on your Mac, run <code>sudo /usr/libexec/ApplicationFirewall/socketfilterfw <span class="option">--unblockapp</span> /Applications/Sill.app/Contents/MacOS/Sill</code> and enter your Mac’s password.
+    <!-- Firewall: for the release that ships it (PR #000); a republish before that release takes this sentence out. -->
+    Sill for Mac says so in its menu, as Devices Can’t Connect, and in its Settings › General, with the command to copy.
+    <!-- /Firewall -->
+    </li>
   </ul>
 
   <h2 id="local-network">Local Network is off</h2>
