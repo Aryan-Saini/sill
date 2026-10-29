@@ -9,7 +9,7 @@ Formerly winstream; the folder still carries the old name.
 ## Current step
 
 **A device's viewport held to what a host takes (2026-10-29, branch `sec-viewport-bounds` from main at
-150479b5, PR #PRNUM; the security scan's finding 4, Low; Noah's go of 2026-10-29 for the batch).** Kind 9 carried
+150479b5, PR #251; the security scan's finding 4, Low; Noah's go of 2026-10-29 for the batch).** Kind 9 carried
 the panel and Aa's scale as Doubles with no bounds and the host took any number above 0: a viewport of 1e300 points
 (or a scale of 1e-300) from any device a Mac admitted reached the window's fit (`fitToViewport`), whose "Resized …"
 line made an Int of it, which traps, so Sill died with every device's session (the scan's chain with finding 3: its
