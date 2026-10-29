@@ -55,6 +55,16 @@ Bonjour name then free for an impostor); with the virtual display `VirtualStage.
   (1.7976931348623157e308 refused, as -0 and 5e-324 were in a run on a02c1afe; 1e999 and a rate of 1e300 "does not
   decode"; a duplicate key and a rate of Int.max taken, the rate held by `wantedFPS`; a rate of Int.min, on a02c1afe,
   a restart at 24 fps), beside them a second client's ten stats reports of Int.max: the host alive throughout.
+- A second review (2026-10-29, after 37e47e68; scripts and logs in sill-handoff's
+  `triage/2026-10-29-security/f4-live/review2/`): one docs fix, e057acaf (DEVELOPMENT.md gave the refusal line's
+  limit per device; it is per connection: one device on two connections got two lines 0.11 s apart). No bypass: 92
+  hostile payloads of every kind a device sends but 19 and 32, on a loopback host with a scripted pointer, every ping
+  and kind 17 answered; 2,178 viewports a host takes in 15 s from two devices (236 restarts), the host streaming
+  after. Re-run: `viewport-bounds` 87 and 30 of 30 (five more mutants of the reviewer's caught), `capture-scale` 175
+  and 50 of 50, `compatibility`'s mutants 34 of 34 (one of Viewport.swift); `run-all.sh`, all 57 (8 min 28 s);
+  `swift build -c release`, only the CaptureProbe warning; the three iOS builds, only the known `StreamClient`
+  capture warning. Built, as the first review had not: the pacing harness from origin/main and this tree (`home`:
+  60.0 fps both, every gate), the audio harness and the restore probe's driver (not run).
 - **Untested, for Noah:** nothing should change on a device: Aa's steps and none, a rotation and the virtual display
   as before on the iPad and iPhone, and Sill.log without a "Viewport from … refused" line; if an iPad with Stage
   Manager on a large external display is at hand, a full-screen window (a video) on the virtual display at Aa 0.5x
