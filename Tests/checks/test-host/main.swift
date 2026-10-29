@@ -17,7 +17,8 @@ import Security
 //    through a hard link and a symlink to a bundle's executable, and replaced on disk after it started
 //    (the kernel's identifier stands). Each copy is started with --facts under sandbox-exec with the
 //    network denied, reads its own facts and prints them; nothing else runs. The signature reader
-//    also reads files: an Apple app (a certificate), this binary (ad hoc), an unsigned copy.
+//    also reads files: an Apple app (a certificate), this binary (ad hoc), an unsigned copy; and its
+//    mapping, pure, every answer (the two that fail closed, which no file here gives, among them).
 //
 // `--facts` and `--facts-wait` are the copies' modes: print this process's facts on one line (after a
 // line on stdin, for --facts-wait) and exit.
@@ -338,6 +339,34 @@ if linkerSignature == .unsigned || codesign(["--remove-signature", path("unsigne
 if let s = signatureOf(path("flat-sill")) {
     check("signature: the flat copy signed as Sill is ad hoc under Sill's identifier", s.signature == .adHoc && s.identifier == sill, "\(s)")
 }
+
+// The signature's information, pure (`signature(read:)`): every answer, the two that fail closed
+// too, which no file on this Mac gives (Security read a copy with a damaged signature, and one deleted
+// once opened, without an error).
+let idKey = kSecCodeInfoIdentifier as String, certKey = kSecCodeInfoCertificates as String, flagsKey = kSecCodeInfoFlags as String
+let adhocFlag = SecCodeSignatureFlags.adhoc.rawValue
+let linkerFlags = NSNumber(value: adhocFlag | 0x20000)   // flags=0x20002(adhoc,linker-signed), the bare binary's
+func pureSig(_ d: [String: Any]?) -> String {
+    let r = AppIdentity.signature(read: d)
+    return "\(r.identifier ?? "-") \(r.signature)"
+}
+let pure: [(String, [String: Any]?, String)] = [
+    ("no information at all (the read failed): unreadable", nil, "- unreadable"),
+    ("information without an identifier: unsigned", [:], "- unsigned"),
+    ("information without an identifier, the ad hoc flag and all: unsigned", [flagsKey: linkerFlags], "- unsigned"),
+    ("the linker's signature (adhoc, linker-signed): ad hoc", [idKey: "SillMenuBar", flagsKey: linkerFlags], "SillMenuBar adHoc"),
+    ("codesign -s - (adhoc): ad hoc", [idKey: sill, flagsKey: NSNumber(value: adhocFlag)], "\(sill) adHoc"),
+    ("ad hoc with an empty certificate list: ad hoc", [idKey: "x", certKey: [Any](), flagsKey: linkerFlags], "x adHoc"),
+    ("a certificate chain, the hardened runtime: certificate", [idKey: sill, certKey: ["leaf", "intermediate", "root"], flagsKey: NSNumber(value: 0x10000)], "\(sill) certificate"),
+    ("a certificate and the ad hoc flag: certificate (any chain at all)", [idKey: "x", certKey: ["leaf"], flagsKey: linkerFlags], "x certificate"),
+    ("an identifier with no certificate and no flags: unreadable", [idKey: "x"], "x unreadable"),
+    ("an identifier with no certificate, only the hardened runtime: unreadable", [idKey: "x", flagsKey: NSNumber(value: 0x10000)], "x unreadable"),
+]
+for (desc, d, want) in pure { check("signature, pure: \(desc)", pureSig(d) == want, pureSig(d)) }
+check("signature, pure: a read that failed makes Sill.app, never a test host (the bare binary's identifier and path)",
+      AppIdentity.isSillApp(facts("SillMenuBar", AppIdentity.signature(read: nil).signature, nil, build)))
+check("signature, pure: an identifier with neither a certificate nor the ad hoc flag makes Sill.app",
+      AppIdentity.isSillApp(facts("SillMenuBar", AppIdentity.signature(read: [idKey: "SillMenuBar"]).signature, nil, build)))
 
 try? fm.removeItem(at: scratch)
 if failures == 0 {

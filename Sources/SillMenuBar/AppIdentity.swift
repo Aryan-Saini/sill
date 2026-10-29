@@ -94,7 +94,9 @@ extension AppIdentity.Facts {
     static func current() -> AppIdentity.Facts {
         var kernel: String?
         if let task = SecTaskCreateFromSelf(nil) { kernel = SecTaskCopySigningIdentifier(task, nil) as String? }
-        var signed = (identifier: String?.none, signature: AppIdentity.Signature.unreadable)
+        // This process's code not found (never seen: the check reads itself however it starts): as a
+        // signature that could not be read.
+        var signed = AppIdentity.signature(read: nil)
         var code: SecCode?
         var onDisk: SecStaticCode?
         if SecCodeCopySelf([], &code) == errSecSuccess, let code,
@@ -107,13 +109,24 @@ extension AppIdentity.Facts {
 }
 
 extension AppIdentity {
-    /// A code signature as `isSillApp` reads it: no identifier is no signature; a certificate (any
-    /// chain at all) is `.certificate`; the ad hoc flag, `.adHoc`; anything else, or a signature that
-    /// could not be read, `.unreadable`.
+    /// A code signature as `isSillApp` reads it: its signing information (`signature(read:)`).
     static func signature(of code: SecStaticCode) -> (identifier: String?, signature: Signature) {
         var info: CFDictionary?
-        guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
-              let d = info as? [String: Any] else { return (nil, .unreadable) }
+        let status = SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &info)
+        return signature(read: status == errSecSuccess ? info as? [String: Any] : nil)
+    }
+
+    /// What a signature's information (SecCodeCopySigningInformation's, kSecCSSigningInformation)
+    /// says, pure: none at all (it could not be read) is `.unreadable`; no identifier is no
+    /// signature, `.unsigned`; a certificate (any chain at all), `.certificate`; the ad hoc flag,
+    /// `.adHoc`; an identifier with neither, `.unreadable`. Only the bare binary's kinds (ad hoc, or
+    /// none on Intel) can make a test host, so anything else fails closed. Measured on 2026-10-29:
+    /// Security answers without an error for a copy whose superblob or identifier is damaged (no
+    /// identifier: `.unsigned`) and for one deleted once opened (read as before), so the two
+    /// `.unreadable` answers are this function's promise for failures no file here showed
+    /// (Tests/checks/test-host checks them here, and the file reader on real files).
+    static func signature(read d: [String: Any]?) -> (identifier: String?, signature: Signature) {
+        guard let d else { return (nil, .unreadable) }
         guard let id = d[kSecCodeInfoIdentifier as String] as? String else { return (nil, .unsigned) }
         if let chain = d[kSecCodeInfoCertificates as String] as? [Any], !chain.isEmpty { return (id, .certificate) }
         let flags = (d[kSecCodeInfoFlags as String] as? NSNumber)?.uint32Value ?? 0
