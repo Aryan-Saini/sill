@@ -328,9 +328,10 @@ docs/reconnect-after-sleep-plan.md has the rules;
 The gear at the end of the bar opens Settings: the Mac's streaming settings,
 changed from the device, and Disconnect at the bottom. After the Mac's settings
 come the device's own: This iPad (or iPhone), with Larger Picture on an iPhone
-(below; off unless turned on), Reverse Scrolling (below; off unless turned on)
-and Three-Finger Gestures (below, Trackpad gestures; on unless turned off),
-none of them ever sent to the Mac, and last Take the Tour.
+(below; off unless turned on), Reverse Scrolling (below; off unless turned on),
+Hold to Show Window Controls (below, Holding a window's thumbnail; 0.5 s unless
+changed) and Three-Finger Gestures (below, Trackpad gestures; on unless turned
+off), none of them ever sent to the Mac, and last Take the Tour.
 
 On the iPhone Duo (docs/iphone-duo-plan.md) the layout follows the hinge,
 which iOS 27.1 reports with the fold's place. Open, Sill is on the inner
@@ -671,6 +672,25 @@ them again would undo it; the switch's footnote says so on an iPad. Each
 scroll reads the switch as it begins and keeps that direction to the end of
 its coast. `Sources/StreamProtocol/ScrollDirection.swift` is the rule, checked
 in `Tests/checks/protocol`.
+
+## Holding a window's thumbnail
+
+Touch and hold a window's thumbnail in the bar and its lights show beside it
+(close, minimize, full screen), as a held Home Screen icon offers its menu;
+keep holding and drag to move the thumbnail to another place in the bar. How
+long the hold is, Hold to Show Window Controls in the Settings panel's This
+iPad group (This iPhone on a phone; issue #113), goes from 0.2 to 3 s in tenths
+of a second with the stepper's − and +, and is 0.5 s unless changed, as iOS's
+own long press is (it was a fixed 1.5 s). It is the device's own
+(`Sill.thumbnailHold`, a Double in seconds), never sent to the Mac, so it works
+with every Sill for Mac. Every bar's thumbnails (sideways, an iPad's window bar
+upright, a phone's row 2) take a change at once, the drag's start with it; the
+drag's own rules (12 pt before the hold is a scroll of the strip, 8 pt after
+it lifts the thumbnail) and the picture's long press (a right click, 0.45 s)
+do not change. VoiceOver reads the row as "Hold to show window controls, 0.5
+seconds", adjustable: a swipe up or down is a tenth.
+`iOSClient/ThumbnailHold.swift` is the rule, checked in
+`Tests/checks/thumbnail-hold`.
 
 ## Pinch zoom
 
@@ -1587,6 +1607,11 @@ simulator:
   and `SILL_TEST_POINTER_PATH` prints each scroll's deltas, so the switch shows
   in their sign: the drag's and the pad's turn around, the trackpad's and the
   wheel's never.
+- `-Sill.thumbnailHold 0.3` holds the thumbnails' hold at 0.3 s for one run
+  (in the normal app too; the stepper's changes are saved for the next run,
+  this one keeps 0.3), and `-SillSettingsScroll hold` opens the Settings panel
+  at its stepper. The console says `thumbnails: hold 0.3 s` when a bar's
+  thumbnails first read the length and at each change.
 - `-SillMacMenu code|blender|long|stale|noaccess|none|slow|timeout|refuse`: the
   mock Mac's menus. `-SillMenusOpen 1` opens the Menus pull-down after launch,
   `-SillMenusOpen 'File/Open Recent'` opens it on that menu, and
