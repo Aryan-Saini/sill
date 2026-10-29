@@ -906,9 +906,10 @@ What a nightly is:
   the build number on both apps, as in "Sill 0.5.5 (990)". Never committed: make-app.sh has always
   stamped the count into the Mac's bundle, and `--build-number` gives it to xcodebuild for the run.
   Only commits on main's first-parent line are uploaded with their count (the nightlies, and
-  testflight.yml, which exports other branches without uploading them), so a build number of the
-  version in App Store Connect names one commit of main, and a night run again finds its own build
-  there. From this Mac, give `--build-number` the count only for a commit of main's line too.
+  testflight.yml, which runs from main alone and checks its line before an upload), so a build
+  number of the version in App Store Connect names one commit of main, and a night run again finds
+  its own build there. From this Mac, give `--build-number` the count only for a commit of main's
+  line too.
 - The words: `Scripts/nightly-notes.sh` writes them once a night for both apps, from the pull
   requests on main's first-parent line since the newest tag `v<version>` (merges and squashes), their
   titles from GitHub: Markdown for the pre-release (no @mention, so nobody is notified every night),
