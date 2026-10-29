@@ -656,9 +656,10 @@ package final class StreamCoordinator {
     /// Asks the macOS firewall, read-only, whether it blocks this process (FirewallCheck, then
     /// FirewallRule's verdict into the status: Sill.app's Settings › General and its menu say so), and
     /// prints one line when the verdict changes (none for a first one that blocks nothing). At launch,
-    /// whenever the listener comes up, when Sill.app's Settings › General opens or Sill becomes
-    /// active over it, and when a device gets in from the network while the verdict says none can;
-    /// never on a timer. One check at a time: one asked for meanwhile runs once more after it, so its
+    /// whenever the listener comes up, when Sill.app's status menu opens (a block that came after
+    /// launch; the menu is built before the answer, so its item shows from the next opening), when
+    /// its Settings › General opens or Sill becomes active over it, and when a device gets in from
+    /// the network while the verdict says none can; never on a timer. One check at a time: one asked for meanwhile runs once more after it, so its
     /// answer is never older than the request.
     package func checkFirewall() {
         guard !firewallChecking else { firewallAgain = true; return }

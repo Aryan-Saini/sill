@@ -14,9 +14,9 @@ import Foundation
 /// there (only the tool's own defaults in /usr/libexec/ApplicationFirewall), so nothing is read
 /// from a file.
 ///
-/// The coordinator asks at launch, whenever the listener comes up, when Sill.app's Settings › General
-/// opens, and when a device gets in from the network while the verdict says none can
-/// (FirewallRule.asksAgain); nothing asks on a timer.
+/// The coordinator asks at launch, whenever the listener comes up, when Sill.app's status menu or
+/// Settings › General opens, and when a device gets in from the network while the verdict says none
+/// can (FirewallRule.asksAgain); nothing asks on a timer.
 package enum FirewallCheck {
     /// This process's executable as the kernel has it, symbolic links resolved (the firewall's rules
     /// name real paths: /private/tmp, not /tmp); the bundle's idea of it when the kernel will not say.

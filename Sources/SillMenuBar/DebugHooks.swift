@@ -37,7 +37,10 @@ import StreamProtocol
 ///     -SillMenuAfter '<s>[; <s> …]'            print the status menu as menu.txt shows it, one
 ///                                              "SillMenuAfter <s> s: " line per line, s seconds
 ///                                              after launch (the "‹device› Wants to Pair",
-///                                              older-device and "Devices Can’t Connect" items)
+///                                              older-device and "Devices Can’t Connect" items);
+///                                              the macOS firewall is asked again first, as the
+///                                              menu does when it opens, its answer shown by the
+///                                              next print
 ///     -SillQuitAfter <s>                       Quit (NSApp.terminate) s seconds after launch
 ///     -SillUpdateFeed <url>                    the update check asks this feed instead of GitHub:
 ///                                              a feed on this Mac only (http or https to
@@ -221,6 +224,7 @@ enum DebugHooks {
         for delay in times(defaults.string(forKey: "SillMenuAfter")) {
             after(delay) {
                 model.permissions.refresh()
+                model.coordinator?.checkFirewall()   // as the menu does when it opens; the answer shows at the next
                 for line in MenuBuilder.dump(MenuBuilder.entries(for: model), card: model.presentation).split(separator: "\n") {
                     print("SillMenuAfter \(delay) s: \(line)")
                 }
@@ -231,6 +235,7 @@ enum DebugHooks {
             after(printAfter) {
                 model.permissions.refresh()
                 model.loginItem.refresh()
+                model.coordinator?.checkFirewall()   // as the menu does when it opens
                 print("SillPrintMenuAfter \(printAfter) s:")
                 let text = MenuBuilder.dump(MenuBuilder.entries(for: model), card: model.presentation)
                 for line in text.split(separator: "\n", omittingEmptySubsequences: false) where !line.isEmpty { print("menu: \(line)") }

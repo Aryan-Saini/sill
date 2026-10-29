@@ -1705,7 +1705,10 @@ AirDrop, Sidecar and Universal Control can hold AWDL on too.
 - The host asks the firewall at launch, whenever its listener comes up (Direct
   Wireless replaces it), when a device gets in from the network while the last
   answer said none could (that answer is stale; a connection over loopback
-  says nothing) and, in Sill.app, whenever Settings › General opens or Sill
+  says nothing) and, in Sill.app, whenever its status menu opens (a block that
+  came after launch, such as a Deny in the firewall's own prompt: the glyph at
+  once, Devices Can’t Connect from the menu's next opening, as the menu is
+  built before the answer) and whenever Settings › General opens or Sill
   becomes active over it; never on a timer. FirewallCheck asks
   `--getglobalstate`, then, while the firewall is on, `--getblockall`,
   `--getappblocked` for the running executable and for its bundle, and
