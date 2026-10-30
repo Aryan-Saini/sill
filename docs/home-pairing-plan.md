@@ -232,10 +232,23 @@ Each such pairing is logged, listed as "over the USB cable" and shown in a notic
   - with Require pairing off, the home door is as open as it is today, but encrypted: to devices on
     the network or nearby, and to any app on this Mac (loopback, or this Mac's own addresses);
   - a device that has never paired can be lured to a look-alike row that advertises `p=0`: it pins
-    and saves nothing, but a session there gets what it types. Over the cable an app on this Mac can
-    go further: listening on the Mac's end of the cable (which the device cannot tell from Sill) and
-    answering an ask with a proof-less ok, it is saved as a Mac and gets what that device types,
-    never the Mac itself. A saved Mac's rows are always dialed pinned, so a paired device never is;
+    and saves nothing, but a session there gets what it types. Only by a tap since the security
+    scan's finding 3 (2026-10-29): the automatic reconnect after such a session is lost dials an
+    open door's row pinned to the key the session saw, and another key under the lost Mac's name
+    ends it ("‹Mac› answered with another key, so this ‹iPad› didn’t reconnect. Tap it to
+    connect."), where it took any key with no tap, the device's clipboard included. Nor does that
+    reconnect dial a plain door (no `p`) under the name, as a DEBUG build's did (its tap still
+    does), with no key to check at all (the review of #255, 2026-10-29): it looks past one, as
+    Release does. A tap during the reconnect (its words invite one: "…Sill keeps trying, or tap it
+    to try now.") still takes any key, but if its dial ends before its handshake the reconnect that
+    follows it is pinned to the key the last session under that name saw (`openKeys`, the review of
+    #255), where it took any key from then on. Left as it was: a tap under a name no session has
+    seen a key under since Sill started (`openKeys` is kept in memory only), whose dial ended before
+    its handshake, leaves a reconnect that takes any key, as the tap would have. Over the cable an
+    app on this Mac can go further: listening on the Mac's end of the cable (which the device cannot
+    tell from Sill) and answering an ask with a proof-less ok, it is saved as a Mac and gets what
+    that device types, never the Mac itself. A saved Mac's rows are always dialed pinned, so a
+    paired device never is;
   - anyone who can reach the home door (this network, or radio range with Direct Wireless on) can
     connect and read the Mac's certificate: TLS 1.3 encrypts it on the wire, but a client that
     connects receives it, and its key is stable, so it names this Mac across networks, as the
@@ -1149,7 +1162,12 @@ New attention items (first group, orange):
 - **The pin** is the saved Mac's fingerprint. For an unsaved Mac on an open door (`p=0`) the
   session's first connection takes any key, and every later connection of that session (a move,
   a PR #12 hop) pins the key the first one saw. `DeviceIdentity.loadOrCreate()` runs at the first
-  TLS dial (today: at the first pairing).
+  TLS dial (today: at the first pairing). Since the security scan's finding 3 (2026-10-29), so does
+  the automatic reconnect once the session is lost (`DiscoveryPolicy.reconnectTrust`, the lost
+  session's key carried as `Reconnect.openKey`): it finds an unsaved Mac by its Bonjour name alone,
+  and with any key it gave whatever advertised that name with `p=0` the session, with no tap.
+  Another key now ends the reconnect (`HomeEnd.otherKey`: "‹Mac› answered with another key, so this
+  ‹iPad› didn’t reconnect. Tap it to connect."); a tap takes any key, as before.
 - **A move's new connection** is read up to its first window list before it takes the session
   over (`probeMove`); over TLS that is also where the Mac's refusal of the key shows (a read error,
   -9825, right after `.ready`), and a refused move ends as a failed one does today. SessionLink's
@@ -1211,7 +1229,16 @@ New attention items (first group, orange):
 | no `p`, DEBUG, not `homeTLS` | plain, as today |
 | no `p`, otherwise | nothing dialed; status "Mac mini runs an older Sill. Update Sill on the Mac to connect." |
 
-- The automatic reconnect follows the same table, and never asks: an ask is a tap's.
+- The automatic reconnect follows the same table, and never asks: an ask is a tap's. Two rows
+  differ since the security scan's finding 3 (2026-10-29, `DiscoveryPolicy.reconnectTrust`): an
+  unsaved `p=0` row is dialed pinned to the key the lost session saw (`Reconnect.openKey`), not
+  with any key, since the reconnect finds an unsaved Mac by its Bonjour name alone (§7.6); and
+  after such a session a row without `p` is not dialed at all, where a DEBUG build dialed it plain
+  (the review of #255): the reconnect looks on, as Release's does past "Update Sill". A tap clears
+  the reconnect and dials any key; the reconnect after a tap whose dial ended before its handshake
+  pins the key the last session under that name saw (`DiscoveryPolicy.reconnectKey`'s `earlier`,
+  StreamClient's `openKeys`, in memory; the review of #255), and any key only when no session
+  under that name saw one.
 - A Wired row's dial goes over the cable first (`wiredDial`, :748; :832 at `cea195c`) with its
   fallback after `wiredWait`, for an ask as for a session.
 
@@ -1293,6 +1320,14 @@ New attention items (first group, orange):
   the saved Mac's Bonjour name alone (§7.3) is skipped by the reconnect from then on
   (`pinRefusedRows`) without that copy; after a tap, which asked for that Mac, the copy follows the
   Mac's other rows as for a row its tag named.
+- **-9808 on the automatic reconnect of an unsaved `p=0` Mac** (`HomeEnd.otherKey`, the security
+  scan's finding 3, 2026-10-29): the reconnect's dial, pinned to the key the lost session saw, met
+  another key under the lost Mac's Bonjour name: another Mac that took the name, or the same Mac
+  with a new key, which the device cannot tell apart. Status "Mac mini answered with another key, so
+  this ‹iPad› didn’t reconnect. Tap it to connect."; no automatic reconnect; the row reads "Not
+  paired", and a tap connects with any key, as a tap on that row always has. Before, the reconnect
+  took any key there, so whatever advertised the name with `p=0` got the session with no tap: what
+  the device typed, and its clipboard.
 - **The reconnect at a row that waits for a tap** (`DiscoveryPolicy.reconnectEnd`, the security
   review, 2026-09-27): the automatic reconnect never asks, so an unsaved Mac whose door now requires
   pairing (Require pairing turned on while this device was away, or a session that ended without a
@@ -1329,7 +1364,7 @@ New attention items (first group, orange):
 | Where | Text |
 |---|---|
 | Row words | "Not paired", "Wired", "Update Sill" (§7.3) |
-| Status | "Pairing with Mac mini…" · "Pairing with Mac mini over the cable…" · "Paired with Mac mini over the cable." · "Mac mini runs an older Sill. Update Sill on the Mac to connect." · "Mac mini removed this ‹iPad›. Tap it to pair again." · "Mac mini now asks devices to pair. Tap it to pair this ‹iPad›." |
+| Status | "Pairing with Mac mini…" · "Pairing with Mac mini over the cable…" · "Paired with Mac mini over the cable." · "Mac mini runs an older Sill. Update Sill on the Mac to connect." · "Mac mini removed this ‹iPad›. Tap it to pair again." · "Mac mini now asks devices to pair. Tap it to pair this ‹iPad›." · "Mac mini answered with another key, so this ‹iPad› didn’t reconnect. Tap it to connect." (2026-10-29) |
 | After an ask | `openOnMac`: "Mac mini didn’t show a code. On the Mac, choose Pair iPhone or iPad… in the Sill menu, then tap Mac mini again." · `locked`: "Unlock Mac mini, then tap it again." · `shown` (as built, step 4, while the card is up): "Mac mini is showing a code. Point this ‹iPad› at it." · nothing answered the ask or a proof (step 4): "Mac mini didn’t answer. Check that Sill is open on it, then tap it again." |
 
 **The home card**
