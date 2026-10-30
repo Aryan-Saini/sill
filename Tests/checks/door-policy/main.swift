@@ -341,7 +341,7 @@ check("other key: after Remove (the list without A) the device is free", !D.othe
 
 // MARK: Test hooks
 
-check("test host: does not advertise and is not a .app's executable",
+check("test host: does not advertise and is not Sill.app's own code (bundled)",
       D.isTestHost(advertises: false, bundled: false) && !D.isTestHost(advertises: false, bundled: true)
       && !D.isTestHost(advertises: true, bundled: false) && !D.isTestHost(advertises: true, bundled: true))
 let hook = ["SILL_TEST_ASK_FROM_THIS_MAC": "1"]
