@@ -1867,11 +1867,18 @@ The release workflow (`.github/workflows/release.yml`) runs on a pushed tag
 `v<version>`: it checks and builds, and with the repository variable
 `SILL_SIGN_IN_CI` set to `true` it also signs, notarizes and publishes with
 `release.sh --publish` (docs/release-checklist.md, "Releasing from GitHub
-Actions"). Its checkout is that tag, so there `--publish` checks the local
-tag (`SILL_RELEASE_TAG`) rather than ask origin. Pushing the tag, which a
-`--publish` from your Mac needs first, starts it too. The release workflow has
-no profile yet, so publish from your Mac with `release.sh --publish` and leave
-`SILL_SIGN_IN_CI` off until the workflow gets one. Apple's answers and logs for
+Actions"), in the environment `release`: only a `v*` tag may use it, Noah
+approves each run before it starts, and the signing secrets are that
+environment's, not the repository's. Its checkout is the commit the run was
+started for, with every tag as origin has it, and it stops when the tag no
+longer names that commit (a tag moved after the run began), so there
+`--publish` checks the local tag (`SILL_RELEASE_TAG`) rather than ask origin.
+Pushing the tag, which a `--publish` from your Mac needs first, starts it too
+(with `SILL_SIGN_IN_CI` on, its publish job then waits for Noah's approval).
+Since the nightlies the release workflow embeds the profile too (the secret
+`SILL_PROVISION_PROFILE`, decoded to `Packaging/embedded.provisionprofile`),
+so with `SILL_SIGN_IN_CI` on a pushed tag publishes a release on the
+data-protection keychain, as one from your Mac. Apple's answers and logs for
 both submissions are the run's artifact `notary-v<version>` for 30 days: when
 the job's log says a notary log lists issues, read them there.
 
@@ -1901,10 +1908,38 @@ Store Connect API key with the Admin role (`--api-key`, `--api-issuer`),
 and it needs Xcode 27.1 or a later 27 (the iOS 27.1 SDK the iPhone Duo's
 layouts need: the app it checks must say it was built with it).
 `--privacy-report` lists what the archive's privacy manifest declares and the
-required-reason APIs its binary uses. The TestFlight workflow
-(`.github/workflows/testflight.yml`) runs it on GitHub, by hand only.
-docs/release-checklist.md, "TestFlight", has the App Store Connect side, the
-record field by field.
+required-reason APIs its binary uses. `--build-number N` builds with N for the
+run only (xcodebuild's `CURRENT_PROJECT_VERSION=N`; the project is never
+changed), and `--whats-new FILE`, with `--upload` and `--api-key`, sets the
+build's What to Test once App Store Connect has processed it. The TestFlight
+workflow (`.github/workflows/testflight.yml`) runs it on GitHub, by hand and
+from main only (its job runs in the environment `nightly`, which only main may
+use, and holds the App Store Connect key), with the commit count as the build
+number, and uploads only a commit on main's own line (another branch's count
+can be a later nightly's). docs/release-checklist.md,
+"TestFlight", has the App Store Connect side, the record field by field.
+
+Nightlies (`.github/workflows/nightly.yml`; docs/release-checklist.md,
+"Nightlies"): every night main moved (09:17 UTC, while the repository variable
+`SILL_NIGHTLY` is `true`) and by hand, from main only: both builds run in the
+environment `nightly`, which holds the nine secrets. `Scripts/release.sh
+--nightly --publish` builds main's head as a release, but universal
+(`SILL_UNIVERSAL=1`; make-app.sh takes `SILL_RELEASE_NIGHTLY=1` for an
+untagged HEAD), as `Sill-nightly-<yyyymmdd>-<sha7>.dmg` and `.zip` on the
+rolling pre-release `nightly` (the seven newest kept, never "latest");
+`release-ios.sh --build-number <commit count>` uploads the iOS build, and
+`Scripts/asc.swift` (App Store Connect's API: an ES256 token from the .p8 key
+with CryptoKit, Foundation only) waits for App Store Connect to process it,
+sets What to Test and gives it to every internal TestFlight group, and to the
+public beta group only while `SILL_NIGHTLY_PUBLIC_BETA` is `true`.
+`Scripts/nightly-notes.sh` writes both apps' words from the pull requests
+merged since the last release tag. A nightly says the version main says,
+0.5.5, the pre-release number (the store release will be 0.6.0), with the
+commit count as its build; the update check never offers a nightly, and offers
+one nothing until a release newer than its version exists. A nightly reads the
+release's data-protection keychain items, so a device paired with one stays
+paired with the other. `swift Scripts/asc.swift groups --key-file … --key-id …
+--issuer …` lists the app's TestFlight groups (reads only).
 
 ## Known limitations
 
