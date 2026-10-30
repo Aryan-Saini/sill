@@ -39,6 +39,8 @@ answers when its row is tapped, so another Mac on the network that takes the
 Mac's name could answer that tap; its automatic reconnect goes back only to
 the key it connected to, and a paired device checks the Mac's key every
 time. With Show the pairing window to screen sharing on (Settings ›
+encrypted; only a paired device can turn Direct Wireless Connection on or off
+from its settings panel. With Show the pairing window to screen sharing on (Settings ›
 Devices, off by default), Screen Sharing and other remote desktop apps show the
 pairing window, so anyone who can see the Mac's screen remotely can read its
 code. `SillHost`, the command-line host for development, keeps a plain

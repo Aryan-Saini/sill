@@ -180,10 +180,12 @@ too; `SillHost` saves nothing, so a change lasts until it quits, and the
 device's panel says so. Its Virtual Display switch works only when `SillHost`
 runs with `--virtual-display`. `--direct-wireless` starts it with Direct
 Wireless Connection on (see Direct Wireless Connection below); it is off by
-default here too. `--audio` starts it with Send Audio on (The Mac's sound
-below, a beta), off by default too; a device turns it on or off from its
-Settings panel, until `SillHost` quits; with `--synthetic` the sound is a
-test tone. The
+default here too, and only a device paired at `--pairing`'s door changes it
+from its panel (at the plain door the switch is dimmed and `SillHost` refuses
+it: Settings from a device, below). `--audio` starts it with Send Audio on
+(The Mac's sound below, a beta), off by default too; a device turns it on or
+off from its Settings panel, until `SillHost` quits; with `--synthetic` the
+sound is a test tone. The
 clipboard is shared as in Sill.app (The clipboard, below); `--no-clipboard`
 turns it off for the run.
 
@@ -443,6 +445,14 @@ A connected iPhone or iPad changes the same settings from its own Settings
 panel (the gear, the last button of its bar): Quality, Resolution, Frame Rate,
 Prioritize Encoding Speed, Virtual Display, Send Audio (a beta: The Mac's
 sound, below) and Direct Wireless Connection, with exactly the Mac's choices.
+Direct Wireless Connection widens who can reach the Mac, so only a device whose
+key is on the Mac's list of paired devices changes it, and only at home: the
+Mac refuses it, on or off, from away, from an unpaired device at a door that
+lets any device in (Require pairing off) and at SillHost's plain door ("Settings
+from iPad (iPad14,1) refused: direct wireless (only a paired device)"), and the
+device's switch is disabled there ("Change this on Mac mini, or from a device
+paired with it."; kind 16's `sessionPaired`). A device paired during its session
+(Pair This iPad…) can change it from then on.
 Sill.app saves a device's change like a menu click,
 and its Settings window and menu show it; the change applies to every connected
 device, and a streaming setting restarts the stream for a moment. A device away
@@ -1038,11 +1048,12 @@ itself, without dropping the stream, once the network has listed the Mac for
 two seconds (and only to that same Mac, never to another of the same name).
 Turning it on or off applies at once and never restarts the stream, though
 turning it off disconnects a device that is still connected directly (a second
-and a half later); it comes back over the network if it shares one. A device
-finds a Mac this way by itself once it has seen the Mac with it on, or when you
-tap Search Nearby on its connect screen; such a Mac shows as "Direct". With it
-on, anyone nearby running Sill can find the Mac and ask to pair, which opens
-its pairing window (at most three times in ten minutes); only devices you
+and a half later); it comes back over the network if it shares one. From an
+iPhone or iPad, only one you paired changes it (Settings from a device, above).
+A device finds a Mac this way by itself once it has seen the Mac with it on, or
+when you tap Search Nearby on its connect screen; such a Mac shows as "Direct".
+With it on, anyone nearby running Sill can find the Mac and ask to pair, which
+opens its pairing window (at most three times in ten minutes); only devices you
 paired connect, unless Require pairing is off (Pairing at home, below).
 Turning Wi-Fi off in Control Center does not end a direct connection (it
 leaves the radio on for AirDrop); Settings › Wi-Fi does.
@@ -1138,7 +1149,10 @@ paired for Remote Access connects at home with no further step.
 - **The command-line host** keeps its plain, open door (The command-line host,
   above). With `--pairing` it prints its code and link in Terminal, and again
   after each device's ask; `--print-cable` prints what the cable rule reads on
-  each interface and exits.
+  each interface and exits. On `--synthetic`, `SILL_TEST_REQUIRE_PAIRING=0`
+  (TEST ONLY) turns Require pairing off at that door for the run, as the bare
+  app's `-requirePairing NO` does, so an unpaired device's session can be tried
+  headless (`sillclient.py --tls --identity=DIR --pin=none`).
 - **To start over:** remove the device in Settings › Devices, or on the device
   touch and hold the Mac's row and choose Forget. The Sill for Mac you download
   (0.4.0 and later) keeps the paired devices, Require pairing's setting and the

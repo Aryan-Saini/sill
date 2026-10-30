@@ -353,22 +353,25 @@ struct HostSettingsPanel: View {
                 // Direct Wireless Connection: how devices reach the Mac, not how it streams; after the
                 // closing footer, whose "the stream restarts" is not true of it, and last, the least
                 // changed row with the longest footer (the compact halves' 259 pt shows the rest
-                // first). Disabled only away from home (the Mac refuses it from a remote connection):
-                // off from a directly connected device is allowed, as on the Mac, and its consequence
-                // is written beside it. No row for a host without it.
+                // first). Disabled away from home (the Mac refuses it from a remote connection) and on
+                // a session the Mac says is not paired (it takes it only from a paired device:
+                // `takesDirectWireless`, 2026-10-29): off from a directly connected device is
+                // allowed, as on the Mac, and its consequence is written beside it. No row for a host
+                // without it.
                 if let direct = shown.directWireless {
+                    let locked = Self.directWirelessLock(remote: remoteRoute != nil, takes: state.takesDirectWireless, mac: mac)
                     Rows {
                         Toggle(isOn: binding(direct) { HostSettingsChange(directWireless: $0) }) {
                             RowTitle(title: "Direct Wireless Connection", since: client.settings.pendingSince(.directWireless))
                         }
-                        // A warning about turning it off, so only while the switch shows on.
-                        .accessibilityHint(client.connectedDirectly && direct ? "Turning this off disconnects this \(device)." : "")
-                        // From afar the Mac refuses it anyway: how devices near the Mac reach it is
-                        // theirs and the Mac's to change.
-                        .disabled(remoteRoute != nil)
+                        // A warning about turning it off, so only while the switch shows on and works.
+                        .accessibilityHint(locked == nil && client.connectedDirectly && direct ? "Turning this off disconnects this \(device)." : "")
+                        // From afar, or unpaired, the Mac refuses it anyway: how devices near the Mac
+                        // reach it is the Mac's and its paired devices' to change.
+                        .disabled(locked != nil)
                         .rowFrame()
                     }
-                    Footnote(text: remoteRoute != nil ? "Change this on \(mac), or from a device near it." : directFooter(on: direct))
+                    Footnote(text: locked ?? directFooter(on: direct))
                 }
                 if !state.persistent {
                     Footnote(text: "SillHost keeps these until it quits.")
@@ -710,6 +713,16 @@ struct HostSettingsPanel: View {
 
     /// "iPhone" or "iPad", for copy about this device.
     private var device: String { UIDevice.current.userInterfaceIdiom == .phone ? "iPhone" : "iPad" }
+
+    /// Why the Direct Wireless Connection switch is disabled, as its footnote says it, or nil while
+    /// this device may change it: away from home (`remote`) the Mac refuses it from a remote
+    /// connection, and on a session it says is not paired (`takes` false:
+    /// `HostSettingsState.takesDirectWireless`) from any device it did not pair.
+    static func directWirelessLock(remote: Bool, takes: Bool, mac: String) -> String? {
+        if remote { return "Change this on \(mac), or from a device near it." }
+        if !takes { return "Change this on \(mac), or from a device paired with it." }
+        return nil
+    }
 
     /// Under the Direct Wireless Connection row: what it does and costs, and, while the switch shows
     /// on and this device is connected over it, what turning it off does to this device: the Mac

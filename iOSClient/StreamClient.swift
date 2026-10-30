@@ -4459,14 +4459,16 @@ extension StreamClient {
 
     #if DEBUG
     /// The layout harness has no Mac: answer a pick after 0.35 s the way a host would, over the
-    /// mock's state at that moment, refusing the virtual display where the mock has none. The
-    /// readout follows as a restart would make it. Nothing under `mockFrozen`.
+    /// mock's state at that moment, refusing the virtual display where the mock has none, and Direct
+    /// Wireless on a session it says is not paired. The readout follows as a restart would make it.
+    /// Nothing under `mockFrozen`.
     private func mockAnswer(_ out: HostSettingsChange) {
         guard !mockFrozen else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             guard let self, self.connection == nil, var state = self.settings.host else { return }
             var ok = out
             if ok.virtualDisplay == true, !state.virtualDisplayAvailable { ok.virtualDisplay = nil }
+            if !state.takesDirectWireless || self.remoteRoute != nil { ok.directWireless = nil }
             let before = state.settings
             state.settings = ok.applied(to: before)
             if var stream = state.stream {

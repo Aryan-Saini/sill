@@ -1121,9 +1121,11 @@ package final class StreamCoordinator {
             recent.append(now)
             settingsArrivals[id] = recent
             // A connection whose route is not known (never: it is set before any message is
-            // handled) counts as remote, so nothing it sends can widen exposure.
+            // handled) counts as remote and unpaired, so nothing it sends can widen exposure. Paired:
+            // its key on the trust list as the Mac's status has it now (`sessionPaired`).
             let (ok, refused) = DeviceSettings.accepted(change, virtualDisplayAvailable: appKitLoop,
-                                                        fromRemote: routes[id].map { $0.isRemote } ?? true)
+                                                        fromRemote: routes[id].map { $0.isRemote } ?? true,
+                                                        paired: sessionPaired(id))
             if !refused.isEmpty { print("Settings from \(who) refused: \(refused.joined(separator: ", "))") }
             if !ok.isEmpty, !shuttingDown {
                 let before = target
@@ -2713,11 +2715,12 @@ package final class StreamCoordinator {
     /// Connection `id`'s state (docs/remote-bundle-plan.md §5.4): the pair its controls set (the
     /// away quality for a device away), the home and away qualities with which one is the target
     /// (`away`, from a host with an identity, `remote`: SillHost --pairing alone too, where no
-    /// connection is ever away), and the rest shared. A pure function of the target,
-    /// `awayWanted`, the connection's route, the status snapshot and two constants (appKitLoop,
-    /// whether the hook is set). The target changes only in `setTarget`, the snapshot only in
-    /// `HostStatus.update`, and `awayWanted` only in `routesChanged`, which updates the snapshot
-    /// with it; all three publish, so no change can be missed and none can stick. Never the
+    /// connection is ever away), whether its key is paired (`sessionPaired`), and the rest shared. A
+    /// pure function of the target, `awayWanted`, the connection's route, the status snapshot (its
+    /// trust list too) and two constants (appKitLoop, whether the hook is set). The target changes
+    /// only in `setTarget`, the snapshot only in `HostStatus.update`, and `awayWanted` only in
+    /// `routesChanged`, which updates the snapshot with it; all three publish, so no change can be
+    /// missed and none can stick. Never the
     /// pipeline's `awayRunning`: it changes in `adopt`, which publishes only through a snapshot
     /// change, and none comes while nothing streams.
     private func settingsState(for id: ObjectIdentifier, answering: Int? = nil) -> HostSettingsState {
@@ -2740,7 +2743,20 @@ package final class StreamCoordinator {
                                  answering: answering,
                                  away: away,
                                  link: link,
-                                 audioNote: t.sendAudio ? s.audio?.note : nil)
+                                 audioNote: t.sendAudio ? s.audio?.note : nil,
+                                 sessionPaired: sessionPaired(id))
+    }
+
+    /// Whether connection `id`'s key is on this Mac's trust list now, as the status snapshot lists it
+    /// (RemoteAccess publishes every change of the list, and each change publishes the settings): the
+    /// one judgement both of what the connection may set (Direct Wireless, `DeviceSettings.accepted`)
+    /// and of what its state says (`sessionPaired`, so the device's panel disables what the Mac would
+    /// refuse). A pure function of the route and the snapshot, as `settingsState` is. False at the
+    /// plain door (no key), for an unpaired key at a door that lets any device in, on a host without
+    /// an identity (no list), and for a route not known.
+    private func sessionPaired(_ id: ObjectIdentifier) -> Bool {
+        let trusted = status.snapshot.remote?.paired.compactMap { Base64URL.decode($0.id) } ?? []
+        return DeviceSettings.paired(key: routes[id]?.fingerprint, trusted: trusted)
     }
 
     /// The Mac's Virtual Display pane in its order (SettingsPanes.swift, `statusText`), without the
