@@ -256,9 +256,33 @@ Each such pairing is logged, listed as "over the USB cable" and shown in a notic
     telling;
   - a stranger on the network can hold up pairing and the door without getting in: three asks in
     10 minutes use up the device-opened windows (the real device is then sent to the Mac's menu,
-    whose "‹name› Wants to Pair" it can keep lit), five wrong codes stop any open window, and eight
-    half-open connections (10 s each, two per address, and IPv6 gives it any number of addresses)
-    fill the door's pending places, as they can at the remote door;
+    whose "‹name› Wants to Pair" it can keep lit), and five wrong codes stop any open window. Its
+    half-open connections no longer hold the door's pending places for good (the security scan of
+    2026-10-18, finding 9; branch `sec-door-pending`, `DoorPolicy.Places`): waiting costs (a tenth
+    of a failure for each connection that ends unadmitted, and for a pairing connection's kind 19,
+    a tenth for each second it waited at least, one more for every 2 s beyond the first 2, at least
+    one for a refusal; 5 within a minute back an address off for 5 minutes, as before), counted to
+    the place's deadline at most and, for an address that proved a paired key, as for one that did
+    not (the review of 2026-10-29: a kind 19 sent just before its deadline held a place for
+    nothing, the Mac's sleep counted as waiting, a paired device's stalled dials cost it more than a
+    stranger's, and, its second pass, a place held 2 s at a time cost a twentieth a second, under an
+    address's 5 a minute, so eight addresses held every shared place for good), the TLS handshake
+    has 4 s, an IPv6 address answers for its /64 too (12 failures in 5 minutes from its addresses
+    not known back the /64 off, each address counting 6 at most, so it takes two: paced under its
+    own backoff, one address backed off its whole link before the review's second pass), and 2
+    places beyond the 8 are kept for addresses that proved a paired key in the last day, at either
+    door. What stays: an address keeps about 4/5 of a place for good without being backed off (one
+    connection held 2 s in every 2.5 s), so ten IPv4 addresses on the network taking turns can keep
+    the shared places full for new devices (and with a /24's free ones, a new one as each is backed
+    off, without taking turns; IPv6 from the internet at the remote door, with Internet Access on,
+    gives a stranger with a routed /48 or /56 as many /64s), and a paired device whose address has
+    not proved its key that day waits as a new one does; a device not yet paired in its own IPv6 /64 is refused while
+    that /64 is backed off, and a stranger in the /64 (at home, link-local addresses share one per
+    interface) keeps it backed off with a dozen refused handshakes from new addresses each time the
+    5 minutes end; someone at a paired device's own address (its NAT, or its address while it is
+    away) takes the two kept places and is backed off with it within 30 s, since nothing tells them
+    apart before TLS; and an asker's quiet now covers its IPv6 /64, so for 10 minutes after the
+    Mac's Cancel another new device of that /64 opens the window on the Mac;
   - Remote Access's own switches (remote access, internet access, the port) and Direct Wireless
     stay in UserDefaults, where any process of this user can flip them: that widens who reaches a
     door, never lets an unpaired key in. Require pairing is the one switch that would, so it is
@@ -712,7 +736,8 @@ enum CableLink {
 
 #### 4.4 `Door.swift` (new, from RemoteServer.swift) and `RemoteServer.swift`
 
-- **`Door`** is RemoteServer's admission, moved: pending connections (8 in all, 2 a source), the
+- **`Door`** is RemoteServer's admission, moved: pending connections (8 in all, 2 a source; since
+  the security scan's finding 9, `DoorPolicy.Places` and §9's rows), the
   10 s admission deadline, the origin check before start, the verify block (now
   `DoorPolicy.trusts`), `.ready` (`DoorPolicy.atReady`), reading the one kind 19, the backoff (5 of
   its own refusals in 60 s → 300 s; a paired key clears its source), `doorRefusals`, and the
@@ -1481,8 +1506,8 @@ the code Mac mini shows." Esc, Cancel or the escape gesture fold it back to the 
 
 | What | Value |
 |---|---|
-| Home door: accept → admission (TLS, plus a pairing connection's one kind 19) | 10 s |
-| Home door: pending connections | 8 in all, 2 per source; 5 of the door's own refusals in 60 s → refused for 300 s (an older Sill's plain tries do not count, §4.4); a paired key clears its source |
+| Home door: accept → admission (TLS, plus a pairing connection's one kind 19) | 10 s; since the security scan's finding 9 (2026-10-29, `DoorPolicy.Places`, both TLS doors): 4 s to `.ready` (10 s from an address that proved a paired key within a day), then 4 s for the kind 19, 10 s at most |
+| Home door: pending connections | 8 in all, 2 per source; 5 of the door's own refusals in 60 s → refused for 300 s (an older Sill's plain tries do not count, §4.4); a paired key clears its source. Since finding 9: 8 places for anyone and 2 more for addresses that proved a paired key; 2 per address, and per IPv6 /64 for addresses not known; every connection that ends unadmitted, and a pairing connection's kind 19, costs its address (and its /64, unless known) a tenth of a failure, a tenth for each second it waited at least, one more for every 2 s it waited beyond the first 2 (counted to its deadline at most, and to an unknown address's for a known one), at least one when refused; 5 within 60 s → the address refused for 300 s, 12 within 300 s from a /64's unknown addresses (each counting 6 at most) → the /64 |
 | Device-opened pairing windows | one at a time; at most 3 in any 10 minutes; a device whose window was cancelled on the Mac or stopped opens none for 10 minutes (by key and by address); a window that ran out, or that its device withdrew, quiets nobody |
 | Pairing window | 300 s, 5 wrong proofs, spacing 1/2/4/8 s, 5 s per source, single use (as today) |
 | The ask: kind 20 on the device | within 15 s |
