@@ -155,6 +155,7 @@ swift run -c release SillHost --synthetic            # the Desktop streams a tes
 SILL_TEST_PATTERN=picture:/path/to.jpg swift run -c release SillHost --synthetic   # the Desktop a still picture instead (TEST ONLY)
 SILL_TEST_STILL_AFTER=3 swift run -c release SillHost --synthetic   # no frame from 3 s on, as a window that stopped changing (TEST ONLY)
 SILL_TEST_KEYFRAME_IGNORE=1 swift run -c release SillHost --synthetic   # the first keyframe request ignored, as a Mac from before kind 44 ignores every one (TEST ONLY)
+SILL_TEST_FIREWALL=executable swift run -c release SillHost --synthetic   # the macOS firewall's answers canned: Sill's executable blocked (TEST ONLY; If devices can't connect, below)
 swift run -c release SillHost --remote               # the remote door for this run, on any free port (--remote=PORT)
 swift run -c release SillHost --remote --internet    # also admit paired devices from the internet
 swift run -c release SillHost --print-reachability   # the addresses a device would get away from home, then exit
@@ -1782,6 +1783,65 @@ the Mac's radio off the channel: Direct Wireless Connection should be off, and
 AirDrop, Sidecar and Universal Control can hold AWDL on too.
 
 ## Troubleshooting
+
+### If devices can't connect
+
+- The macOS firewall (System Settings › Network › Firewall) keeps a rule per
+  path, and one Mac held two for Sill at once (a user's report, 2026-10-29):
+  `/Applications/Sill.app` allowed and `/Applications/Sill.app/Contents/MacOS/Sill`
+  blocked (`/usr/libexec/ApplicationFirewall/socketfilterfw --listapps`). Sill's
+  port then took nothing from the network while the Mac itself connected fine
+  (the firewall never filters loopback), System Settings showed Sill allowed,
+  and `--getappblocked` on the bundle said "permitted". `sudo
+  /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp
+  /Applications/Sill.app/Contents/MacOS/Sill` fixed it.
+- The host asks the firewall at launch, whenever its listener comes up (Direct
+  Wireless replaces it), when a device gets in from the network while the last
+  answer said none could (that answer is stale; a connection over loopback
+  says nothing) and, in Sill.app, whenever its status menu opens (a block that
+  came after launch, such as a Deny in the firewall's own prompt: the glyph at
+  once, Devices Can’t Connect from the menu's next opening, as the menu is
+  built before the answer) and whenever Settings › General opens or Sill
+  becomes active over it; never on a timer. FirewallCheck asks
+  `--getglobalstate`, then, only while the firewall is on (off, Block all and a
+  state that doesn't read decide alone), `--getblockall`, `--getappblocked` for
+  the running executable and for its bundle, and `--listapps`, each in a
+  process of its own given 2 s (then SIGTERM, and SIGKILL a second later, so a
+  tool that hangs leaves nothing running): read-only, no privileges, nothing
+  changed. FirewallRule (pure, `Tests/checks/firewall`) reads the answers: on,
+  with a rule that blocks the executable or its bundle (its own answer or the
+  list's, either one enough) or with Block all incoming connections, devices on
+  the network cannot connect; allowed only once the list was read (a path's
+  own "permitted" never stands in for it: the report's bundle said it), else
+  unknown, and the log says why. Settings › General then says so, with the
+  Terminal command that unblocks what is blocked (the running executable's own
+  path, quoted for the shell when it needs it) and Copy, or for Block all where
+  to turn it off; the menu says "Devices Can’t Connect" (it opens General); the
+  log says it once, "Firewall: the macOS firewall blocks Sill’s executable, so
+  devices on the network cannot connect. In Terminal: sudo …", and once more
+  when it no longer does. Sill never runs the command itself: it needs an
+  administrator.
+- Measured on macOS 27.0.1 as an ordinary user, without Full Disk Access (as
+  Sill.app runs): each question answers in 4–8 ms with no prompt. Asked in one
+  run, the tool is killed (status 137, nothing printed) when `--getstealthmode`
+  or `--getallowsigned` follows `--getappblocked`, or `--listapps` follows it
+  with an app bundle's path; `--getglobalstate`, `--getblockall` and another
+  `--getappblocked` after it, `--listapps` after an executable's path, and each
+  question alone answer every time: hence a process each. An option it does
+  not know ends with status 255.
+  `/Library/Preferences/com.apple.alf.plist`, which older Macs kept, does not
+  exist there. Answers that don't read put "Firewall: couldn’t read the macOS
+  firewall’s settings (…)" in the log once, and nothing on screen.
+- TEST ONLY: `SILL_TEST_FIREWALL=executable|bundle|both|all|off|allowed|unreadable`,
+  or the path of a file whose first word is one of them (read again at each
+  check), gives a test host the answers macOS 27 prints in that case instead
+  of asking (`executable` is the report's Mac). Honoured only by a host that
+  does not advertise and is not Sill.app itself; anywhere else one line says
+  it is ignored. The bare app's `-SillRenderPreviews` draws General with the
+  line (`pane-general-firewall-*`), the line alone in each case
+  (`pane-firewall-*`) and the menu's `firewall-blocked` and
+  `firewall-blocks-all` samples; `-SillPrintMenuAfter <s>` prints General's
+  firewall line with the menu.
 
 ### What to try if it's slow
 
