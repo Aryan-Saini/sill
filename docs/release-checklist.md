@@ -805,6 +805,8 @@ To send feedback, take a screenshot while you use Sill, or use Send Beta Feedbac
   Test internally first: that needs none of it.
 - Once approved: invite testers by email, or turn on a public link (Open to Anyone, with a tester
   limit if you like, up to 10,000).
+  The public beta group's link, on since 2026-10-29: https://testflight.apple.com/join/6v7nqyn3 (the README, the download
+  page and the nightly pre-release's notes carry it; a new link means changing all three).
 
 ### 8. Screenshots, for the App Store
 

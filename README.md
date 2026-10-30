@@ -28,6 +28,13 @@ Sill's own [tap](https://github.com/Saffsanity/homebrew-sill). Sill for iPhone
 and iPad is free on the [App Store](https://apps.apple.com/app/id6816359860),
 and you can also build it from source (below).
 
+To try the next version before it ships: Sill for iPhone and iPad has a
+[public beta on TestFlight](https://testflight.apple.com/join/6v7nqyn3), and Sill for Mac
+has [nightly builds](https://github.com/Saffsanity/sill/releases/tag/nightly) on
+GitHub, notarized like a release but not supported. Your devices stay paired
+(a nightly uses the release's identity), and Sill's update check never offers
+a nightly: the release above is the one to use.
+
 ## Screenshots
 
 These are the iPad screenshots from the App Store; on iPhone and iPhone Duo,
