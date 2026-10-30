@@ -15,9 +15,11 @@ extension StreamClient {
     /// A viewport that leaves `localCursor` nil (StreamScreen measures panels and knows nothing
     /// about pointers) gets the current flag filled in, so a rotation or an Aa change never puts
     /// the Mac cursor back under a client-drawn one. Remembers what went out in `lastViewport`.
-    /// A no-op on the wire without a connection. Main thread.
+    /// Held to what a Mac takes (ViewportBounds.held: each side 1 to 16384 points, a scale 0.25 to 4),
+    /// so no Mac refuses it; a panel not measured yet sends nothing. A no-op on the wire without a
+    /// connection. Main thread.
     func sendViewport(_ v: Viewport) {
-        var v = v
+        guard var v = ViewportBounds.held(v) else { return }
         if v.localCursor == nil { v.localCursor = localCursorState.wanted }
         lastViewport = v
         send(.viewport, payload: Wire.encode(v))

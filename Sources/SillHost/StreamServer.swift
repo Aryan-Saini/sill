@@ -1425,7 +1425,9 @@ final class StreamServer {
                         client.device = name.isEmpty ? nil : name
                         client.worstFrameAgeSincePrint = max(client.worstFrameAgeSincePrint, stats.frameAgeMaxMs ?? -1)
                         client.worstRttSincePrint = max(client.worstRttSincePrint, stats.rttMaxMs ?? -1)
-                        client.audioLateSincePrint += max(0, stats.audioLate ?? 0)
+                        // The device's own count, added without overflow (ClientStats.lateSince): two
+                        // reports of Int.max within a line's 1.5 s trapped here and ended Sill.
+                        client.audioLateSincePrint = ClientStats.lateSince(client.audioLateSincePrint, adding: stats.audioLate)
                         let now = CFAbsoluteTimeGetCurrent()
                         if now - client.lastStatsPrint >= 1.5 {
                             client.lastStatsPrint = now

@@ -12,6 +12,9 @@ usage: sillclient.py PORT [seconds] [desktop|none|window:ID] [flags...]
                      in send order. Keys: maxFPS, bitrate, captureScale, prioritizeSpeed,
                      virtualDisplay, directWireless, sendAudio; booleans accept 1/0/true/false/on/off
   --raw17=JSON@T     send this literal kind 17 payload T seconds in (split on the last @)
+  --raw9=JSON@T      send this literal kind 9 payload (a viewport) T seconds in (split on the last @);
+                     a host refuses one outside 1 to 16384 points a side or 0.25 to 4 for its scale,
+                     and one that does not decode, with a "Viewport from … refused" line
   --pick=SRC@T       a timed selectSource: none, desktop or window:ID
   --stats            send ClientStats (kind 12) once a second as device "sillclient", so the host
                      logs a name for this client
@@ -136,7 +139,7 @@ h:HOME_BITRATE/SCALE,a:AWAY_BITRATE/SCALE,this=1|0,run=1|0, and link= (only whil
 the link behind or stalled) STATE,withheld=N,bitrate=B,carried=KBPS|-,suggested=B/SCALE|-. Flags may come in any
 order after the positional arguments. Everything is checked before connecting: an unknown flag, a
 --set or --expect key that is not one of theirs, or a value that does not parse stops the script
-with status 2 (--raw17 and --input go out as written). Find PORT with: lsof -nP -iTCP -sTCP:LISTEN -a -p <pid>.
+with status 2 (--raw17, --raw9 and --input go out as written). Find PORT with: lsof -nP -iTCP -sTCP:LISTEN -a -p <pid>.
 The --synthetic hosts do not advertise over Bonjour, so this is the only way to reach them."""
 import json, re, socket, struct, sys, time
 
@@ -150,7 +153,7 @@ SET_KEYS = {"maxFPS", "bitrate", "captureScale", "prioritizeSpeed", "virtualDisp
 # Away from home (docs/remote-bundle-plan.md): read from the state's `away`, and its `link`'s state.
 AWAY_KEYS = {"homeBitrate", "homeCaptureScale", "awayBitrate", "awayCaptureScale", "thisConnectionAway", "awayRunning"}
 EXPECT_KEYS = SET_KEYS | {"persistent", "virtualDisplayAvailable", "linkState", "clipboard"} | AWAY_KEYS
-TIMED = ("set", "raw17", "pick", "fps-after", "stop-ping", "stop-read", "pairing-wanted", "keyframe", "fetch", "press", "raw25",
+TIMED = ("set", "raw17", "raw9", "pick", "fps-after", "stop-ping", "stop-read", "pairing-wanted", "keyframe", "fetch", "press", "raw25",
          "raw27", "move", "tap", "key", "input", "gesture", "raw28", "copy", "copy-bytes", "raw32")
 INPUT = ("move", "tap", "key", "input")
 # What --gesture may send: TrackpadGesture's six names (Gesture.swift). Anything else goes with --raw28.
@@ -717,6 +720,8 @@ def fire(e, now):
         s.sendall(msg(17, json.dumps(change).encode())); print(f"  sent change {json.dumps(change)} at {at}")
     elif name == "raw17":
         s.sendall(msg(17, text.encode())); print(f"  sent raw kind 17 {text} at {at}")
+    elif name == "raw9":
+        s.sendall(msg(9, text.encode())); print(f"  sent raw kind 9 {text} at {at}")
     elif name == "pick":
         s.sendall(msg(6, json.dumps(parsed).encode())); print(f"  sent pick {text} at {at}")
     elif name == "fps-after":
