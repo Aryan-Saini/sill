@@ -830,8 +830,23 @@ final class StreamClient: ObservableObject {
         var rowListing: Double?
         var rowDials = 0
         var lastRowDialAt: Double?
+        /// An unsaved Mac on an open door (`p=0`): the key its lost session saw, which every dial of
+        /// its row pins (DiscoveryPolicy.reconnectKey, reconnectTrust: the security scan's finding 3,
+        /// 2026-10-29); another key ends the reconnect, and a tap takes any key. A plain door under the
+        /// name is never dialed while it is set (a DEBUG build's; the review of #255). For a session
+        /// that never saw one (a tap's dial that ended before its handshake), the key the last session
+        /// under its name saw (`openKeys`; the review of #255). Nil for a saved Mac (pinned to its
+        /// saved key), a plain door, and a session that never saw one under a name none saw one.
+        var openKey: Data?
     }
     var reconnect: Reconnect?
+    /// The key the last session at home under each Bonjour name saw on an open door (`p=0`), in
+    /// memory: DiscoveryPolicy.reconnectKey's `earlier`. A tap clears the reconnect and dials any
+    /// key, so a tap whose dial ended before its handshake (one the reconnect's own words invite
+    /// while the Mac is away) left a reconnect that took any key under that name, the pin of the
+    /// session before it lost (the review of #255, 2026-10-29); that reconnect pins this key instead.
+    /// Set as a session's first connection is ready. Main thread.
+    var openKeys: [String: Data] = [:]
     /// The reconnect's retry timer chain now running (`scheduleReconnectRetry`).
     private var reconnectRetryChain = 0
     /// The dial in flight, remote or pairing: one at a time each.
@@ -1605,10 +1620,12 @@ final class StreamClient: ObservableObject {
     /// pinned to its key; an unsaved Mac's on an open door with any key; the ask (a tap's only) for
     /// a Mac that requires pairing or removed this device; a plain one to a plain door (a DEBUG
     /// build, a Mac never seen with `p`); nothing for a Mac whose Sill is too old for this build.
-    /// `macID`: the saved Mac it is (its tag's, or the reconnect's by Bonjour name). True when it
-    /// dialed something. Main thread.
+    /// `macID`: the saved Mac it is (its tag's, or the reconnect's by Bonjour name). `seen`: the
+    /// reconnect's, the key its lost session saw (Reconnect.openKey), which its dial of an unsaved
+    /// Mac on an open door pins (DiscoveryPolicy.reconnectTrust); a tap takes any key there. True
+    /// when it dialed something. Main thread.
     @discardableResult
-    func dial(_ mac: FoundMac, macID: String?, tap: Bool) -> Bool {
+    func dial(_ mac: FoundMac, macID: String?, tap: Bool, seen: Data? = nil) -> Bool {
         let saved = macID.flatMap { savedMac($0) }
         let decision = homeDecision(mac, macID: macID, tap: tap)
         switch decision {
@@ -1622,7 +1639,10 @@ final class StreamClient: ObservableObject {
                 replaces: saved?.newKey == true ? saved?.macID : nil)
             return true
         case .pinned, .anyKey, .plain:
-            guard let trust = DiscoveryPolicy.sessionTrust(decision, savedPin: saved?.fingerprintData) else { return false }
+            // A tap takes any key at an open door; the automatic reconnect pins the key its lost session saw.
+            let wanted = tap ? DiscoveryPolicy.sessionTrust(decision, savedPin: saved?.fingerprintData)
+                             : DiscoveryPolicy.reconnectTrust(decision, savedPin: saved?.fingerprintData, seen: seen)
+            guard let trust = wanted else { return false }
             return dialRow(mac, macID: saved?.macID, trust: trust, tagNamed: mac.macID != nil, tap: tap)
         }
     }
@@ -1772,8 +1792,12 @@ final class StreamClient: ObservableObject {
                     guard self.connection === c else { c.cancel(); return }   // replaced while connecting
                     self.connectedDirectly = direct
                     self.session?.route = direct ? .direct : .network
-                    // An open door's session keeps the key its first connection saw: every later one pins it.
+                    // An open door's session keeps the key its first connection saw: every later one pins it,
+                    // and so does a reconnect after a tap under its name that sees none (`openKeys`).
                     if let t = self.session?.home { self.session?.home = DiscoveryPolicy.trust(t, readyWith: seen) }
+                    if let name = self.session?.bonjourName, let key = DiscoveryPolicy.reconnectKey(lost: self.session?.home) {
+                        self.openKeys[name] = key
+                    }
                     self.setRoute(from: path, fresh: true)
                     self.pathSignals = PathSignals()
                     self.lastPongAt = ProcessInfo.processInfo.systemUptime
@@ -4496,14 +4520,16 @@ extension StreamClient {
 
     #if DEBUG
     /// The layout harness has no Mac: answer a pick after 0.35 s the way a host would, over the
-    /// mock's state at that moment, refusing the virtual display where the mock has none. The
-    /// readout follows as a restart would make it. Nothing under `mockFrozen`.
+    /// mock's state at that moment, refusing the virtual display where the mock has none, and Direct
+    /// Wireless on a session it says is not paired. The readout follows as a restart would make it.
+    /// Nothing under `mockFrozen`.
     private func mockAnswer(_ out: HostSettingsChange) {
         guard !mockFrozen else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             guard let self, self.connection == nil, var state = self.settings.host else { return }
             var ok = out
             if ok.virtualDisplay == true, !state.virtualDisplayAvailable { ok.virtualDisplay = nil }
+            if !state.takesDirectWireless || self.remoteRoute != nil { ok.directWireless = nil }
             let before = state.settings
             state.settings = ok.applied(to: before)
             if var stream = state.stream {

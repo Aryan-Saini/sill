@@ -69,9 +69,16 @@ package final class StreamCoordinator {
     /// encoder, the launch probe never runs and the re-check never starts, so no test touches the
     /// Mac's one hardware encoder while Noah streams (PointerTestHooks).
     private let softwareOnly: Bool
-    /// The TEST ONLY hooks' lines (PointerTestHooks, InputInjector.testInputLog, `keyframeIgnoreHook`),
-    /// printed as `start` begins; empty without them.
+    /// The TEST ONLY hooks' lines (PointerTestHooks, InputInjector.testInputLog, `keyframeIgnoreHook`,
+    /// FirewallCheck.TestHook), printed as `start` begins; empty without them.
     private let testHookLines: [String]
+    /// The macOS firewall (FirewallRule, a user's report of 2026-10-29): the paths a rule may name
+    /// for this process, the TEST ONLY answers a test host takes instead of asking, and one check at
+    /// a time (`checkFirewall`), with one more after it when asked meanwhile.
+    private let firewallPaths: FirewallRule.Paths
+    private let firewallHook: FirewallCheck.TestHook?
+    private var firewallChecking = false
+    private var firewallAgain = false
     /// A picked window streams from its own HiDPI display (see VirtualStage): the CLI's
     /// `--virtual-display`, or the app's setting. Every branch this adds is behind this flag;
     /// without it the coordinator behaves as before. It changes only inside `select` (`adopt`).
@@ -184,8 +191,11 @@ package final class StreamCoordinator {
     /// the user's pick.
     private var pickArrivedWhileSwitching: StreamSource?
     /// The client's last stream panel size and text scale. One stream, so with several clients
-    /// the last one to report wins.
+    /// the last one to report wins. Only ever one a host takes (ViewportBounds); a refused one
+    /// leaves it as it was.
     private var viewport: Viewport?
+    /// When each connection's last "Viewport from … refused" line was printed: one a second at most.
+    private var viewportRefusedLineAt: [ObjectIdentifier: CFAbsoluteTime] = [:]
     /// Each connection's last viewport scale, nil for none: Aa going from a scale to Off puts the windows back.
     private var fitScales: [ObjectIdentifier: Double] = [:]
     /// The windows Sill sized for a device in regular mode, each with its way back (WindowRestore,
@@ -231,8 +241,9 @@ package final class StreamCoordinator {
     private lazy var keyframeRequestDrops = RefusalSummary(queue: .main, categories: ["keyframes"]) { counts in
         "Keyframe requests ignored: \(counts["keyframes"] ?? 0) in a minute, from devices asking more than once a second."
     }
-    /// Gestures waiting for a switch in flight to finish, in arrival order, and the task posting them.
-    private var pendingGestures: [(gesture: TrackpadGesture, device: String)] = []
+    /// Gestures waiting for a switch in flight to finish, in arrival order, with the connection that
+    /// sent each, and the task posting them.
+    private var pendingGestures: [(gesture: TrackpadGesture, device: String, id: ObjectIdentifier)] = []
     private var gestureDrain: Task<Void, Never>?
     /// A host that does not advertise (the synthetic test hosts, which tests reach by port) posts no
     /// gesture's chord: it logs the one it would post, "(not posted: a test host)", and counts
@@ -268,6 +279,12 @@ package final class StreamCoordinator {
     package let remote: RemoteAccess?
     /// Each admitted connection's route (home and its origin, or the remote door's), from the server.
     private var routes: [ObjectIdentifier: ClientRoute] = [:]
+    /// Connections the Mac no longer serves (StreamServer.closeSessions: a pairing removed, Remote
+    /// Access or internet access off, Require pairing on), from the moment the server marks them until
+    /// they leave: nothing they send lands but the up of a key or a button they hold down on the Mac
+    /// (RevokedInput), whether it comes now, waits in the input held for an activation or waits for a
+    /// switch (a gesture). Security scan finding 10.
+    private var revoked: Set<ObjectIdentifier> = []
     /// Away from home (docs/remote-bundle-plan.md §5; AwayPolicy): every connected device is away,
     /// so the away quality is the target. Kept while no device is connected; the next to register
     /// decides (`routesChanged`). What the Mac's card, menu and every device are told.
@@ -350,9 +367,14 @@ package final class StreamCoordinator {
         let userActive = DisplayWake.userActive(environment: env, testHost: synthetic)
         displayActivity = DisplayActivity(remote: userActive.remote)
         keyframeRequestsToIgnore = keyframeIgnore.count
+        // The firewall's TEST ONLY answers, for a test host alone (StreamServer's own rule).
+        let firewallTest = FirewallCheck.TestHook.read(testHost: DoorPolicy.isTestHost(advertises: !synthetic, bundled: !testHooks),
+                                                       environment: env)
+        firewallHook = firewallTest.hook
+        firewallPaths = FirewallRule.paths(executable: FirewallCheck.executablePath())
         desktopStartsToFail = desktopFail.count
         testHookLines = [path.line, software.line, inputLog.line, userActive.line, keyframeIgnore.line, desktopFail.line,
-                         noScreen.line].compactMap { $0 }
+                         noScreen.line, firewallTest.line].compactMap { $0 }
         status = HostStatus()
         var home = StreamServer.HomeDoorMode.plain
         if homePairing, let remote {
@@ -436,22 +458,43 @@ package final class StreamCoordinator {
                     $0.devices.append(HostStatusSnapshot.Device(id: id, endpoint: "\(connection.endpoint)", name: route.pairedName,
                                                                 route: link, remoteRoute: route.label))
                 }
+                // Admitted while the Mac was deciding a change that cuts it off (Remove, Require pairing,
+                // Remote Access or internet access: the decision saved it, a keychain write or its prompt,
+                // while this registration waited behind it, out of `cutOff`'s sight): cut off now, before
+                // any message of it, which all come after this (security scan finding 10, the review of
+                // PR #254). The server says goodbye to it as to the others. Nothing of it wakes the display
+                // or counts as the paired device's last connection.
+                if let remote = self.remote, !remote.stillServes(route) { self.markRevoked(id) }
+                let cut = self.revoked.contains(id)
                 // A paired key's session, at either door: the pane's "last connected", and over the
                 // cable the iPhone or iPad the key runs on (learned once).
-                if let fp = route.fingerprint, route.pairedName != nil {
+                if !cut, let fp = route.fingerprint, route.pairedName != nil {
                     let words = route.label ?? Self.homeRouteWords(route, link: link)
                     self.remote?.sessionStarted(fingerprint: fp, route: words, cableDevice: route.cableDevice)
+                }
+                // A device got in from the network while the firewall's verdict said none could:
+                // that verdict is stale (FirewallRule.asksAgain).
+                if FirewallRule.asksAgain(after: self.status.snapshot.firewall, fromLoopback: route.origin == .loopback) {
+                    self.checkFirewall()
                 }
                 // Home or away before its catalog: its settings state says which quality it sets.
                 self.routesChanged(joined: id, endpoint: "\(connection.endpoint)")
                 // A sleeping display gives black frames: the session's start wakes it, as a key would.
-                self.deviceActive(.connect, connection)
+                if !cut { self.deviceActive(.connect, connection) }
                 // Catalog first: the client's UI needs it even if the keyframe is slow to come.
                 self.catalog.thumbnailsWanted = true
                 self.sendCatalog(to: connection)
                 self.encoder?.requestKeyframe()
             }
         }
+        // A device the Mac no longer serves: from now on nothing of it lands but what lets go of what it
+        // holds (RevokedInput), in the same order as its messages, which the server hands on after this.
+        server.onClientRevoked = { [weak self] connection in
+            Task { @MainActor in self?.clientRevoked(connection) }
+        }
+        // The same devices, marked as the Mac decides (RemoteAccess, on the main actor): before any of
+        // their messages already waiting here, which the server's mark above would only follow.
+        remote?.onCutOff = { [weak self] matching in self?.cutOff(matching) }
         // Each device's link (LinkJudge): the report its kind 16 carries, the card's row, one line.
         server.onClientLinkChanged = { [weak self] connection, verdict in
             let id = ObjectIdentifier(connection)
@@ -472,6 +515,7 @@ package final class StreamCoordinator {
                 let id = ObjectIdentifier(connection)
                 self.gestureArrivals[id] = nil
                 self.keyframeRequestAt[id] = nil
+                self.viewportRefusedLineAt[id] = nil
                 self.routes[id] = nil
                 self.lastPairingWanted[id] = nil
                 self.connections[id] = nil
@@ -480,7 +524,12 @@ package final class StreamCoordinator {
                 if self.flipWait == id { self.flipWait = nil }
                 self.menus.clientLeft(connection)
                 self.clipboard.clientLeft(connection)
+                // Its keys go up, and its buttons when the Mac no longer served it (`revoked`, read before
+                // it is forgotten below). Its input still held for an activation is judged as a departed
+                // device's from here on (`gone`: `leftWhileHeld`), and an identifier a later connection
+                // takes is never revoked.
                 self.releaseKeys(of: id)
+                self.revoked.remove(id)
                 self.status.update { $0.devices.removeAll { $0.id == id } }
                 // The last device at home left devices away behind: the away quality, at once.
                 let flipped = self.routesChanged(joined: nil, endpoint: nil)
@@ -632,6 +681,9 @@ package final class StreamCoordinator {
                 $0.network = .registering
             }
         }
+        // The listener is up, at launch or replaced (Direct Wireless): whether the macOS firewall
+        // lets devices reach it.
+        if network == .registering { checkFirewall() }
     }
 
     /// Bonjour registered this name (nil: the registration went away, to come back).
@@ -645,6 +697,33 @@ package final class StreamCoordinator {
         }
     }
 
+    // MARK: The macOS firewall
+
+    /// Asks the macOS firewall, read-only, whether it blocks this process (FirewallCheck, then
+    /// FirewallRule's verdict into the status: Sill.app's Settings › General and its menu say so), and
+    /// prints one line when the verdict changes (none for a first one that blocks nothing). At launch,
+    /// whenever the listener comes up, when Sill.app's status menu opens (a block that came after
+    /// launch; the menu is built before the answer, so its item shows from the next opening), when
+    /// its Settings › General opens or Sill becomes active over it, and when a device gets in from
+    /// the network while the verdict says none can; never on a timer. One check at a time: one asked
+    /// for meanwhile runs once more after it, so its answer is never older than the request.
+    package func checkFirewall() {
+        guard !firewallChecking else { firewallAgain = true; return }
+        firewallChecking = true
+        let paths = firewallPaths, hook = firewallHook
+        Task { @MainActor in
+            let raw = await FirewallCheck.read(paths, hook: hook)
+            let verdict = FirewallRule.verdict(raw, paths: paths)
+            if let line = FirewallRule.Copy.logLine(from: status.snapshot.firewall, to: verdict) { print(line) }
+            status.update { $0.firewall = verdict }
+            firewallChecking = false
+            if firewallAgain {
+                firewallAgain = false
+                checkFirewall()
+            }
+        }
+    }
+
     /// `preselect` is the optional command-line match; without it nothing streams until a client picks.
     /// `promptForPermissions: false` (the app) asks for nothing at launch: no Accessibility alert,
     /// and no window list before Screen Recording is granted, because the first ScreenCaptureKit
@@ -653,6 +732,7 @@ package final class StreamCoordinator {
     package func start(preselect: String?, promptForPermissions: Bool = true) async {
         for line in testHookLines { print(line) }
         if let line = clipboard.testHookLine { print(line) }   // TEST ONLY, and only with one of its variables set
+        checkFirewall()                                         // at launch, beside the listener's own check
         if !synthetic, promptForPermissions { InputInjector.ensureAccessibility() }   // prompts once; input is dropped silently without it
         if softwareOnly {
             // TEST ONLY: a gate that must never touch the Mac's one hardware encoder (Noah may be
@@ -966,6 +1046,18 @@ package final class StreamCoordinator {
     private func handle(_ message: StreamMessage, from connection: NWConnection) async {
         // Input decoded once, for the display's rule and for its case below.
         let input = message.kind == .input ? Wire.decode(InputEvent.self, from: message.payload) : nil
+        // A device the Mac no longer serves (`revoked`): only the up of a key or a button it holds down
+        // on the Mac still goes, where the pointer is; nothing else of it acts, wakes the display or
+        // raises a window. Its connection closes within 0.25 s.
+        let sender = ObjectIdentifier(connection)
+        if revoked.contains(sender) {
+            if let input, injector.releasesWhatItHolds(input, from: sender) {
+                deliver(input, in: .null, from: sender)
+            } else if message.kind == .input || message.kind == .gesture {
+                Stats.shared.bump("in.revoked")
+            }
+            return
+        }
         // Every message goes to DisplayWake, which alone says which of them is a person at the device
         // (a pick never is: the device asks for the Desktop by itself), issue #134.
         deviceActive(.message(message.kind, input), connection)
@@ -1042,7 +1134,7 @@ package final class StreamCoordinator {
             }
             recent.append(now)
             gestureArrivals[id] = recent
-            queueGesture(gesture, from: deviceName(connection))
+            queueGesture(gesture, from: deviceName(connection), id: id)
         case .keyframeRequest:
             // A device's picture was interrupted (its display layer failed, or iOS stopped it while
             // Sill was away) and waits for a keyframe, which a still window never sends. The encoder
@@ -1065,7 +1157,19 @@ package final class StreamCoordinator {
             print("Keyframe for \(deviceName(connection)): its picture was interrupted.")
             encoder.requestKeyframe()
         case .viewport:
-            guard let v = Wire.decode(Viewport.self, from: message.payload) else { return }
+            // A device's panel and text scale. One outside what a host takes (ViewportBounds), or a
+            // payload that does not decode, is refused whole, with a line: the last viewport stands and
+            // nothing of the message is taken, its rate neither. Until 2026-10-29 a side of 1e300 points
+            // reached the window's fit and the virtual display's window size, whose lines trapped in
+            // Int(), and the host died with every device's session (security scan, finding 4).
+            guard let v = Wire.decode(Viewport.self, from: message.payload) else {
+                refuseViewport("it does not decode as a viewport", from: connection)
+                return
+            }
+            if let why = ViewportBounds.refusal(v) {
+                refuseViewport(why, from: connection)
+                return
+            }
             let id = ObjectIdentifier(connection)
             // Aa set to Off by the device that had fitted a window: the windows Sill sized go back to
             // their own frames now, as when they stop streaming, not at the end of the session (#179).
@@ -1134,9 +1238,11 @@ package final class StreamCoordinator {
             recent.append(now)
             settingsArrivals[id] = recent
             // A connection whose route is not known (never: it is set before any message is
-            // handled) counts as remote, so nothing it sends can widen exposure.
+            // handled) counts as remote and unpaired, so nothing it sends can widen exposure. Paired:
+            // its key on the trust list as the Mac's status has it now (`sessionPaired`).
             let (ok, refused) = DeviceSettings.accepted(change, virtualDisplayAvailable: appKitLoop,
-                                                        fromRemote: routes[id].map { $0.isRemote } ?? true)
+                                                        fromRemote: routes[id].map { $0.isRemote } ?? true,
+                                                        paired: sessionPaired(id))
             if !refused.isEmpty { print("Settings from \(who) refused: \(refused.joined(separator: ", "))") }
             if !ok.isEmpty, !shuttingDown {
                 let before = target
@@ -1276,9 +1382,23 @@ package final class StreamCoordinator {
         // Asked again for a size the app already refused (its minimum): nothing moved.
         guard abs(actual.width - current.width) >= 1 || abs(actual.height - current.height) >= 1 else { return nil }
         Stats.shared.bump("win.resized")
-        print("Resized \(window.owningApplication?.applicationName ?? "?") to \(Int(actual.width))×\(Int(actual.height)) pt "
-              + "(asked \(Int(target.width))×\(Int(target.height)) for a \(Int(v.width))×\(Int(v.height)) panel at \(textScale)×)")
+        // ViewportBounds.whole prints as Int() did, without its trap (finding 4: 1e300 points got here).
+        print("Resized \(window.owningApplication?.applicationName ?? "?") to \(ViewportBounds.whole(actual)) pt "
+              + "(asked \(ViewportBounds.whole(target)) for a \(ViewportBounds.whole(CGSize(width: v.width, height: v.height))) panel at \(textScale)×)")
         return actual
+    }
+
+    /// A device's viewport refused (ViewportBounds; `why` its words, or that it does not decode):
+    /// counted (`vp.refused` in the stats line) and said in a line that names the device, at once and
+    /// then at most once a second per connection, so a device that sends nothing else costs a line a
+    /// second, not one per message.
+    private func refuseViewport(_ why: String, from connection: NWConnection) {
+        Stats.shared.bump("vp.refused")
+        let id = ObjectIdentifier(connection)
+        let now = CFAbsoluteTimeGetCurrent()
+        if let last = viewportRefusedLineAt[id], now >= last, now - last < 1 { return }
+        viewportRefusedLineAt[id] = now
+        print("Viewport from \(deviceName(connection)) refused: \(why)")
     }
 
     /// A new viewport while a window streams. The encoder is fixed to the old size, but the
@@ -1404,13 +1524,18 @@ package final class StreamCoordinator {
         // the Mac has down (DroppedInput: a modifier left down makes the next click a ⌘-click, a
         // button every move a drag), a button's where the pointer is (`.null`), not where the old
         // source would have put it. The keys of devices that left meanwhile go up after them.
+        // A device the Mac no longer serves, or one that left meanwhile, gets only the up of what it
+        // holds down itself (RevokedInput), and none of its gestures.
         let dropped = heldInput
         heldInput = []; holdUntil = 0
         for item in dropped {
             switch item {
             case .input(let event, _, let device):
-                if injector.isUpOfSomethingDown(event) { injector.apply(event, in: .null, from: device) }
-            case .chord(let keyCode, let flags):
+                if gone(device) ? injector.releasesWhatItHolds(event, from: device) : injector.isUpOfSomethingDown(event) {
+                    injector.apply(event, in: .null, from: device)
+                }
+            case .chord(let keyCode, let flags, let device):
+                if gone(device) { Stats.shared.bump("in.revoked"); continue }
                 injector.chord(keyCode: keyCode, flags: flags)
             }
         }
@@ -1778,12 +1903,15 @@ package final class StreamCoordinator {
     private var lastActivationAt: CFAbsoluteTime = 0
     /// Input held for an activation, replayed in order once the app is up, each with the device that
     /// sent it (its keys are its own, KeyStrokes); a gesture's chord that arrives meanwhile waits
-    /// behind it, so a click just before the gesture lands first.
-    private enum Held { case input(InputEvent, CGRect, KeyStrokes.Device), chord(keyCode: UInt16, flags: UInt64) }
+    /// behind it, so a click just before the gesture lands first. A device the Mac no longer serves, or
+    /// one that left while it waited (`gone`), gets only the up of what it holds down (RevokedInput)
+    /// and none of its chords.
+    private enum Held { case input(InputEvent, CGRect, KeyStrokes.Device), chord(keyCode: UInt16, flags: UInt64, device: KeyStrokes.Device) }
     private var heldInput: [Held] = []
     private var holdUntil: CFAbsoluteTime = 0
-    /// Devices that left while input was held: their keys go up after it (`releaseKeys`).
-    private var leftWhileHeld: [KeyStrokes.Device] = []
+    /// Devices that left while input was held: their keys go up after it (`releaseKeys`), and the
+    /// buttons of one the Mac no longer served (`revoked`).
+    private var leftWhileHeld: [(device: KeyStrokes.Device, revoked: Bool)] = []
     /// How long held input waits for the app to become frontmost before it is replayed anyway.
     private static let activationTimeout: TimeInterval = 0.6
 
@@ -1800,25 +1928,72 @@ package final class StreamCoordinator {
         heldInput = []
         for item in held {
             switch item {
-            case .input(let event, let rect, let device): logClick(event, in: rect); injector.apply(event, in: rect, from: device)
-            case .chord(let keyCode, let flags): injector.chord(keyCode: keyCode, flags: flags)
+            case .input(let event, let rect, let device):
+                if gone(device) {
+                    if injector.releasesWhatItHolds(event, from: device) { injector.apply(event, in: .null, from: device) }
+                    else { Stats.shared.bump("in.revoked") }
+                    continue
+                }
+                logClick(event, in: rect); injector.apply(event, in: rect, from: device)
+            case .chord(let keyCode, let flags, let device):
+                if gone(device) { Stats.shared.bump("in.revoked"); continue }
+                injector.chord(keyCode: keyCode, flags: flags)
             }
         }
         releaseKeysOfDevicesThatLeft()
     }
 
-    /// A device left: the keys it still holds down on the Mac go up (InputInjector.releaseKeys),
-    /// after whatever of its input is still held for an activation, so no up of its own is overtaken
-    /// and no down of its own comes after.
+    /// A device the Mac no longer serves (`revoked`), or one that left while input was held
+    /// (`leftWhileHeld`): of what it sent, only the up of a key or a button it holds down still goes.
+    private func gone(_ device: KeyStrokes.Device) -> Bool {
+        revoked.contains(device) || leftWhileHeld.contains { $0.device == device }
+    }
+
+    /// StreamServer marked this device revoked (`closeSessions`). Ignored once it has left (no route):
+    /// its identifier may be a later connection's by then.
+    private func clientRevoked(_ connection: NWConnection) {
+        let id = ObjectIdentifier(connection)
+        guard routes[id] != nil else { return }
+        markRevoked(id)
+    }
+
+    /// RemoteAccess cut these devices off (Remove, Require pairing turned on, Remote Access or internet
+    /// access turned off), on the main actor as it decided: each connection whose route `matching`
+    /// names is marked now, so its messages still waiting for the main actor (read off the network
+    /// while the Mac saved the change, the keychain's write) land nothing either. The server marks each
+    /// again as it says goodbye (`clientRevoked`). A connection whose registration still waits here (one
+    /// admitted while the Mac was saving the change) is marked as it registers, before any message of it
+    /// (RemoteAccess.stillServes, `onClientConnected`).
+    private func cutOff(_ matching: (ClientRoute) -> Bool) {
+        for (id, route) in routes where matching(route) { markRevoked(id) }
+    }
+
+    private func markRevoked(_ id: ObjectIdentifier) {
+        guard revoked.insert(id).inserted else { return }
+        // A menu choice or fetch of it still waiting for its turn is neither made nor read.
+        menus.clientRevoked(id)
+        // TEST ONLY (SILL_TEST_INPUT_LOG, a synthetic host): where its input stops landing, so a test
+        // reads what was posted for it after this line.
+        if injector.testLog {
+            let device = status.snapshot.devices.first { $0.id == id }
+            print("Test input: \(device?.name ?? device?.endpoint ?? "a device") is no longer served: only the up of a key or a button it holds down goes from here on.")
+        }
+    }
+
+    /// A device left: the keys it still holds down on the Mac go up (InputInjector.releaseKeys), and
+    /// the buttons of one the Mac no longer served (`revoked`: RevokedInput.buttonsLetGo), after
+    /// whatever of its input is still held for an activation, so no up of its own is overtaken and no
+    /// down of its own comes after.
     private func releaseKeys(of device: KeyStrokes.Device) {
-        if !heldInput.isEmpty || CFAbsoluteTimeGetCurrent() < holdUntil { leftWhileHeld.append(device); return }
-        injector.releaseKeys(of: device)
+        let wasRevoked = revoked.contains(device)
+        if !heldInput.isEmpty || CFAbsoluteTimeGetCurrent() < holdUntil { leftWhileHeld.append((device, wasRevoked)); return }
+        injector.releaseKeys(of: device, revoked: wasRevoked)
     }
 
     private func releaseKeysOfDevicesThatLeft() {
         let left = leftWhileHeld
         leftWhileHeld = []
-        for device in left { injector.releaseKeys(of: device) }
+        for (device, wasRevoked) in left { injector.releaseKeys(of: device, revoked: wasRevoked) }
     }
 
     /// Where a held key's repeat would land now (InputInjector.repeatLanding, KeyRepeat), as a
@@ -2691,8 +2866,8 @@ package final class StreamCoordinator {
     /// gesture made while a window streamed comes right after the device's Desktop pick, the
     /// window may be on its way home from the virtual display, and the view should open over the
     /// Desktop, which is the only source that shows it.
-    private func queueGesture(_ gesture: TrackpadGesture, from device: String) {
-        pendingGestures.append((gesture, device))
+    private func queueGesture(_ gesture: TrackpadGesture, from device: String, id: ObjectIdentifier) {
+        pendingGestures.append((gesture, device, id))
         guard gestureDrain == nil else { return }
         gestureDrain = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -2702,7 +2877,9 @@ package final class StreamCoordinator {
             }
             while !self.pendingGestures.isEmpty {
                 let next = self.pendingGestures.removeFirst()
-                self.performGesture(next.gesture, from: next.device)
+                // Its device revoked or gone while the gesture waited for the switch: it acts no more.
+                if self.revoked.contains(next.id) || self.routes[next.id] == nil { Stats.shared.bump("in.revoked"); continue }
+                self.performGesture(next.gesture, from: next.device, id: next.id)
             }
             self.gestureDrain = nil
         }
@@ -2712,7 +2889,7 @@ package final class StreamCoordinator {
     /// one line saying what it did, and the chord posted, behind input held for an activation; on
     /// a host that does not advertise, only counted. Nothing is raised or activated first: these
     /// views act on the whole Mac (App Exposé on the app in front), as they do from its keyboard.
-    private func performGesture(_ gesture: TrackpadGesture, from device: String) {
+    private func performGesture(_ gesture: TrackpadGesture, from device: String, id: ObjectIdentifier) {
         guard !shuttingDown else { return }
         let outcome = gestureChords.resolve(gesture.gesture, table: hotKeyTable())
         print(GestureChords.line(device: device, gesture: gesture.gesture, fingers: gesture.fingers,
@@ -2723,7 +2900,7 @@ package final class StreamCoordinator {
             return
         }
         if !heldInput.isEmpty || CFAbsoluteTimeGetCurrent() < holdUntil {
-            heldInput.append(.chord(keyCode: keyCode, flags: flags))
+            heldInput.append(.chord(keyCode: keyCode, flags: flags, device: id))
             return
         }
         injector.chord(keyCode: keyCode, flags: flags)
@@ -2820,11 +2997,12 @@ package final class StreamCoordinator {
     /// Connection `id`'s state (docs/remote-bundle-plan.md §5.4): the pair its controls set (the
     /// away quality for a device away), the home and away qualities with which one is the target
     /// (`away`, from a host with an identity, `remote`: SillHost --pairing alone too, where no
-    /// connection is ever away), and the rest shared. A pure function of the target,
-    /// `awayWanted`, the connection's route, the status snapshot and two constants (appKitLoop,
-    /// whether the hook is set). The target changes only in `setTarget`, the snapshot only in
-    /// `HostStatus.update`, and `awayWanted` only in `routesChanged`, which updates the snapshot
-    /// with it; all three publish, so no change can be missed and none can stick. Never the
+    /// connection is ever away), whether its key is paired (`sessionPaired`), and the rest shared. A
+    /// pure function of the target, `awayWanted`, the connection's route, the status snapshot (its
+    /// trust list too) and two constants (appKitLoop, whether the hook is set). The target changes
+    /// only in `setTarget`, the snapshot only in `HostStatus.update`, and `awayWanted` only in
+    /// `routesChanged`, which updates the snapshot with it; all three publish, so no change can be
+    /// missed and none can stick. Never the
     /// pipeline's `awayRunning`: it changes in `adopt`, which publishes only through a snapshot
     /// change, and none comes while nothing streams.
     private func settingsState(for id: ObjectIdentifier, answering: Int? = nil) -> HostSettingsState {
@@ -2847,7 +3025,20 @@ package final class StreamCoordinator {
                                  answering: answering,
                                  away: away,
                                  link: link,
-                                 audioNote: t.sendAudio ? s.audio?.note : nil)
+                                 audioNote: t.sendAudio ? s.audio?.note : nil,
+                                 sessionPaired: sessionPaired(id))
+    }
+
+    /// Whether connection `id`'s key is on this Mac's trust list now, as the status snapshot lists it
+    /// (RemoteAccess publishes every change of the list, and each change publishes the settings): the
+    /// one judgement both of what the connection may set (Direct Wireless, `DeviceSettings.accepted`)
+    /// and of what its state says (`sessionPaired`, so the device's panel disables what the Mac would
+    /// refuse). A pure function of the route and the snapshot, as `settingsState` is. False at the
+    /// plain door (no key), for an unpaired key at a door that lets any device in, on a host without
+    /// an identity (no list), and for a route not known.
+    private func sessionPaired(_ id: ObjectIdentifier) -> Bool {
+        let trusted = status.snapshot.remote?.paired.compactMap { Base64URL.decode($0.id) } ?? []
+        return DeviceSettings.paired(key: routes[id]?.fingerprint, trusted: trusted)
     }
 
     /// The Mac's Virtual Display pane in its order (SettingsPanes.swift, `statusText`), without the

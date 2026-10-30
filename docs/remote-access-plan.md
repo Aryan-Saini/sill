@@ -575,8 +575,8 @@ ClientHello (ALPN sill/1), both pinned ───────────▶  Mac
 
 | Where | Limit | On violation |
 |---|---|---|
-| Remote door, before admission | 8 pending connections in total, 2 per source address. A source with 5 failures in 60 s is refused for 300 s | Closed before TLS; counted for the minute's summary |
-| Remote door, before admission | 10 s from accept to admission (TLS, plus kind 19 on a pairing connection) | Closed |
+| Remote door, before admission | 8 pending connections in total, 2 per source address. A source with 5 failures in 60 s is refused for 300 s (since 2026-10-29, the security scan's finding 9: `DoorPolicy.Places`, docs/home-pairing-plan.md §9) | Closed before TLS; counted for the minute's summary |
+| Remote door, before admission | 10 s from accept to admission (TLS, plus kind 19 on a pairing connection); since finding 9, 4 s to `.ready` (10 s from a known address), then 4 s for the kind 19 | Closed |
 | Remote door, pairing connection | Exactly one message: kind 19, at most 4 KB | Anything else, or more: closed |
 | Remote door, admitted | 8 sessions | The 9th: goodbye `busy`, then closed |
 | Both doors, admitted | Any client → host payload at most 1 MiB (today a header can announce 4 GiB and the host waits for it all: StreamServer.swift:462) | Closed with one line |

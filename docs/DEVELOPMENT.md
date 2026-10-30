@@ -155,6 +155,7 @@ swift run -c release SillHost --synthetic            # the Desktop streams a tes
 SILL_TEST_PATTERN=picture:/path/to.jpg swift run -c release SillHost --synthetic   # the Desktop a still picture instead (TEST ONLY)
 SILL_TEST_STILL_AFTER=3 swift run -c release SillHost --synthetic   # no frame from 3 s on, as a window that stopped changing (TEST ONLY)
 SILL_TEST_KEYFRAME_IGNORE=1 swift run -c release SillHost --synthetic   # the first keyframe request ignored, as a Mac from before kind 44 ignores every one (TEST ONLY)
+SILL_TEST_FIREWALL=executable swift run -c release SillHost --synthetic   # the macOS firewall's answers canned: Sill's executable blocked (TEST ONLY; If devices can't connect, below)
 SILL_TEST_DESKTOP_FAIL=2 swift run -c release SillHost --synthetic   # the first 2 Desktop starts fail, as on 2026-10-28; 1: the host's one more try streams (TEST ONLY)
 swift run -c release SillHost --remote               # the remote door for this run, on any free port (--remote=PORT)
 swift run -c release SillHost --remote --internet    # also admit paired devices from the internet
@@ -181,10 +182,12 @@ too; `SillHost` saves nothing, so a change lasts until it quits, and the
 device's panel says so. Its Virtual Display switch works only when `SillHost`
 runs with `--virtual-display`. `--direct-wireless` starts it with Direct
 Wireless Connection on (see Direct Wireless Connection below); it is off by
-default here too. `--audio` starts it with Send Audio on (The Mac's sound
-below, a beta), off by default too; a device turns it on or off from its
-Settings panel, until `SillHost` quits; with `--synthetic` the sound is a
-test tone. The
+default here too, and only a device paired at `--pairing`'s door changes it
+from its panel (at the plain door the switch is dimmed and `SillHost` refuses
+it: Settings from a device, below). `--audio` starts it with Send Audio on
+(The Mac's sound below, a beta), off by default too; a device turns it on or
+off from its Settings panel, until `SillHost` quits; with `--synthetic` the
+sound is a test tone. The
 clipboard is shared as in Sill.app (The clipboard, below); `--no-clipboard`
 turns it off for the run.
 
@@ -464,6 +467,14 @@ A connected iPhone or iPad changes the same settings from its own Settings
 panel (the gear, the last button of its bar): Quality, Resolution, Frame Rate,
 Prioritize Encoding Speed, Virtual Display, Send Audio (a beta: The Mac's
 sound, below) and Direct Wireless Connection, with exactly the Mac's choices.
+Direct Wireless Connection widens who can reach the Mac, so only a device whose
+key is on the Mac's list of paired devices changes it, and only at home: the
+Mac refuses it, on or off, from away, from an unpaired device at a door that
+lets any device in (Require pairing off) and at SillHost's plain door ("Settings
+from iPad (iPad14,1) refused: direct wireless (only a paired device)"), and the
+device's switch is disabled there ("Change this on Mac mini, or from a device
+paired with it."; kind 16's `sessionPaired`). A device paired during its session
+(Pair This iPad…) can change it from then on.
 Sill.app saves a device's change like a menu click,
 and its Settings window and menu show it; the change applies to every connected
 device, and a streaming setting restarts the stream for a moment. A device away
@@ -570,6 +581,29 @@ sequences that fit a window and put it back (over `WindowRestore.Access`, which
 `Tests/checks/window-restore` against a stand-in Mac;
 docs/restore-window-frames-plan.md has the reasons, and The restore probe
 (below) checks it against a real window.
+
+The host takes a device's viewport (kind 9, the panel's size and Aa's scale)
+only within bounds: each side 1 to 16384 points, a text scale 0.25 to 4 or
+none (`ViewportBounds` in `Sources/StreamProtocol/Viewport.swift`, checked in
+`Tests/checks/viewport-bounds`). Any other, or a payload that does not decode,
+is refused whole and the last viewport stands, with one line naming the device
+("Viewport from iPad (iPad14,1) refused: width 1e+300 (1 to 16384 points)", at
+most one a second per connection, so a device on two at once, as during a move,
+can give two; `vp.refused` in the stats line counts every one). Every device
+build sends a viewport within them, and a device holds what
+it sends to them. Until 2026-10-29 a side of 1e300 points reached the fit
+above, whose log line made an Int of it, which traps: one message from any
+device a Mac admitted ended Sill and every device's session (security scan,
+finding 4). A window on the virtual display is asked at most 65536 points a
+side, the most a host takes (16384 points at 0.25), so every viewport is asked
+for as before: the placement fits the window to the display, and a full-screen
+window's crop keeps the panel's shape, which a hold at the display's own 4096
+would lose for a panel larger than the display at Aa's smaller steps (an iPad's
+Stage Manager window on a large display). A device's stats report is its own
+numbers too: the host adds up the sound's late packets it reports for its
+`client …` line without trapping, the sum stopping at Int.max
+(`ClientStats.lateSince`; until 2026-10-29 two reports of Int.max within the
+line's 1.5 s ended Sill, found in the review of finding 4).
 
 The lights a held thumbnail shows (close, minimize, full screen; kind 15) press
 the window's own buttons through Accessibility, on the host's main actor, each
@@ -1217,11 +1251,12 @@ itself, without dropping the stream, once the network has listed the Mac for
 two seconds (and only to that same Mac, never to another of the same name).
 Turning it on or off applies at once and never restarts the stream, though
 turning it off disconnects a device that is still connected directly (a second
-and a half later); it comes back over the network if it shares one. A device
-finds a Mac this way by itself once it has seen the Mac with it on, or when you
-tap Search Nearby on its connect screen; such a Mac shows as "Direct". With it
-on, anyone nearby running Sill can find the Mac and ask to pair, which opens
-its pairing window (at most three times in ten minutes); only devices you
+and a half later); it comes back over the network if it shares one. From an
+iPhone or iPad, only one you paired changes it (Settings from a device, above).
+A device finds a Mac this way by itself once it has seen the Mac with it on, or
+when you tap Search Nearby on its connect screen; such a Mac shows as "Direct".
+With it on, anyone nearby running Sill can find the Mac and ask to pair, which
+opens its pairing window (at most three times in ten minutes); only devices you
 paired connect, unless Require pairing is off (Pairing at home, below).
 Turning Wi-Fi off in Control Center does not end a direct connection (it
 leaves the radio on for AirDrop); Settings › Wi-Fi does.
@@ -1261,10 +1296,30 @@ paired for Remote Access connects at home with no further step.
   (double-click). **Require pairing** is on by default. Off, any device at
   home, and any app on the Mac, connects without pairing, still encrypted;
   turned on again, it disconnects the devices that are not paired ("Mac mini
+  now asks devices to pair."). A device connected without pairing reconnects
+  by itself only to the key it connected to: another key under the Mac's name
+  ends the reconnect ("Mac mini answered with another key, so this iPad didn’t
+  reconnect. Tap it to connect."; the DEBUG console's "home: the session
+  ended: otherKey"), and a tap connects with any key, as before. A tap whose
+  dial does not connect leaves that pin as it was (a reconnect that follows
+  the tap pins the same key), and a Debug build no longer reconnects by itself
+  to a plain door (the CLI's `SillHost` without `--pairing`, an older
+  Sill.app) under that name: tap it. Sill keeps Require pairing beside the
+  paired devices in the keychain, not in its defaults: in the data-protection
+  keychain in the Sill for Mac you download (0.4.0 and later), and in the
+  login keychain in a Sill.app you build yourself without the Developer ID
+  provisioning profile.
   now asks devices to pair."). Sill keeps it beside the paired devices in the
   keychain, not in its defaults: in the data-protection keychain in the Sill
   for Mac you download (0.4.0 and later), and in the login keychain in a
   Sill.app you build yourself without the Developer ID provisioning profile.
+  Remove, Require pairing turned on and Remote Access or internet access
+  turned off cut a device off at once: from then on nothing it sends reaches
+  the Mac but the up of a key or a button it holds down, input held for it
+  while an app came forward included, and a menu item it chose that still
+  waits for its turn is not chosen; its connection closes within a quarter of
+  a second, and a key or a button it still holds then goes up (the `[1s]`
+  lines count what was dropped as `in.revoked`).
 - **Through Screen Sharing** (a Mac without a display, or one you use from afar
   with Screen Sharing, Apple Remote Desktop or a VNC app such as Screens): Sill
   keeps its pairing window out of what these apps show, so through them Pair
@@ -1308,7 +1363,10 @@ paired for Remote Access connects at home with no further step.
 - **The command-line host** keeps its plain, open door (The command-line host,
   above). With `--pairing` it prints its code and link in Terminal, and again
   after each device's ask; `--print-cable` prints what the cable rule reads on
-  each interface and exits.
+  each interface and exits. On `--synthetic`, `SILL_TEST_REQUIRE_PAIRING=0`
+  (TEST ONLY) turns Require pairing off at that door for the run, as the bare
+  app's `-requirePairing NO` does, so an unpaired device's session can be tried
+  headless (`sillclient.py --tls --identity=DIR --pin=none`).
 - **To start over:** remove the device in Settings › Devices, or on the device
   touch and hold the Mac's row and choose Forget. The Sill for Mac you download
   (0.4.0 and later) keeps the paired devices, Require pairing's setting and the
@@ -1479,7 +1537,9 @@ python3 Scripts/sillclient.py PORT 8 desktop --set=bitrate=25000000@3 --expect=b
 Its docstring lists every flag: timed changes and picks, stats as a named
 device, the remote door with pairing, the Mac's menus (`--menus`, `--fetch`,
 `--press`), a keyframe request (`--keyframe@T`: the summary's "keyframes at"
-shows the one it brought), and more. It checks every argument
+shows the one it brought), a literal viewport (`--raw9=JSON@T`, which a host
+refuses outside its bounds, with a line: Windows sized for a device, above),
+and more. It checks every argument
 before it connects, and a bad one exits 2. The synthetic hosts do not
 advertise over Bonjour, so this client, or the simulator's `-SillConnect`, is
 how to reach them; `lsof -nP -iTCP -sTCP:LISTEN -a -p <pid>` finds the port.
@@ -1503,6 +1563,13 @@ python3 Scripts/sillclient.py PORT 3 desktop --input='{"key":{"hidUsage":44,"dow
 ```
 
 (`$T/path` holds one line, `0 756 474`: the scripted pointer gives the test
+pattern a place for input to land.) `--key=USAGE,HOLD@T` holds the key HOLD
+seconds before its up. When the Mac stops serving a device (Remove, Require
+pairing turned on, Remote Access or internet access turned off), such a host
+says where that device's input stops landing (`Test input: iPad is no longer
+served: only the up of a key or a button it holds down goes from here on.`):
+after it, only those ups are posted for it, and the rest is counted as
+`in.revoked`. `--gesture=NAME[,FINGERS]@T` sends a
 pattern a place for input to land.) `--key=USAGE,HOLD@T` holds a key down for
 HOLD seconds, pinging four times a second meanwhile as a device does (the host
 repeats a held key only while its device is heard from), and `--ping=0.25` pings
@@ -1523,6 +1590,24 @@ clipboard, above: with `SILL_TEST_PASTEBOARD` the host's pasteboard is a
 private one, never this Mac's clipboard.
 `SILL_TEST_DESKTOP_FAIL=<n>` (a `--synthetic` host only) makes the first n starts of the Desktop's capture fail where the capture would start, as ScreenCaptureKit's "Start stream failed … The stream is nil" did on 2026-10-28: with 1 the host's one more try streams it; with 2 that try fails too, nothing streams, and a device asks for the Desktop again when its 10 s spacing ends (the console's `session: … asking for it again`).
 `SILL_TEST_NO_SCREEN=1` (a `--synthetic` host only) keeps the window catalog off ScreenCaptureKit altogether: the window list stays empty and no thumbnail is taken, so a headless test host asks macOS for no screen recording, which otherwise counts against the grant of whatever launched it and brings up macOS's reminder after every rebuilt binary.
+
+A TLS door (the remote door, and the home door of `--pairing` and Sill.app)
+charges an address for each connection that ends without being admitted, and
+for each pairing connection's kind 19 (`--pair-ask`, `--pair-url`,
+`--pair-code`): a tenth of a failure, a tenth for each second it waited at
+least, one more for every 2 s it waited beyond the first 2 (up to its
+deadline: 4 s for the handshake, 4 s more for a kind 19, so a `--pair-hold`
+longer than that is cut, and refused), and at least one when the door refused
+it. Five failures in a minute refuse the address for 5 minutes (twelve in 5
+minutes from an IPv6 /64's addresses, the /64, one address counting six at
+most), and a paired key that gets in clears its address. So a test that
+abandons or fails many connections from 127.0.0.1 (a run of `--pair-hold`s,
+five `--expect-tls-fail`s, a client that connects and closes again and again,
+or keeps one waiting unadmitted for a minute, fifty pairing requests a minute)
+meets that backoff as an attacker would (`--flood`'s resets mostly never reach
+the door), and the host says so ("Home door backed off 127.0.0.1 for 300 s:
+its connections waited without being admitted, or were refused.");
+`SILL_TEST_BACKOFF_SECONDS=<s>` shortens it on a test host.
 
 `Scripts/sillrelay.py --listen 0 --to HOST:PORT [--delay-ms N] [--rate-mbps R]
 [--blackhole-after S] [--record PREFIX]` sits between a client and a host, and
@@ -1635,7 +1720,17 @@ settings in the defaults domain `SillMenuBar` (delete it after), and takes:
   ```
 
 Sill.app itself ignores every `-Sill…After` argument, `-SillTestScreenHeight`,
-`-SillSettingsShot` and `-requirePairing`, with one line each.
+`-SillSettingsShot` and `-requirePairing`, with one line each. Sill.app here is
+its code wherever it runs from, known by what it is, not by its folder's name
+(`AppIdentity`, `Tests/checks/test-host`): signed as `me.saffer.sill.mac` or
+with any certificate (or a signature it can't read), a bundle whose identifier
+is Sill's, or a `.app`. Only the bare binary as `swift build` makes it (the
+linker's ad hoc signature, no Info.plist) takes the hooks; a copy of it in a
+scratch bundle with Sill's Info.plist ignores them too. Sill.app's code in a
+folder that is not a `.app` (a renamed copy, a link to its executable, that
+scratch bundle) says why first, a renamed copy of Sill.app as: "Running from
+…/Sill.bin, which is not a .app, as Sill.app itself (signed
+me.saffer.sill.mac): it takes no test hook."
 
 `--encoder-selftest` and `--virtual-display-selftest` work in the app too.
 
@@ -1916,6 +2011,65 @@ the Mac's radio off the channel: Direct Wireless Connection should be off, and
 AirDrop, Sidecar and Universal Control can hold AWDL on too.
 
 ## Troubleshooting
+
+### If devices can't connect
+
+- The macOS firewall (System Settings › Network › Firewall) keeps a rule per
+  path, and one Mac held two for Sill at once (a user's report, 2026-10-29):
+  `/Applications/Sill.app` allowed and `/Applications/Sill.app/Contents/MacOS/Sill`
+  blocked (`/usr/libexec/ApplicationFirewall/socketfilterfw --listapps`). Sill's
+  port then took nothing from the network while the Mac itself connected fine
+  (the firewall never filters loopback), System Settings showed Sill allowed,
+  and `--getappblocked` on the bundle said "permitted". `sudo
+  /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp
+  /Applications/Sill.app/Contents/MacOS/Sill` fixed it.
+- The host asks the firewall at launch, whenever its listener comes up (Direct
+  Wireless replaces it), when a device gets in from the network while the last
+  answer said none could (that answer is stale; a connection over loopback
+  says nothing) and, in Sill.app, whenever its status menu opens (a block that
+  came after launch, such as a Deny in the firewall's own prompt: the glyph at
+  once, Devices Can’t Connect from the menu's next opening, as the menu is
+  built before the answer) and whenever Settings › General opens or Sill
+  becomes active over it; never on a timer. FirewallCheck asks
+  `--getglobalstate`, then, only while the firewall is on (off, Block all and a
+  state that doesn't read decide alone), `--getblockall`, `--getappblocked` for
+  the running executable and for its bundle, and `--listapps`, each in a
+  process of its own given 2 s (then SIGTERM, and SIGKILL a second later, so a
+  tool that hangs leaves nothing running): read-only, no privileges, nothing
+  changed. FirewallRule (pure, `Tests/checks/firewall`) reads the answers: on,
+  with a rule that blocks the executable or its bundle (its own answer or the
+  list's, either one enough) or with Block all incoming connections, devices on
+  the network cannot connect; allowed only once the list was read (a path's
+  own "permitted" never stands in for it: the report's bundle said it), else
+  unknown, and the log says why. Settings › General then says so, with the
+  Terminal command that unblocks what is blocked (the running executable's own
+  path, quoted for the shell when it needs it) and Copy, or for Block all where
+  to turn it off; the menu says "Devices Can’t Connect" (it opens General); the
+  log says it once, "Firewall: the macOS firewall blocks Sill’s executable, so
+  devices on the network cannot connect. In Terminal: sudo …", and once more
+  when it no longer does. Sill never runs the command itself: it needs an
+  administrator.
+- Measured on macOS 27.0.1 as an ordinary user, without Full Disk Access (as
+  Sill.app runs): each question answers in 4–8 ms with no prompt. Asked in one
+  run, the tool is killed (status 137, nothing printed) when `--getstealthmode`
+  or `--getallowsigned` follows `--getappblocked`, or `--listapps` follows it
+  with an app bundle's path; `--getglobalstate`, `--getblockall` and another
+  `--getappblocked` after it, `--listapps` after an executable's path, and each
+  question alone answer every time: hence a process each. An option it does
+  not know ends with status 255.
+  `/Library/Preferences/com.apple.alf.plist`, which older Macs kept, does not
+  exist there. Answers that don't read put "Firewall: couldn’t read the macOS
+  firewall’s settings (…)" in the log once, and nothing on screen.
+- TEST ONLY: `SILL_TEST_FIREWALL=executable|bundle|both|all|off|allowed|unreadable`,
+  or the path of a file whose first word is one of them (read again at each
+  check), gives a test host the answers macOS 27 prints in that case instead
+  of asking (`executable` is the report's Mac). Honoured only by a host that
+  does not advertise and is not Sill.app itself; anywhere else one line says
+  it is ignored. The bare app's `-SillRenderPreviews` draws General with the
+  line (`pane-general-firewall-*`), the line alone in each case
+  (`pane-firewall-*`) and the menu's `firewall-blocked` and
+  `firewall-blocks-all` samples; `-SillPrintMenuAfter <s>` prints General's
+  firewall line with the menu.
 
 ### What to try if it's slow
 

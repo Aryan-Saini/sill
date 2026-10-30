@@ -124,6 +124,12 @@ final class StreamServer {
         var acceptedPeerToPeer = false
         /// A hello (kind 23) came on this connection: only the first counts.
         var helloSeen = false
+        /// The Mac no longer serves it (`closeSessions`: its pairing removed, Remote Access or internet
+        /// access off, Require pairing on), set as it is told goodbye: until its connection closes (at
+        /// most `within`, 0.25 s), its receive loop hands on nothing but the up of a key or a button
+        /// (RevokedInput.mayLetGo), which the coordinator posts only if it lets go of something this
+        /// device holds down on the Mac. Security scan finding 10.
+        var revoked = false
         /// The input messages (kind 8) read from it. Every kind 26 sent to it carries the count, so the
         /// device can drop one the host built before it read that device's latest input
         /// (docs/pointer-visibility-plan.md §3.3).
@@ -151,6 +157,10 @@ final class StreamServer {
     /// when its connection does not say, and always for a remote session). Called on the network
     /// queue.
     var onClientConnected: ((NWConnection, ClientRoute, ClientLink.Route?) -> Void)?
+    /// The Mac no longer serves this client (`closeSessions`), in the same queue turn as its receive
+    /// loop stops handing on its input, before any message of it read later: the coordinator then
+    /// drops whatever of it still waits (RevokedInput). Called on the network queue.
+    var onClientRevoked: ((NWConnection) -> Void)?
     /// A connected home client's link changed with its connection's path. Only reported, never
     /// acted on: the menu card shows it. Called on the network queue.
     var onClientRouteChanged: ((NWConnection, ClientLink.Route?) -> Void)?
@@ -1042,12 +1052,17 @@ final class StreamServer {
 
     /// Every admitted session, of either door, whose route matches gets goodbye `reason` and is
     /// closed; `line` names one (its paired name, else the device's own, and its endpoint) for the
-    /// log, and `done` gets how many there were. Thread-safe.
+    /// log, and `done` gets how many there were. Each is marked revoked first (`Client.revoked`,
+    /// `onClientRevoked`): from that queue turn on nothing it sends reaches the Mac but the up of a
+    /// key or a button it holds down (RevokedInput), though its connection lasts until the goodbye is
+    /// handed to the network, or 0.25 s. Thread-safe.
     func closeSessions(_ reason: String, matching: @escaping @Sendable (ClientRoute) -> Bool,
                        line: (@Sendable (String, String) -> String)? = nil, done: (@Sendable (Int) -> Void)? = nil) {
         queue.async { [self] in
             let list = clients.values.filter { matching($0.route) }
             for client in list {
+                client.revoked = true
+                onClientRevoked?(client.connection)
                 if let line { print(line(client.route.pairedName ?? client.device ?? "a device", "\(client.connection.endpoint)")) }
                 goodbye(Goodbye(reason: reason), to: client.connection)
             }
@@ -1421,6 +1436,19 @@ final class StreamServer {
                 return
             }
             let deliver = { (payload: Data) in
+                if client.revoked {
+                    // The Mac no longer serves it (`closeSessions`): until its connection closes, only a
+                    // key's or a button's up goes on, which the coordinator posts only if it lets go of
+                    // something this device holds down (RevokedInput). No pong, no stats line, no
+                    // pointer handed to it; the rest of its input is counted (`in.revoked`).
+                    if header.kind == .input, let event = Wire.decode(InputEvent.self, from: payload), RevokedInput.mayLetGo(event) {
+                        self.onMessage?(StreamMessage(kind: header.kind, timestamp: header.timestamp, isKeyframe: header.isKeyframe, payload: payload), c)
+                    } else if header.kind == .input || header.kind == .gesture {
+                        Stats.shared.bump("in.revoked")
+                    }
+                    self.receiveLoop(client)
+                    return
+                }
                 if header.kind == .input {
                     self.lastInputAt = Date().timeIntervalSince1970
                     if self.tickTimer == nil { self.updateTicking() }
@@ -1447,7 +1475,9 @@ final class StreamServer {
                         client.device = name.isEmpty ? nil : name
                         client.worstFrameAgeSincePrint = max(client.worstFrameAgeSincePrint, stats.frameAgeMaxMs ?? -1)
                         client.worstRttSincePrint = max(client.worstRttSincePrint, stats.rttMaxMs ?? -1)
-                        client.audioLateSincePrint += max(0, stats.audioLate ?? 0)
+                        // The device's own count, added without overflow (ClientStats.lateSince): two
+                        // reports of Int.max within a line's 1.5 s trapped here and ended Sill.
+                        client.audioLateSincePrint = ClientStats.lateSince(client.audioLateSincePrint, adding: stats.audioLate)
                         let now = CFAbsoluteTimeGetCurrent()
                         if now - client.lastStatsPrint >= 1.5 {
                             client.lastStatsPrint = now

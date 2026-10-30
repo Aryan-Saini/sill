@@ -12,11 +12,14 @@ usage: sillclient.py PORT [seconds] [desktop|none|window:ID] [flags...]
                      in send order. Keys: maxFPS, bitrate, captureScale, prioritizeSpeed,
                      virtualDisplay, directWireless, sendAudio; booleans accept 1/0/true/false/on/off
   --raw17=JSON@T     send this literal kind 17 payload T seconds in (split on the last @)
+  --raw9=JSON@T      send this literal kind 9 payload (a viewport) T seconds in (split on the last @);
+                     a host refuses one outside 1 to 16384 points a side or 0.25 to 4 for its scale,
+                     and one that does not decode, with a "Viewport from … refused" line
   --pick=SRC@T       a timed selectSource: none, desktop or window:ID
   --stats            send ClientStats (kind 12) once a second as device "sillclient", so the host
                      logs a name for this client
-  --expect=K=V[,...] at exit, compare the last kind 16's settings (and its top-level persistent
-                     and virtualDisplayAvailable; away from home, docs/remote-bundle-plan.md: its
+  --expect=K=V[,...] at exit, compare the last kind 16's settings (and its top-level persistent,
+                     virtualDisplayAvailable and sessionPaired; away from home, docs/remote-bundle-plan.md: its
                      away's homeBitrate, homeCaptureScale, awayBitrate, awayCaptureScale,
                      thisConnectionAway and awayRunning, missing when the host sent no away; and
                      linkState, its link's state, "fine" when it sent none): prints EXPECT ok or
@@ -136,26 +139,28 @@ same clock when both run on one Mac).
 Once a second it prints the frames, their payload in kB (the encoder's output), ticks, cursor
 shapes and the last ping's round trip. Every kind 16 (host settings) is printed on one line with
 its arrival time; dw= is Direct Wireless
-(1, 0, or - when the host did not report it: an older host); away= (only when the host sent it) is
+(1, 0, or - when the host did not report it: an older host); paired= is sessionPaired, whether this
+session's key is on the Mac's trust list, the one kind of session it takes Direct Wireless from (1, 0,
+or - from a host before 2026-10-29); away= (only when the host sent it) is
 h:HOME_BITRATE/SCALE,a:AWAY_BITRATE/SCALE,this=1|0,run=1|0, and link= (only while the host reports
 the link behind or stalled) STATE,withheld=N,bitrate=B,carried=KBPS|-,suggested=B/SCALE|-. Flags may come in any
 order after the positional arguments. Everything is checked before connecting: an unknown flag, a
 --set or --expect key that is not one of theirs, or a value that does not parse stops the script
-with status 2 (--raw17 and --input go out as written). Find PORT with: lsof -nP -iTCP -sTCP:LISTEN -a -p <pid>.
+with status 2 (--raw17, --raw9 and --input go out as written). Find PORT with: lsof -nP -iTCP -sTCP:LISTEN -a -p <pid>.
 The --synthetic hosts do not advertise over Bonjour, so this is the only way to reach them."""
 import json, re, socket, struct, sys, time
 
 KIND = {0:"ps",1:"frame",2:"list",3:"thumb",4:"icon",5:"apps",11:"pong",13:"tick",14:"cursor",16:"settings",18:"macinfo",20:"pairresult",22:"goodbye",24:"menu",26:"pointer",32:"clipboard",43:"audio"}
 BOOL = {"1": True, "0": False, "true": True, "false": False, "on": True, "off": False, "yes": True, "no": False}
 BOOL_KEYS = {"prioritizeSpeed", "virtualDisplay", "directWireless", "sendAudio", "persistent", "virtualDisplayAvailable",
-             "thisConnectionAway", "awayRunning"}
+             "thisConnectionAway", "awayRunning", "sessionPaired"}
 # What --set may send: HostSettingsChange's seven fields. The host drops any other key without a
 # word, so a misspelt one would only show up as an unchanged answer.
 SET_KEYS = {"maxFPS", "bitrate", "captureScale", "prioritizeSpeed", "virtualDisplay", "directWireless", "sendAudio"}
 # Away from home (docs/remote-bundle-plan.md): read from the state's `away`, and its `link`'s state.
 AWAY_KEYS = {"homeBitrate", "homeCaptureScale", "awayBitrate", "awayCaptureScale", "thisConnectionAway", "awayRunning"}
-EXPECT_KEYS = SET_KEYS | {"persistent", "virtualDisplayAvailable", "linkState", "clipboard"} | AWAY_KEYS
-TIMED = ("set", "raw17", "pick", "fps-after", "stop-ping", "stop-read", "pairing-wanted", "keyframe", "fetch", "press", "raw25",
+EXPECT_KEYS = SET_KEYS | {"persistent", "virtualDisplayAvailable", "sessionPaired", "linkState", "clipboard"} | AWAY_KEYS
+TIMED = ("set", "raw17", "raw9", "pick", "fps-after", "stop-ping", "stop-read", "pairing-wanted", "keyframe", "fetch", "press", "raw25",
          "raw27", "move", "tap", "key", "input", "gesture", "raw28", "copy", "copy-bytes", "raw32")
 INPUT = ("move", "tap", "key", "input")
 # What --gesture may send: TrackpadGesture's six names (Gesture.swift). Anything else goes with --raw28.
@@ -602,7 +607,8 @@ if flood:
 mac_pin = None
 if pair_hold is not None:
     # A pairing connection still pending: TLS up (ALPN sill-pair/1), then silence. The host's
-    # admission deadline (10 s) or a Direct Wireless change may close it first.
+    # deadline for its kind 19 (4 s after the handshake, 10 s at most from accept, a TLS door's
+    # DoorPolicy.deadline) or a Direct Wireless change may close it first.
     ensure_identity(identity_dir)
     hs, _ = tls_connect("sill-pair/1", b64u_decode(pin_arg) if pin_arg and pin_arg != "none" else None)
     t_hold = time.time(); closed_at = None
@@ -693,6 +699,7 @@ def describe(d):
     note = d.get("virtualDisplayNote")
     dw = "-" if st.get("directWireless") is None else b(st.get("directWireless"))   # "-": an older host
     au = "-" if st.get("sendAudio") is None else b(st.get("sendAudio"))             # "-": a host without sound
+    sp = "-" if d.get("sessionPaired") is None else b(d.get("sessionPaired"))       # "-": a host before 2026-10-29
     away = d.get("away"); link = d.get("link")
     dash = lambda x: "-" if x is None else x
     extra = ""
@@ -704,7 +711,7 @@ def describe(d):
         extra += (f" link={link.get('state')},withheld={link.get('withheldPerSecond')},bitrate={link.get('bitrate')},"
                   f"carried={dash(link.get('carriedKbps'))},suggested={suggested}")
     return (f"maxFPS={st.get('maxFPS')} bitrate={st.get('bitrate')} scale={st.get('captureScale')} speed={b(st.get('prioritizeSpeed'))} "
-            f"vd={b(st.get('virtualDisplay'))} dw={dw} audio={au} persistent={b(d.get('persistent'))} vdAvail={b(d.get('virtualDisplayAvailable'))} "
+            f"vd={b(st.get('virtualDisplay'))} dw={dw} paired={sp} audio={au} persistent={b(d.get('persistent'))} vdAvail={b(d.get('virtualDisplayAvailable'))} "
             f"sw={b(d.get('softwareEncoder'))} stream={running}" + (f" note={note!r}" if note else "")
             + (f" audioNote={d['audioNote']!r}" if d.get("audioNote") else "") + extra)
 
@@ -740,6 +747,8 @@ def fire(e, now):
         s.sendall(msg(17, json.dumps(change).encode())); print(f"  sent change {json.dumps(change)} at {at}")
     elif name == "raw17":
         s.sendall(msg(17, text.encode())); print(f"  sent raw kind 17 {text} at {at}")
+    elif name == "raw9":
+        s.sendall(msg(9, text.encode())); print(f"  sent raw kind 9 {text} at {at}")
     elif name == "pick":
         s.sendall(msg(6, json.dumps(parsed).encode())); print(f"  sent pick {text} at {at}")
     elif name == "fps-after":
@@ -794,8 +803,11 @@ def fire(e, now):
         s.sendall(msg(32, text.encode())); print(f"  sent raw kind 32 {text} at {at}")
 while time.time() - t0 < dur:
     now = time.time()
-    while events and now - t0 >= events[0][0]:
-        fire(events.pop(0), now)
+    try:
+        while events and now - t0 >= events[0][0]:
+            fire(events.pop(0), now)
+    except OSError as e:
+        print(f"send failed at {now - t0:.2f}s: {e}"); break
     try:
         if pinging and now >= nextping:
             # Four a second while a key is held, as a device pings (StreamClient.pingInterval), else one.
@@ -968,7 +980,7 @@ if expect is not None:
         problems.append("no settings received")
     else:
         for k, want in expect.items():
-            if k in ("persistent", "virtualDisplayAvailable"): got = last_state.get(k)
+            if k in ("persistent", "virtualDisplayAvailable", "sessionPaired"): got = last_state.get(k)
             elif k in AWAY_KEYS: got = (last_state.get("away") or {}).get(k)
             elif k == "linkState": got = (last_state.get("link") or {}).get("state", "fine")
             else: got = last_state.get("settings", {}).get(k)

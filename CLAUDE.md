@@ -8,6 +8,225 @@ Formerly winstream; the folder still carries the old name.
 
 ## Current step
 
+**The door's waiting places (2026-10-29, branch `sec-door-pending` from main at 150479b5, PR #252; finding 9 of the
+security scan of 2026-10-18, Low; Noah's go of 2026-10-29).** A TLS door (the remote one, and the home one of
+Sill.app and `SillHost --pairing`) held 8 connections waiting for admission, 2 per address, 10 s each, and backed an
+address off only for its own refusals: four addresses closing each connection at 9.9 s kept every place full for good
+and a paired device got "limit". Host only, no wire change. `DoorPolicy.Places` (pure) owns the places, `Door` runs
+it on a monotonic clock: a connection that ends unadmitted, and a pairing connection's kind 19, costs its address a
+tenth of a failure, a tenth for each second it waited at least, one more for every 2 s beyond the first 2 (counted to
+its deadline at most), at least one when refused (5 in 60 s: 300 s, as before; a paired key at `.ready` clears its
+address); the TLS handshake has 4 s (Network.framework does not say when a ClientHello arrives, so the whole
+handshake rather than its first bytes; 10 s from a known address), a pairing connection's kind 19 4 s after `.ready`,
+10 s in all; an IPv6 address answers for its /64 too (a link-local one's on its interface): 2 waiting places per /64
+for addresses not known, and 12 failures in 300 s from those back the /64 off, an address counting 6 at most (so it
+takes two); 2 places beyond the 8 for addresses that proved a paired key within a day (known: never refused for nor
+charged to their /64, and they pay for what they hold as an address not known does, so someone at a paired device's
+address is backed off with it within 30 s: nothing tells them apart before TLS). One line a minute per door, "Home
+door backed off 10.128.0.34 for 300 s: its connections waited without being admitted, or were refused."
+`AskLimits.quietKey`: the quiet after the Mac's Cancel or a stop covers the asker's IPv6 /64. Checks: `door-policy`
+254 (the scan's attack modelled against the rule before and this one: before, every place held and the paired device
+refused at all 60 tries in 2 minutes; now the four backed off 12 s in, the paired device admitted at every try, one
+not yet known in at 13 s; closing at 1.9 s, 26.6 s; IPv6 churn in a /64, the /64 at 61 s, holding one place at 120 s)
+and 109 of 109 mutants; `ask-limits` 43 and 24 of 24. Live on loopback synthetic `--pairing` hosts (sources
+127.0.0.1, en0's 10.128.0.34, en13's 10.128.0.148 and en14's 169.254.219.184, whose connections to 127.0.0.1 stay on
+lo0; 127.0.0.2–5 cannot be bound without a root alias): main's build refused the paired client at all 30 tries in 90
+s ("… 27 over the limit."), backing nobody off; this one cut the four at 4.2 s and backed them off at 12.6 s ("Home
+door backed off 10.128.0.34 for 300 s: …", the client at 127.0.0.1 with them); a scratch build with 6 shared places
+(three addresses filling them as four fill 8) served a known client at all 20 tries and an unknown one from 13 s; one
+address cycling at 1.9 s held 2 places for good on main and was backed off at 47.9 s here. Plan's "What stays open"
+updated (an address keeps about 4/5 of a place, so ten IPv4 addresses taking turns fill the shared places; the
+co-located address; a device not yet paired in a backed-off /64, which a stranger in it keeps backed off with a dozen
+refused handshakes as each 5 minutes end; a routed IPv6 prefix from the internet at the remote door).
+- The review (2026-10-29; the report's "The review", f9-pending-slots-report.md in sill-handoff's
+  triage/2026-10-29-security): three findings, each reproduced live on 7929c539 first and fixed in a commit of its own.
+  A kind 19 left its place for nothing, and the home door's verify block takes `sill-pair/1` with any key: a holder
+  doing TLS on it 3 s in and a kind 19 (`v` 2, answered `closed`, nothing shown) 3.5 s later held all 8 places for
+  90 s from four addresses (112 kind 19s), nobody backed off, an unknown paired client refused at all 30 tries; now
+  `Places.End.request` pays as a connection that ended then (fd0a58c5): the same holder backed off at 13.07 s. The
+  wait counted from accept on CLOCK_MONOTONIC, which runs on through a sleep while the deadline's timer does not: one
+  connection waiting across a 20 s SIGSTOP of the host (a sleep's stand-in) backed 127.0.0.1 off at the continue and
+  the known client was refused at all 13 tries; now a wait counts to its place's deadline at most (0b457e48): no
+  backoff, 13 of 13 served. A known address was charged for all of its 10 s (a cut 4.1, its device's own let-go at
+  5 s 1.6, where main charged 1 and nothing): a known device's reconnect whose dials stalled was backed off at 40.06 s
+  and refused at all 6 tries after; now it pays as an address not known (1.1 at most for a handshake, 3.1 for a
+  pairing connection; 8e0148a0): no backoff, 6 of 6 served. Docs: the plans' limits tables, sillclient's `--pair-hold`
+  note, DEVELOPMENT.md, and the /64 trade-off (a check: the /64 open 1.8 s of 15 minutes).
+- The review's second pass (2026-10-29, resumed after the session's limit stopped the first before it pushed; the
+  report's "The review"): three more findings, each reproduced first and fixed in a commit of its own. A mutant's
+  pattern still named the line 0b457e48 replaced, so `run.sh --mutants` said "NOT APPLIED" and 103 of 104 (bda128ba).
+  An end within 2 s cost a tenth however long it held its place, so one connection at a time closed at 2 s cost an
+  address 3 a minute, under its 5: eight addresses held every shared place for good (the model, 600 s: nobody backed
+  off, a device not yet known refused at all 300 tries; live, one address 120 s: no "backed off" line; a scratch
+  build of 3 shared places: three addresses held them 120 s, a paired client not yet known refused at all 40 tries);
+  now each second held costs a tenth at least, `DoorPolicy.waitCost` (8b51058d): live, "[51.54] Home door backed off
+  10.128.0.34 for 300 s: …", and with 3 places the three backed off at 51.5 s (27 connections each) and the client,
+  refused at all 17 tries before, served at all 23 after; an address keeps about 4/5 of a place (ten taking turns
+  could fill the 8). The /64's 12 was said to need two addresses, true only for a burst: paced under its own 5, one
+  address backed its /64 off (an older Sill's plain try every 2 s on its link-local address backed off its whole link
+  at 238 s; a refusal every 16 s, at 176 s); now an address counts for 6 at most, `DoorPolicy.groupShare` (c0e70ab6;
+  the model only: the test listener is IPv4). door-policy 254 checks and 109 of 109 mutants, ask-limits 24 of 24,
+  home-model 25 of 25, addresses 16 of 16; `run-all.sh` all 56 (513 s); `swift build -c release` from a clean
+  `.build`, only the CaptureProbe warning; `Scripts/pacing/build.sh` builds both sides. The first pass's live runs
+  again on the final build: the kind 19 holder backed off at 13.18 s, the 20 s stop no backoff and 13 of 13 served,
+  the known device's stalled dials no backoff and 7 of 7, the scan's attack backed off by 12.63 s.
+**Untested, for Noah:** a week of ordinary use at home and away (Wi-Fi, cable, Tailscale, the hotspot) with no
+"backed off" line in Sill.log (note any, with what the device did); a new pairing over the hotspot through Tailscale
+(its handshake inside 4 s); an iPad back after a night asleep; from the review, the Mac's lid closed while the iPad
+reconnects, then opened: the iPad back at once, no "backed off" line; the iPad sent to the background mid-dial a few
+times, or walked out of Wi-Fi range while it redials: no "backed off" line for its address; from its second pass, a
+device whose dial tries the Mac's addresses 1 s apart (through Tailscale), away and back a few times: no "backed off"
+line (its losers now cost up to 0.2 each).
+**A device the Mac stops serving lands no more input (2026-10-29, branch `sec-revoked-input` from main at
+150479b5, PR #254; security scan finding 10, Low; Noah's go of 2026-10-29 for the security batch).** Remove,
+Require pairing turned on, and Remote Access or internet access turned off said goodbye and closed the device's
+connection once the goodbye was handed to the network, or 0.25 s later; meanwhile its input kept landing, and
+input held for it while an app came forward (up to 0.6 s) was replayed, also once it had left. Host only; no
+wire change, nothing on the device.
+- The coordinator marks the device as the Mac decides (`RemoteAccess.onCutOff`, on the main actor: every
+  connection whose route the change names, before any of its messages already waiting there; since the review),
+  and a session the door admitted while the Mac decided, whose registration waited behind the decision, as it
+  registers (`RemoteAccess.stillServes`, `DoorPolicy.stillServes`, pure: as `afterGate` judges a session the
+  gate held; since the resumed review), and `StreamServer.closeSessions` marks its session revoked as it says
+  goodbye (`Client.revoked`, on the network queue) and tells the coordinator in the same queue turn
+  (`onClientRevoked`): its receive loop then hands on only a key's or a button's up (`RevokedInput.mayLetGo`),
+  no pong, no stats, no pointer control, and counts the rest (`in.revoked`). The coordinator keeps the revoked
+  set until the device leaves and posts of it only the up of a key or a button that device pressed and the Mac
+  still has down (`RevokedInput.stillGoes`, KeyStrokes.swift, pure; `InputInjector.releasesWhatItHolds`, with
+  each button's owner), a button's where the pointer is; nothing else it sends acts (a pick, a window's buttons,
+  a launch, settings, menus, the clipboard), and a menu choice or fetch of it still waiting for its turn is
+  neither made nor read (`MenuMirror.clientRevoked`; a departed device's choice is still made, as a move counts
+  on it). The replay of held input, a switch's drop of it and gestures waiting for a switch judge a revoked
+  device, and one that left while it waited (`gone`), the same way, and drop their shortcuts. Its keys still
+  down when it leaves go up as before, and its buttons now too (`RevokedInput.buttonsLetGo`; an unremoved
+  device's stay down as before: its session may go on over a move's connection). TEST ONLY: with
+  `SILL_TEST_INPUT_LOG` a synthetic host prints where a revoked device's input stops landing;
+  `sillclient.py --key=USAGE,HOLD@T` holds a key. The pacing and sound harnesses compile KeyStrokes beside
+  StreamServer.
+- The review (2026-10-29, at cf230ed9; three findings, each reproduced on loopback first, then fixed in a
+  commit of its own). (1) A cut-off device's mouse button stayed down after it left (departures let go of
+  keys only): a paired client pressed the left button and was removed before its up; after "Client left"
+  another device's three moves were posted as "left mouse drag", the up only at Quit. Now
+  "left mouse up (none) at 529,332" as it leaves and the moves plain (8399498f). (2) The coordinator learned
+  of the cut only from the server's mark, which reached the main actor behind the device's messages already
+  waiting there (read while the Mac saved the change: the keychain's write, or a locked login keychain's
+  prompt): with the test store's save made to take 150 ms (a scratch build), 25 events (moves, key downs,
+  their ups) landed at +154 ms, after "Removed …", 2 runs of 2; with the decision's mark none, `in.revoked`
+  20 (9c518d13). (3) A menu choice or fetch made before the cut and waiting behind a slow menu read (up to
+  its device's 4 s wait) was still made or read, its app brought forward first; checked with a scratch
+  harness of the real MenuMirror on a stub reader (no Accessibility in that session): the branch's made B's
+  choice and read E's menu after their cut, this one neither, and a departed C's choice is still made
+  (6d7dfb89). Scripts/menu-check/mirror.swift gains the case against the fixture: it compiles, not run there.
+- The review, resumed (2026-10-29, at 14f09529; one finding, reproduced on loopback first, fixed in a commit
+  of its own). A session of the cut-off key that the door admitted while the Mac was deciding (saving the
+  change: a keychain write or its prompt; or the main actor held up, as by a hung app's Accessibility call)
+  registered on the main actor only behind the decision, so `onCutOff` could not name it, and everything it
+  sent until the server's own mark landed after the decision: with a scratch build whose test store's save
+  took 1 s, a second connection of the removed device admitted 0.29–0.33 s into the save landed 58 and 62
+  events (moves, key downs, their ups) at +1,016 to +1,029 ms, after "Removed …; closed 2 connections.", 2
+  runs of 2, and one that sent and left before the save ended still landed 41. Now the coordinator asks, as it
+  registers a session, whether the Mac still serves it (`RemoteAccess.stillServes`, `DoorPolicy.stillServes`:
+  `afterGate`'s judgement from what it was admitted as and the trust as it is now; a plain session never cut
+  off, the remote door's limit no cut), and marks it before any of its messages; such a session neither wakes
+  the display nor counts as the paired device's last connection. With the same save: 0 events after the
+  decision, 3 runs of 3 (`in.revoked` 56 to 76), and 0 for the one that left first.
+- Verified: `key-strokes` 395 checks (42 new on the branch: the rule, the buttons as a cut-off device leaves,
+  the glue modelled with what waits for the main actor, removals, holds, switches, gestures, departures and
+  busy spells, one ending with the decision: 3,000 random sessions; marked by the server alone 1,097 and as
+  it was before 2,789 of 3,000 landed input after the cut) and 98 of 98 mutants (15 new); `run-all.sh`, all
+  56; `swift build -c release`, only the CaptureProbe warning; the pacing and sound harnesses build; no iOS
+  file changed. Live on loopback (a `--synthetic` bare app with `SILL_TEST_INPUT_LOG`, a paired `sillclient`
+  pressing a key every 25 ms, each held 0.6 s, and moving, tapping, typing and pressing F-keys across the
+  cut, not reading, so its connection lasts the whole 0.25 s): between "Removed sec10-client (sillclient);
+  closed 1 connection." and "Client left" main's build posted 48 and 57 events (key downs, moves, clicks,
+  typed text, key ups) up to +253 ms, and 56 after Require pairing's line; the branch's builds only key ups
+  of keys down at the cut (10 to 11), then at "Client left" the keys it still held; on the final build the same
+  for Remove (11, Client left +260 ms, `in.revoked` 44), Require pairing (10, +255 ms, 37), Remote Access off
+  and internet access off through the remote door (16 ups in all each, +256 and +252 ms, 24 and 23), and a
+  device removed mid-drag lets go of the button as it leaves ("left mouse up (none) at 529,332"). After the
+  resumed review (8a29d178): `door-policy` 135 checks (7 new: `stillServes` against `afterGate`'s oracle over
+  5,120 combinations, and the four cuts by name) and 62 of 62 mutants (4 new); `key-strokes` 402 (7 new: the
+  model registers a session ahead of its messages; in 1,181 of 3,000 random sessions a second connection of
+  the removed key admitted while the Mac decides lands nothing after the decision, where without the check at
+  registration 391 of 1,187 landed it) and 98 of 98 mutants (KeyStrokes.swift unchanged); `run-all.sh`, all
+  56; `swift build -c release` from `git archive`, only the CaptureProbe warning; the pacing and sound
+  harnesses build. Live on its build:
+  Remove 10 key ups (`Client left` +262 ms, `in.revoked` 39), Require pairing 11 (+250 ms, 38), Remote Access
+  off and internet access off 16 each (+252 and +253 ms, 22 and 23), each an up of a key down at the cut; the
+  mid-drag removal's up as it leaves and plain moves after; the CLI's plain door, alone and beside `--remote`,
+  a test client's move, key and tap landing as before; the menu stub harness 5 of 5.
+- Not done: a pick already under way, or queued behind a restart, when the cut comes still brings its window
+  forward (not input); frames, the clipboard and pointer reports sent after the goodbye queue behind it and go
+  with the connection.
+- **Untested, for Noah:** with this Sill.app and the iPad's Magic Keyboard streaming TextEdit, type steadily
+  (or hold a key) and click Remove in Settings › Devices: nothing typed after the click lands, and no key
+  stays down on the Mac (Sill.log: "Removed …", then "Client left", the `[1s]` line's `in.revoked`); pair
+  again and it works. The same with Require pairing turned on while an unpaired iPad types. From the review:
+  drag a window with the iPad's trackpad and click Remove mid-drag: the drag ends, and another device's
+  pointer then moves without dragging; choose a menu item from the iPad's Menus in a slow app and click
+  Remove at once: the item is not chosen (Sill.log: "Menu from … refused: …: the Mac no longer serves it").
+**The macOS firewall that blocks Sill's executable (2026-10-29, branch `firewall-executable-block` from main
+at 150479b5; PR #250; the security batch, Noah's go of 2026-10-29).** A user's report: the firewall keeps a
+rule per path, and a Mac held `/Applications/Sill.app` allowed and `…/Contents/MacOS/Sill` blocked
+(`socketfilterfw --listapps`): nothing reached Sill from the network, System Settings showed it allowed, and
+`--getappblocked` on the bundle said "permitted"; `sudo socketfilterfw --unblockapp` on the executable fixed it.
+No wire change.
+- `FirewallCheck` asks `/usr/libexec/ApplicationFirewall/socketfilterfw` `--getglobalstate`, then only while it is
+  on (`asksRules`) `--getblockall`, `--getappblocked` for the running executable (`proc_pidpath`) and its bundle,
+  and `--listapps`: a process each with 2 s (then SIGTERM, SIGKILL a second later), read-only, no privileges
+  (macOS 27.0.1: 4–8 ms each, no prompt, no Full Disk Access needed; asked in one run the tool is killed, 137,
+  when `--getstealthmode` or `--getallowsigned` follows `--getappblocked`, or `--listapps` follows it with a
+  bundle's path; no `com.apple.alf.plist` there). At launch, when the listener comes up, when Sill.app's status
+  menu opens (the glyph at once, its item from the next opening), when its General opens or Sill becomes active
+  over it, and when a device gets in from the network while the verdict says none can (`asksAgain`); never on a
+  timer.
+- `FirewallRule` (pure, `Tests/checks/firewall`, 390 checks, 69 mutants): off, allows (only once `--listapps`
+  was read), `blocks(executable:bundle:)` (its own answer or its rule in the list, either enough), `blocksAll`,
+  unknown (with why, in the log).
+  While it blocks: General's line in the Permissions style with `sudo …/socketfilterfw --unblockapp <the running
+  executable's path>` (a line per option; Copy copies one line), for Block all where to turn it off; the menu's
+  "Devices Can’t Connect — The macOS firewall blocks Sill’s executable." (opens General); one log line per change
+  ("Firewall: …"; none for a first verdict that blocks nothing). Sill never runs the command. support.html's
+  "Your Mac isn’t listed" gains the case (Sill's own line marked `<!-- Firewall`). TEST ONLY
+  `SILL_TEST_FIREWALL=executable|bundle|both|all|off|allowed|unreadable` or a file holding one, test hosts only;
+  the previews are the rule's verdicts on those answers; `-SillPrintMenuAfter` prints General's line.
+- Verified: the check and mutants; `run-all.sh`, all 57; a clean release build (the CaptureProbe warning
+  only); main's CLI output identical masked and sorted, idle and with a client; previews main's but the 16 new
+  files, menu.txt's two samples and General's path; live on loopback, blocked → allowed → Block all →
+  unreadable, a VPN-origin client clearing a stale verdict, the bare app's menu and line, this Mac's real
+  firewall "none (allows)". Not built: an Unblock button with the admin password (`osascript` off the main
+  thread, or a privileged helper), Noah's call.
+- The review (2026-10-29, three lenses; each finding reproduced first, then fixed in a commit of its own;
+  sill-handoff's `triage/2026-10-29-security/firewall-line-report.md`, "The review"): a block that came after
+  launch (a Deny in the firewall's own prompt, Block all turned on) went unsaid until General opened or the
+  listener was replaced, as `asksAgain` can only clear one (on loopback, the canned answer blocked from 2 s: a
+  client at 3.6 s and the bare app's menu at 4 and 7 s said nothing): the status menu asks again as it opens
+  (bd18d96b); with `--listapps` unread the verdict took the executable's own "permitted" for allowed and dropped
+  why: unknown, with why, unless an answer blocks (3d10ea95); the check's usage stand-in had no "apps", so a
+  reading that took any mention of apps for a list passed (56d3f3a3); the docs had the tool die whenever
+  `--listapps` followed `--getappblocked` in one run (the docs commit, af3283d1; the second review measured which
+  options do, below). Re-run: the check 340 and 67 of 67 mutants (64 of 64 before; two extra mutants had
+  survived); `run-all.sh`, all 57; the release build, the CaptureProbe warning only; main's CLI masked and sorted,
+  idle (8 lines) and with a client (three passes, as main against main); previews 162 files; on loopback a device
+  in from a VPN re-asking without clearing a block that holds, and clearing a stale one.
+- The second review (2026-10-29, after af3283d1; the report's "The second review"): two findings, each reproduced
+  first and fixed in a commit of its own. The first review's correction of when the tool dies was wrong both ways
+  (read-only, as noah, 3 runs of 3 each): `--getstealthmode` or `--getallowsigned` after `--getappblocked` kill it
+  whatever the path, `--listapps` only after a bundle's, and `--getglobalstate`, `--getblockall` or another
+  `--getappblocked` after it answer (78685c9a, docs). A tool that never answered was asked all five questions, and
+  one that ignored SIGTERM was left running, a thread blocked on its pipe, after each (FirewallCheck's own code
+  against a stand-in: 10.04 s a check; 20.11 s and 5 processes left; the state on and the rest deaf, 16.16 s and
+  4), which the menu's re-asking at every opening would add up: nothing more is asked once the state decides
+  (`asksRules`: off, Block all, a state that doesn't read) and an unanswered question is killed a second after
+  SIGTERM (2.01, 3.01 and 12.06 s, none left; 6d836d1f). Re-run: the check 390 and 69 of 69 mutants; `run-all.sh`,
+  all 57; a release build from an empty `.build`, the CaptureProbe warning only; this Mac's firewall through the
+  fixed check, 19–22.5 ms for Sill.app's five questions, allows; previews 162 files; on loopback a Block all held
+  against a device in from a VPN, then blocked, cleared and unreadable as the canned answer changed.
+- **Untested, for Noah:** the report's state by hand (`sudo …/socketfilterfw --add …/Contents/MacOS/Sill`, then
+  `--blockapp`; `--remove` after): the device's tap failing, the menu item and log line, General's line and
+  Copy, the command in Terminal, then both gone without a relaunch; Block all on and off, also with Sill running
+  and its menu opened twice (the glyph turns at the first, Devices Can’t Connect at the second); VoiceOver;
+  macOS 14 or 15 (answers that don't read log "Firewall: couldn’t read …" once and show nothing).
 **A password manager's copies go to the devices (2026-10-29, branch `clipboard-concealed` from main at
 6c5b5d24).** Noah, with the clipboard on his iPad: "Copy paste works, including password apps. I think its
 fine to copy password apps. Remove the code that tries to make password copies never arrive." So
@@ -384,6 +603,269 @@ out in Insiders first tomorrow". Merge "Version 0.5.5 for both apps" (PR #244, b
   a second Mac (quarantined: opens, drags, opens, the iPad still paired), TestFlight's groups (the real
   names: the step lists them) and What to Test; `SILL_NIGHTLY` true; after his Insiders test,
   `SILL_NIGHTLY_PUBLIC_BETA` true (Test Information filled in; the first build of a version reviewed in full).
+**A copy of Sill.app takes no test hook, from this build on (2026-10-29, branch `sec-test-host-identity` from main
+at 150479b5, PR #249; the security scan of 2026-10-18, finding 1, Medium; the security batch of 2026-10-29; the
+report in sill-handoff's `triage/2026-10-29-security/f1-test-host-report.md`).** `AppModel.bundled`, the one gate
+on every TEST ONLY hook that bears on who gets in (`SILL_TEST_REMOTE_DIR`'s trust list, `-requirePairing`, the
+`-Sill…After` hooks, the doors' `SILL_TEST_*`: docs/home-pairing-plan.md §4.3), was
+`Bundle.main.bundleURL.pathExtension == "app"`, the folder's name: Sill.app copied to a folder named Sill.bin, or
+its executable started through a symlink or a hard link (Foundation then finds no bundle), read as the bare binary
+and took them all, keeping Sill's grants (TCC keys them to the bundle ID and designated requirement; the scan's
+premise, not tried). Now `bundled` is `AppIdentity.isSillApp` (Sources/SillMenuBar/AppIdentity.swift, pure but for
+its reader) of four facts read once at launch: Sill.app when the running code's signing identifier is
+`me.saffer.sill.mac` (the kernel's, SecTaskCopySigningIdentifier: every copy that can hold Sill's grants carries
+it, and a file replaced after launch does not change it), when it is signed with any certificate or its signature
+can't be read (fail closed), when its bundle's CFBundleIdentifier is Sill's, or, as before, in a `.app`. The one
+test host is the bare binary as `swift build` makes it (identifier `SillMenuBar`, `adhoc,linker-signed`, no
+Info.plist). Sill.app's code outside a `.app` says why first: "Running from …, which is not a .app, as Sill.app
+itself (signed me.saffer.sill.mac): it takes no test hook." No wire change; the CLI unchanged. Builds from before
+keep the old rule: 0.4.0, 0.5.1 and the nightly 0.5.5 (987) take every hook from a renamed copy or a link
+(SECURITY.md names them; what that leaves open is the review's R1, for Noah, in the report).
+- Verified: `swift build -c release`, only the CaptureProbe warning; `Tests/checks/test-host` (new, in CI's
+  mutants matrix) 133 checks (1,344 combinations against an oracle; the reader for real on ad hoc copies of
+  its own binary under `sandbox-exec`: signed again as Sill, a Sill.bin bundle, a hard link, a symlink, a file
+  replaced after launch) and 22 of 22 mutants; `door-policy` 128, `keychain` and its 7 mutants; `run-all.sh`
+  all 57. Live: the bare binary on loopback took `-requirePairing NO` (an unpaired TLS client admitted),
+  `-SillSetAfter 'requirePairing=1'` (the next refused) and the `SILL_TEST_*`; the bare binary in a scratch
+  Sill.bin with Sill's Info.plist, run only under `sandbox-exec` (no network, no LaunchServices database
+  write, no TCC, no preference write, nothing written in the home folder), also signed ad hoc and through a
+  symlink: the line, every hook "ignored", "Home door: TLS, pairing required (0 paired)."; origin/main's build
+  in that bundle took every hook. Sill's real preferences byte for byte; LaunchServices' 43 records of Sill's
+  ID the same before and after.
+- The review (2026-10-29, after b0d9b03b; the report's "The review"), three lenses, four findings, each reproduced
+  first, the fixes in commits of their own: R1, the fix holds for Sill.app built from it on, and a build from
+  before keeps its rule: the nightly 0.5.5 (987)'s own Developer ID build, renamed Sill.bin under the same
+  sandbox, took every hook ("Home door: TLS, pairing not required.", "Settings: require pairing off → on"), so
+  SECURITY.md, the plan's §4.3 and this entry now say which builds (f562b4c3) and what that leaves open is Noah's,
+  in the report; R2, out of the finding's scope, for Noah, in the report; R3, the reader's two fail-closed answers
+  (a read that failed, an identifier with neither a certificate nor the ad hoc flag) were unchecked, three mutants
+  turning them into a test host surviving: `signature(read:)`, pure, 12 checks and 2 mutants (7ce5874c); R4, two
+  comments with the old rule, DebugHooks' header and the plan's §13 (b16d66c7). Tried and holding: this branch's
+  build signed as Sill in a Sill.bin, every hook "ignored", "pairing required (0 paired)"; `CFProcessPath` and
+  argv[0] do not move `Bundle.main` (a symlink does, and the kernel's identifier answers it). Verified after:
+  `test-host` 145 checks and 24 of 24 mutants; `run-all.sh` all 57 (9 min 58 s); `swift build -c release`, only
+  the CaptureProbe warning; the bare binary on loopback took `-requirePairing NO` (an unpaired TLS client
+  admitted), `-SillSetAfter 'requirePairing=1'` (the next refused: "certificate unknown") and the `SILL_TEST_*`;
+  previews 146; Sill's preferences, LaunchServices' 43 records and Sill.log untouched by the sandboxed runs. No
+  iOS file and no wire changed, so the three iOS builds were not run.
+- **Untested, for Noah:** a certificate-signed build reading itself (signing needs the keychain): with Sill.app
+  from this branch installed as usual, Sill.log has no "Running from …" line and Settings › Devices and Remote
+  Access work as before. Don't run a copy of Sill.app outside /Applications to see the refusal: a launched copy
+  can register with LaunchServices for Sill's ID and take the login item (2026-10-20). Seen, not changed:
+  LaunchServices lists 43 copies under Sill's ID (old worktrees' `.build/Sill.app`, `wt-mod157` among them, the
+  Trash, scratch folders).
+**An open door's reconnect pinned to the key it saw (2026-10-29, branch `sec-reconnect-pin` from main at
+150479b5, PR #255; the security scan's finding 3, Medium; Noah's go of 2026-10-29 for the batch).** The device's
+automatic reconnect to a Mac it was connected to without pairing (Require pairing off, `p=0`) found the row by its
+Bonjour name alone and took any key, so whatever advertised that name with `p=0` (another Mac renamed to it, a
+stranger after a crash) got the session with no tap: what the device typed, and its clipboard (kind 32, on by
+default). Device only, no wire change, nothing on the Mac.
+- The rule (DiscoveryPolicy, pure): `reconnectKey(lost:)` is the key an open session's first connection saw
+  (`trust(_:readyWith:)`), carried as `Reconnect.openKey` (`lostReconnect`); `reconnectTrust(_:savedPin:seen:)` is
+  `sessionTrust`'s but for an unsaved open door with a seen key, `.open(seen:)`, so `Pin.key` (`reconnectIfListed`,
+  `dial(_:macID:tap:seen:)`; a tap keeps `sessionTrust`). Another key answering (-9808, DeviceTLS's `onPinRefused`)
+  is `HomeEnd.otherKey`: `homeSessionEnded` ends the reconnect with "‹Mac› answered with another key, so this
+  ‹iPad› didn’t reconnect. Tap it to connect."; the row reads Not paired as before and a tap takes any key; a saved
+  Mac's reconnect is unchanged (its saved pin). The review of #255 added two: a plain door (no `p`) under the name
+  is not dialed after such a session (`reconnectTrust` gives nil for `.plain` with a seen key), where a DEBUG
+  build's reconnect dialed it plain with no key to check (the reconnect looks on, as Release's does past "Update
+  Sill"; a tap still dials it); and a tap during the reconnect (its words invite one) whose dial ends before its
+  handshake leaves the reconnect pinned to the key the last session under that name saw
+  (`reconnectKey(lost:earlier:)`, StreamClient's `openKeys` by Bonjour name, in memory, set at a session's first
+  `.ready`), where it took any key. Left as it was: a tap under a name no session has seen a key under since Sill
+  started (`openKeys` is memory only) whose dial ends before its handshake leaves a reconnect with any key, as the
+  tap would have. DEBUG console: "reconnect: dialing ‹Mac› (dial 1 of this listing), pinned to the key its last
+  session saw", "home: this device's pin refused the key that answered as ‹Mac› (-9808)", "home: the session ended:
+  otherKey (-9808: bad certificate format)", "reconnect: ‹Mac› is a plain door now, and its last session saw a key
+  over TLS: not dialed (a tap dials it)", "reconnect: the dial of ‹Mac› saw no key; the reconnect pins the key the
+  last session under its name saw".
+- Verified: `home-device` 225 checks (16 new) and 142 of 142 mutants (11 new), `home-model` 84 (8) and 28 of 28 (3),
+  `policy` 477 (13, with a model of the glue: 680 reconnects over every sequence of up to four rows under the name,
+  in Release and DEBUG, none to the other key, where main's rule gave it 197) and 171 of 171 (6, O1–O6); the four
+  checks that compile DiscoveryPolicy.swift keep every mutant pattern; `run-all.sh`, all 56; `swift build -c
+  release`, only the CaptureProbe warning; the three iOS builds, only the known `StreamClient` capture warning
+  (StreamClient.swift:4120). Live on a private iPad mini simulator (iOS 27.0, deleted after), two bare `SillMenuBar
+  --synthetic -requirePairing NO` hosts on 127.0.0.1 alone with identities of their own, each advertised as "Studio
+  f3" (`_silltest._tcp`, `p=0`, a tag) by `dns-sd -i lo0 -R` (a test host's own registration is "Sill test ‹pid›"),
+  the app with `-SillServiceType _silltest._tcp -SillTapRow "Studio f3" -SillNoAutoDesktop 1`: a tap connected to A
+  with any key and A's copy reached the device; A killed (-9) with its advertisement; B under the name. Main's build
+  (150479b5) reconnected to B by itself (B: "Client connected", "Client hello", "Clipboard: … shares the
+  clipboard.") and B's copy was written to the device's clipboard (`simctl pbpaste`); this build dialed it pinned,
+  refused B's key, ended with the words above (B logged nothing), the device's clipboard kept its sentinel, and a
+  tap then connected to B with any key; A back with its own key (same identity, new port) was reconnected by itself,
+  pinned, its copy arriving. Logs and photos in `~/Downloads/sill-handoff/triage/2026-10-29-security/f3-live/`.
+- The review (2026-10-29; the report's "The review"): two findings, each reproduced first and fixed in a commit of
+  its own. R1 (Low, DEBUG builds only), b8f0a7bb: after an open session that had seen a key, a DEBUG build's
+  reconnect dialed a plain door under the lost Mac's name with no key at all (live on a private simulator against
+  3e01e3c2's build: the CLI's plain door got the session, its hello and the device's clipboard; after the fix not
+  dialed, A back reconnected pinned, a tap still connects). R2 (Low), 625df1b2: a tap during the reconnect (its own
+  words invite one) whose dial waited for this device's own network and was let go before its handshake left a new
+  reconnect that took any key (the rules walked as StreamClient chains them: B's key taken with no tap); now pinned
+  to the key the last session under the name saw. Measured on loopback: a dial to a Bonjour row whose Mac does not
+  answer (a dead port, a vanished name, a TLS alert in place of a certificate) stays preparing, so a tap there ends
+  with "didn’t answer" and no reconnect at all; R2 needs the waiting case and was not run live. Seen in passing,
+  older and not fixed here: `homeEnd` reads -9825/-9829 as the Mac refusing this device's key even before `.ready`
+  (the plans: "right after `.ready`"), reachable only by an address dial at home (DEBUG's `-SillConnect`). Verified:
+  `home-device` 237 checks and 147 of 147 mutants, `home-model` 87 and 30 of 30, `policy` 482 (its model of the
+  glue: 1,560 reconnects with the person's tap among the looks, none to B; before the review B's plain door got the
+  session in 194 and B's key after such a tap in 94, main's rule B's key in 444) and 176 of 176 mutants, at b8f0a7bb
+  479 and 173 of 173; `remote-rules` 144, its 76 patterns each found once; `run-all.sh`, all 56 (512 s); `swift
+  build -c release` from a `git archive` of the head, only the CaptureProbe warning; the three iOS builds, only the
+  known `StreamClient` capture warning (StreamClient.swift:4134, main's 4110).
+- **Untested, for Noah:** two Macs with Require pairing off on one network (the scan's own steps): connect the iPad
+  to Mac A without pairing, quit Sill on A, give Mac B A's computer name (System Settings › General › Sharing) and
+  open Sill on B: the iPad shows "‹A› answered with another key, so this iPad didn’t reconnect. Tap it to connect.",
+  B's Sill.log has no "Client connected" for it and a copy on B never reaches the iPad; a tap connects to B. Sill
+  reopened on A instead: the iPad reconnects by itself. VoiceOver reads the line once. From the review: with a Debug
+  build from Xcode, the CLI's plain door (`SillHost`, no `--pairing`) or an older Sill.app given A's name after a
+  session with A is not reconnected (the console's "…is a plain door now…"; a tap connects to it); during the
+  reconnect to A ("…isn’t answering…"), a tap on its row while the iPad's own network changes (the tap's dial waits
+  and is let go), then B under the name: no connection to B ("answered with another key"). And a decision: another
+  key ends the reconnect for good, so a look-alike advertising the name for a moment while A is away turns the
+  automatic reconnect off until a tap (live: A back 3 s after it went was not reconnected), and the words ask for
+  the very tap that takes whatever key answers: keep it, skip that row and go on (as a saved Mac's row taken by its
+  name is skipped), or change the words.
+**A device's viewport held to what a host takes (2026-10-29, branch `sec-viewport-bounds` from main at
+150479b5, PR #251; the security scan's finding 4, Low; Noah's go of 2026-10-29 for the batch).** Kind 9 carried
+the panel and Aa's scale as Doubles with no bounds and the host took any number above 0: a viewport of 1e300 points
+(or a scale of 1e-300) from any device a Mac admitted reached the window's fit (`fitToViewport`), whose "Resized …"
+line made an Int of it, which traps, so Sill died with every device's session (the scan's chain with finding 3: its
+Bonjour name then free for an impostor); with the virtual display `VirtualStage.windowSize` was unheld and the
+"insists on …" line trapped the same way (a full-screen window's crop of an infinite panel was NaN, which
+`evenPixels` traps on). No wire change.
+- `ViewportBounds` (StreamProtocol's Viewport.swift, pure, `Tests/checks/viewport-bounds`): each side 1 to 16384
+  points, a text scale 0.25 to 4 or none. The host refuses any other viewport whole at kind 9, and one that does not
+  decode (JSON carries no NaN or infinity): the last viewport stands and nothing of the message is taken, its rate
+  neither; one line naming the device, at most one a second per connection ("Viewport from sillclient refused: width
+  1e+300 (1 to 16384 points), height 1e+300 (1 to 16384 points)"), `vp.refused` in the `[1s]` lines counting every
+  one. Every device build's viewport is within them (the compatibility floor's new line), and a device holds what it
+  sends to them (`held`, in `sendViewport`). The two lines print through `ViewportBounds.whole` (Int()'s number,
+  toward zero, without its trap); no other host line prints a device's number through Int() (a click's point is held
+  to the source by InputLanding, the rest are the Mac's own).
+- The window's size on the virtual display held to 1…65536 points a side, the most a host takes (16384 points at
+  0.25; `VirtualDisplaySize.windowSize`, `Tests/checks/capture-scale`): every viewport a host takes is asked as before
+  (a side under half a point 1, not 0), the placement fits it to the display, and a full-screen window's crop keeps
+  the panel's shape (the review's second finding: held at the display's 4096 it did not).
+- `sillclient.py --raw9=JSON@T` sends a literal viewport.
+- Verified: `viewport-bounds` 79 checks and 26 of 26 mutants (18,566 of its 200,000 random viewports main's guard
+  took and its line trapped on, none taken now), `capture-scale` 172 and 48 of 48; `run-all.sh`, all 57; `swift
+  build -c release` from `git archive`, only the CaptureProbe warning; the three iOS builds, only the known
+  `StreamClient` capture warning; live, a loopback synthetic host streaming the test pattern: 1e300, -1, NaN,
+  Infinity and a scale of 1e-300 each refused with its line (NaN and Infinity: "it does not decode as a viewport"),
+  three in 0.4 s one line and `vp.refused 3`, 16384 points at 0.25 taken, the stream going throughout (47–58 frames
+  a second). main's own lines (the handler, the fit's guard, target and line, the stage's window size and line, cut
+  from 150479b5 and compiled with its Viewport.swift) trap on the scan's payload and on a scale of 1e-300 (exit
+  133); the branch's refuse and go on. Not live on main's host: only a real window resized through Accessibility
+  reaches that line, which no test host lists.
+- The review (2026-10-29, after a02c1afe; the report's "The review"): two findings, each reproduced first and fixed in
+  a commit of its own. (1) f664a04d: a device's ClientStats `audioLate` was added to the stats line's count with a
+  plain `+` (StreamServer, from the audio work, after the scanned commit), so two reports of Int.max within the line's
+  1.5 s trapped: a loopback host built from a02c1afe died at the third report (exit 133), and lived with 1000; now
+  `ClientStats.lateSince` (Viewport.swift, pure: nothing for a missing or negative count, the sum stopping at
+  Int.max), and the rebuilt host took ten reports of Int.max and printed "9223372036854775807 late". (2) 972e2b87: the
+  window's size on the virtual display held at 4096 changed a full-screen window's crop for a panel past the display
+  (from the commits' own lines, a 2560×1400 panel at 0.5x: main 4096×2240, 1.829:1, the panel's shape; a02c1afe
+  4096×2800, 1.463:1, black bars on the device); now 65536, every row as main's. Re-verified: `viewport-bounds` 87
+  checks and 30 of 30 mutants, `capture-scale` 175 and 50 of 50; `run-all.sh`, all 57 (8 min 16 s); `swift build -c
+  release` from `git archive`, only the CaptureProbe warning; the three iOS builds, only the known `StreamClient`
+  capture warning; live on one loopback host, every kind 9 above refused again with its line, and the review's tries
+  (1.7976931348623157e308 refused, as -0 and 5e-324 were in a run on a02c1afe; 1e999 and a rate of 1e300 "does not
+  decode"; a duplicate key and a rate of Int.max taken, the rate held by `wantedFPS`; a rate of Int.min, on a02c1afe,
+  a restart at 24 fps), beside them a second client's ten stats reports of Int.max: the host alive throughout.
+- A second review (2026-10-29, after 37e47e68; scripts and logs in sill-handoff's
+  `triage/2026-10-29-security/f4-live/review2/`): one docs fix, e057acaf (DEVELOPMENT.md gave the refusal line's
+  limit per device; it is per connection: one device on two connections got two lines 0.11 s apart). No bypass: 92
+  hostile payloads of every kind a device sends but 19 and 32, on a loopback host with a scripted pointer, every ping
+  and kind 17 answered; 2,178 viewports a host takes in 15 s from two devices (236 restarts), the host streaming
+  after. Re-run: `viewport-bounds` 87 and 30 of 30 (five more mutants of the reviewer's caught), `capture-scale` 175
+  and 50 of 50, `compatibility`'s mutants 34 of 34 (one of Viewport.swift); `run-all.sh`, all 57 (8 min 28 s);
+  `swift build -c release`, only the CaptureProbe warning; the three iOS builds, only the known `StreamClient`
+  capture warning. Built, as the first review had not: the pacing harness from origin/main and this tree (`home`:
+  60.0 fps both, every gate), the audio harness and the restore probe's driver (not run).
+- **Untested, for Noah:** nothing should change on a device: Aa's steps and none, a rotation and the virtual display
+  as before on the iPad and iPhone, and Sill.log without a "Viewport from … refused" line; if an iPad with Stage
+  Manager on a large external display is at hand, a full-screen window (a video) on the virtual display at Aa 0.5x
+  fills the panel as on main.
+**Direct Wireless only from a paired device (2026-10-29, branch `sec-direct-wireless-paired` from main at
+150479b5, PR #253; the security scan's finding 8, Low; Noah's go of 2026-10-29 for the batch).** Any session at
+the home door could turn Direct Wireless Connection on or off from its Settings panel, an unpaired device at a door
+that lets any device in (Require pairing off) and any device at SillHost's plain door included, and Sill.app saved
+it: the door advertised and accepting over AWDL, radio range, on a stranger's word. Additive wire, host and device.
+- Host: `DeviceSettings.accepted(_:virtualDisplayAvailable:fromRemote:paired:)` (no default arguments now) takes
+  `directWireless`, on or off, only from a paired session at home; otherwise refused and named, "Settings from
+  ‹device› refused: direct wireless (only a paired device)" (away from home the old "(not from a remote
+  connection)" first), the rest of the change applied whoever sent it. Paired (`DeviceSettings.paired(key:trusted:)`,
+  the coordinator's `sessionPaired`): the session's key (`ClientRoute.fingerprint`, proved in its TLS handshake;
+  none at the plain door) on the Mac's trust list as the status snapshot lists it now (`remote.paired`, which
+  RemoteAccess publishes with every change of the list). The route already kept the admission (`peer.name`, nil
+  for an unpaired key); the live list adds a device paired during its session (Pair This iPad… at an open door)
+  and drops one removed before its session closes. Turning it off is refused too: an unpaired device would
+  disconnect the paired ones connected over it.
+- Wire: kind 16's `sessionPaired` (`HostSettingsState`, optional, the connection's own like `away` and `link`):
+  true for a key on the list (the remote door's too), false for an unpaired key at an open door and at a plain
+  door; nil from hosts before, which took it from any session at home; re-published when the list changes.
+- Device: the ledger's rule 10 (`HostSettingsState.takesDirectWireless`, `sessionPaired != false`) never sends
+  it on a session the Mac says is not paired; the panel disables the switch there, its footnote "Change this on
+  ‹Mac›, or from a device paired with it." (away from home as before, "…, or from a device near it."). The mock:
+  `default` paired, `cli` and `openpair` not, the older Macs' cases silent.
+- CLI: TEST ONLY `SILL_TEST_REQUIRE_PAIRING=0` (a `--synthetic` host; TestHooks' list) turns Require pairing off
+  at `--pairing`'s TLS door for the run ("Home door: TLS, pairing not required."); sillclient prints `paired=` and
+  `--expect` takes `sessionPaired`. Closes the Direct Wireless entry's "revisit it with pairing" (below) and
+  docs/direct-wireless-plan.md's; SECURITY.md's known list, DEVELOPMENT.md and support.html say who changes it.
+- Verified: `away-quality` 143 checks and 39 of 39 mutants (96 and 30 before), `compatibility` 146 and
+  36 of 36 (140, 34), `ledger` 116 and 16 of 16 (100, 12; 5,000 random runs: Direct Wireless taken from a paired
+  session 1,579 times, refused from an unpaired one 521, rule 10 holding back 943 picks, 1,209 devices paired
+  during a session, 899 runs against a host from before); `run-all.sh`, all 56 (621 s); a clean `swift build -c release`
+  from `git archive` of 52ad232c, only the CaptureProbe warning; the iOS app Debug and Release for the simulator
+  and Debug for a device, only the known `StreamClient` capture warning (StreamClient.swift:4110). Live on
+  loopback synthetic CLI hosts (software encoder, no router, no screen): at `--pairing`'s door a paired identity
+  turned it on and off (`dw=1 paired=1`, "Settings from paired-a: direct wireless off → on", "Direct wireless
+  on: listening on port … again."); at the open door (`SILL_TEST_REQUIRE_PAIRING=0`, "Home door: TLS, pairing
+  not required.") an unpaired identity's on and off refused (`dw=0 paired=0`, "Settings from unpaired-b
+  refused: direct wireless (only a paired device)") while a paired one beside it turned it on and off, and an
+  identity paired by a second connection during its session heard `paired=1` 5.0 s in and was then taken; the
+  plain door refused it (`paired=0`); the remote door refused it as before (`paired=1`, "(not from a remote
+  connection)"); no "Enabling AWDL" in the kernel log meanwhile. H2 against 150479b5 (`--synthetic` idle, then a
+  test client on the Desktop): identical masked and sorted (27 lines) but for the second the client left
+  (which counters it listed). Harness photos on a private iPad mini simulator (deleted after), 710×1000 and
+  1000×710: `openpair` and `cli` the switch dimmed with the new footnote, `default` as before (sill-handoff's
+  `triage/2026-10-29-security/f8-photos/`).
+- The review (2026-10-29, after 73f4892f; sill-handoff's `triage/2026-10-29-security/f8-direct-wireless-report.md`,
+  "The review"): the rule holds (the key from the TLS handshake at `.ready`, the list the status publishes with every
+  change of it before anything else runs, `accepted`'s `ok` the only way a device's change reaches the config). The
+  scan's own command took it at origin/main's plain door (`dw=1`, "Direct wireless on: listening on port … again.")
+  and is refused here (EXPECT FAIL). Every bypass tried on loopback was refused: at the open door a kind 17 forging
+  `sessionPaired`, an Int, duplicate keys, six at once and a paired device's name; a pairing window open after kind
+  21; the plain door; the remote door. What remains is by design or another finding's: a session that controls the
+  Mac's input can still turn it on in Sill's own menu or Settings (blind: Sill streams none of its windows), any
+  paired device can, and the cable's automatic pairing is finding 2. Two docs findings fixed: the plan's host rule
+  and the gates that change it at the plain door (91b83561), DEVELOPMENT.md's command-line host (881ac12f).
+  Re-run: `away-quality` 143 and 39 of 39 mutants, `compatibility` 146 and 36 of 36, `ledger` 116 and 16 of 16;
+  `run-all.sh`, all 56 (483 s); `swift build -c release`, only the CaptureProbe warning; the three iOS builds
+  (Xcode 27.1), only the known `StreamClient` capture warning; H2 against 150479b5, identical masked and sorted but
+  for one stats line as the client left.
+- A second pass (2026-10-29, after a66cd93a; the report's "The review, second pass"): no code to fix; one docs nit,
+  support.html's new sentence promised a paired device the switch through Remote Access too, which the Mac refuses
+  (`dw=0 paired=1`, "(not from a remote connection)"): now "but not while it's connected through Remote Access",
+  inside the Remote Access markers (e012ab81). It tried what the rule and all of pairing rest on, a paired device's
+  key used without its private key. Apple's APIs cannot make such a client (SecIdentityCreate refuses a certificate
+  with another key; `sec_identity_create_with_certificates` still sends the identity's own certificate first, which
+  the open door admits as unpaired and refuses Direct Wireless). A TLS 1.3 client of its own (CryptoKit;
+  sill-handoff's `triage/2026-10-29-security/f8-review2/tls13forge.swift`) sending paired a's certificate with a
+  CertificateVerify signed by another key got a `decrypt_error` alert before any Sill message, at `--pairing`'s door
+  and at the open door, and the host logged no "Client connected"; the same client signing with a's own key was
+  admitted as paired-a and turned it on. Re-run: `away-quality` 143 and 39 of 39 mutants, `ledger` 116 and 16 of 16,
+  `compatibility` 146 and 36 of 36; `swift build -c release`, only the CaptureProbe warning.
+- **Untested, for Noah:** with this branch's Sill.app (release-signed with the profile) and this iPad
+  build: a paired device's switch at home, on and off, Sill.app's menu and General pane following and
+  `defaults read me.saffer.sill.mac directWireless` saved; Require pairing off and a device the Mac has not
+  paired (one never paired, or one removed in Settings › Devices): its switch dimmed with "Change this on ‹Mac›,
+  or from a device paired with it.", then Pair This iPad… from that panel: the switch comes back without
+  reconnecting; away through Tailscale:
+  dimmed with "…, or from a device near it." as before; VoiceOver on the dimmed switch (read as dimmed, then the
+  footnote); mixed builds: this iPad against Sill for Mac 0.5.1 (no `sessionPaired`: the switch works, 0.5.1
+  takes it from any session at home), and the 0.5.1 (4) iPad, unpaired at an open door, against this Sill.app
+  (its switch goes back, "‹Mac› kept its setting").
 **Aa's Off, and Aa only for a window (2026-10-29, ArfiArfath21's PR #181 with maintainer edits, branch
 `aa-off`; issue #179, taschaub).** Noah's decisions of 2026-10-29: the Off detent ("off makes more sense
 than 1x"), and Aa not selectable while the Desktop streams ("misleading"). `TextScale` (pure,
@@ -5684,8 +6166,10 @@ its Wi-Fi channel up to ~97 ms every 524 ms (see the trackpad-stutter section).
   16/17 stay compatible both ways (old device: ignores the key; old host: the
   device sees nil).
 - Host: `HostConfig.directWireless`, off in `standard` (the CLI and a fresh or
-  updated Sill.app), accepted from a device on every host, and absent from
-  `restartNeeded`: it is the listener's. `StreamServer` builds the listener
+  updated Sill.app), accepted from a device on every host (since 2026-10-29 only
+  from a paired session at home: the Current step's "Direct Wireless only from a
+  paired device"), and absent from `restartNeeded`: it is the listener's.
+  `StreamServer` builds the listener
   with `makeListener(peerToPeer:port:)`, with the setting when it is given
   before `start()`; after that `setPeerToPeer` replaces the listener live on
   its queue: cancel, wait for `.cancelled`, bind the same port at once with no
@@ -5991,8 +6475,11 @@ its Wi-Fi channel up to ~97 ms every 524 ms (see the trackpad-stutter section).
   find and connect to the Mac until pairing (M5); the host-settings plan's §9
   payload cap and a kind 17 rate limit matter more with it on. It is the first
   device-writable setting that widens who can reach the Mac, against that
-  plan's "a device sets stream quality, never network exposure": revisit it
-  with pairing. A Mac is known by its Bonjour name for a reconnect, so another
+  plan's "a device sets stream quality, never network exposure": revisited
+  with pairing on 2026-10-29 (the security scan's finding 8, PR #253): a
+  device sets it only from a session whose key is on the Mac's trust list,
+  never unpaired at an open door, at the CLI's plain door or from away. A Mac
+  is known by its Bonjour name for a reconnect, so another
   Mac of the same name running Sill on the device's network would be joined
   (pairing again; the move checks the launch ID, which a reconnect cannot, as
   the host may have relaunched). The host can print "Client left" twice for a
@@ -6552,6 +7039,15 @@ good.
 - `Sources/StreamProtocol/StreamMessage.swift` — 14-byte header + payload framing,
   message kinds in both directions, HEVC parameter set encoding. Shared by both
   sides. Change it in one place. `Switcher.swift` — the catalog types
+  (`WindowList`, with the host's per-launch `launchID`; `WindowInfo`,
+  `AppInfo`, `StreamSource`) and image blob framing. `Viewport.swift` —
+  `Viewport` (kind 9: the device's panel, Aa's scale and its rate),
+  `ClientStats` (with `lateSince`, a host's count of a device's late sound
+  packets, which never traps), `CursorShapeBlob`, and `ViewportBounds` (what a
+  host takes of a viewport: each side 1 to 16384 points, a scale 0.25 to 4 or
+  none, any other refused; what a device sends, `held`; and `whole`, a number
+  for a log line as Int() printed it, without its trap; pure,
+  `Tests/checks/viewport-bounds`).
   (`WindowList`, with the host's per-launch `launchID` and what it takes and does:
   `gestures`, `clipboard`, `keyRepeat`; `WindowInfo`, `AppInfo`, `StreamSource`) and
   image blob framing.
@@ -6639,7 +7135,16 @@ good.
   rate, the suggestion, the host's lines, and which restarts judge afresh
   (`judgedAfresh`); pure, `Tests/checks/link-judge`),
   `HostStatus` (the snapshot the app shows, pushed on events; `onChange`
-  publishes the devices' settings state), `DeviceSettings` (what a device may
+  publishes the devices' settings state; `firewall`, the macOS firewall's
+  verdict), `FirewallRule` (what the macOS firewall's read-only answers mean
+  for this host: a rule that blocks the running executable or its bundle, or
+  Block all incoming connections, keeps devices out; Settings › General's
+  line with the Terminal command that unblocks it, the menu's subtitle, the
+  log's lines; the TEST ONLY SILL_TEST_FIREWALL's canned answers; pure,
+  `Tests/checks/firewall`) and `FirewallCheck` (asks `socketfilterfw` five
+  read-only questions, a process each, no privileges: at launch, when the
+  listener comes up, when Sill.app's status menu or General opens, when a
+  device gets in while the verdict says none can), `DeviceSettings` (what a device may
   set, `HostConfig` ↔ wire), `HostLog` (the print shadow, the app's ring and
   log file),
   `WindowCatalog` (polls windows and thumbnails only while a client is
@@ -6659,7 +7164,9 @@ good.
   `InputLanding`, where a device's position lands on the Mac: at most the
   source's last pixel row and column at its display's scale; and
   `VirtualDisplaySize`, the size of Sill's virtual display, no side under 800
-  points, which macOS kept at 2x (an iPhone's 754×784 came up at 1x); pure,
+  points, which macOS kept at 2x (an iPhone's 754×784 came up at 1x), and of
+  the window on it, 1 to 65536 points a side, the most a host takes, so a
+  full-screen window's crop keeps the panel's shape (`windowSize`); pure,
   `Tests/checks/capture-scale`), `SyntheticCapture` (test pattern for
   `--synthetic`; SILL_TEST_PATTERN=noise adds a square of noise,
   SILL_TEST_PATTERN=picture:<path> shows a still picture instead,
@@ -6682,7 +7189,9 @@ good.
   (`paceRemote`, docs/remote-bundle-plan.md §3); one sweep a second closing
   every client's second into its LinkJudge (`onClientLinkChanged`), the judges
   reset only at another quality (`resetLinks`, apart from `resetForNewStream`);
-  `send(each:)`, kind 16 per connection; the test-only
+  `send(each:)`, kind 16 per connection; a session `closeSessions` cuts off
+  marked revoked as it is told goodbye, its receive loop then handing on only a
+  key's or a button's up (`onClientRevoked`, RevokedInput); the test-only
   SILL_TEST_REMOTE_ORIGIN;
   the listener built with or without peer-to-peer and replaced live when Direct
   Wireless changes, and turned off, the devices on peer-to-peer Wi-Fi
@@ -6694,6 +7203,10 @@ good.
   `InputInjector` (CGEvents: pointer and scroll where InputLanding lands them, scroll with phases, text with modifier
   flags cleared explicitly (a ⌘Space before typing otherwise tainted the text
   events and Spotlight ignored them), HID keys as KeyStrokes gives them, each
+  device's keys let go when it leaves (and a cut-off device's buttons) and every
+  key and button at the host's end, the check after each key's up, a button's
+  up with nowhere to land where the pointer is; the TEST ONLY input log),
+  `KeyStrokes` (a device's key as the
   device's keys let go when it leaves and every key and button at the host's
   end, the check after each key's up, a button's up with nowhere to land where
   the pointer is; a held key's repeats, as KeyRepeat steps them (a Task on the
@@ -6712,7 +7225,10 @@ good.
   Mac's: its virtual key, and the flags each event carries from the modifier
   keys the devices hold down, so a key's up leaves only what is held;
   `KeyUpCheck`, whether an up took its modifiers out of the HID state table;
-  `DroppedInput`, what of input with nowhere to land still goes; pure,
+  `DroppedInput`, what of input with nowhere to land still goes;
+  `RevokedInput`, what still goes of a device the Mac no longer serves, or of
+  one that left while its input was held: the up of what it holds down, and
+  the buttons a cut-off device holds as it leaves (`buttonsLetGo`); pure,
   `Tests/checks/key-strokes`),
   `WindowSizer` (Accessibility resize for the Aa scale, returning what it did,
   `Fit`; `placement/move/restore` for the virtual display; `AXWindows`,
@@ -6749,11 +7265,24 @@ good.
   `RemoteAccess` (main actor; ties them together, signs kind 18; owns
   pairing for both doors: the ask, the cable's devices, Require pairing,
   Remove at both doors). Pairing at home (docs/home-pairing-plan.md): `Door`
+  (admission at a TLS door, one class behind both listeners: the places
+  waiting for admission and their deadlines, the backoff and its line, the
+  verify block, the device gate, one pairing request per `sill-pair/1`
+  connection; `RemoteServer` keeps the remote door's listener), `DoorPolicy`
+  (who each door admits, the ask rule's six steps, `afterGate`,
+  `isTestHost`: a host that does not advertise and is not Sill.app's own
+  executable; `Places`, what waiting for admission costs an address and its
+  IPv6 /64, and the places kept for addresses that proved a paired key; pure,
+  `Tests/checks/door-policy`), `CableLink`
+  Remove at both doors; names the sessions each cut-off closes to the
+  coordinator as it decides, `onCutOff`, and says whether a session that
+  registers later is still served, `stillServes`). Pairing at home (docs/home-pairing-plan.md): `Door`
   (admission at a TLS door, one class behind both listeners: the pending
   caps, the backoff, the verify block, the device gate, one pairing request
   per `sill-pair/1` connection; `RemoteServer` keeps the remote door's
   listener), `DoorPolicy` (who each door admits, the ask rule's six steps,
-  `afterGate`, `isTestHost`: a host that does not advertise and is not
+  `afterGate`, `stillServes` (a session registered behind a change that cut
+  it off), `isTestHost`: a host that does not advertise and is not
   Sill.app's own executable; pure, `Tests/checks/door-policy`), `CableLink`
   (whether a connection came over the USB cable to an iPhone or iPad, from
   InterfaceSnapshot's IOKit reading, and the device's ID; pure,
@@ -6761,7 +7290,7 @@ good.
   (an unlocked console), `TestHooks` (the door and pairing hooks a host that
   is not a test host ignores, one line each), `AskLimits` (PairingWindow.swift:
   one device-opened window at a time, three in 10 minutes, the quiet after
-  the Mac's Cancel or a stop; `Tests/checks/ask-limits`) and
+  the Mac's Cancel or a stop, an IPv6 asker's by its /64; `Tests/checks/ask-limits`) and
   `RequirePairingValue` (HostIdentity.swift: Require pairing's record, off
   only with the Mac's own signature). StreamServer's home door is plain (the
   CLI without --pairing), TLS (`Door(.home)`, `p` in its TXT record) or
@@ -6784,7 +7313,8 @@ good.
   per element, 1.5 s a menu, and no item begun that would end past the
   request's deadline), `MenuMirror` (main actor: the target, the version, the
   subscribers (only they are served), one request at a time with its
-  deadline, the cache and the kept elements; the TEST ONLY
+  deadline, the cache and the kept elements; a cut-off device's waiting
+  requests neither read nor made, `clientRevoked`; the TEST ONLY
   SILL_TEST_MENU_PID, honoured only by a synthetic host, makes a process's
   menus the test pattern's) and `MenuSelfTest` (`--menu-selftest[=APP]`,
   read-only).
@@ -6850,7 +7380,10 @@ good.
   on its own stdout), `--print-cable` and `--no-clipboard`.
 - `Sources/SillMenuBar/` — the app: `main.swift` (AppKit lifecycle, accessory
   policy), `AppDelegate` (launch order, Quit, the modal-loop rule), `AppModel`
-  (owns the coordinator, presentation, App Nap guard, onboarding),
+  (owns the coordinator, presentation, App Nap guard, onboarding), `AppIdentity`
+  (whether this launch is Sill.app itself, by its signing identifier, signature and bundle
+  wherever it runs from, or the bare binary, the one test host; pure but for its reader,
+  `Tests/checks/test-host`),
   `HostSettings` (UserDefaults; the presets are StreamProtocol's
   `QualityPreset`), `StatusItemController` (+ `MenuBuilder`), `StatusText`
   (all status copy), `StatusCard`, `StatusGlyph`, `SettingsWindow` (its
@@ -6974,7 +7507,8 @@ good.
   the tool and the background. Sourced, it only defines its functions.
   `Scripts/sillclient.py` is the wire-format test client
   (timed `--set=K=V[,K=V]@T` kind 17 changes with tokens 1, 2, 3…,
-  `--raw17=JSON@T`, `--pick=none|desktop|window:ID@T`, `--stats`,
+  `--raw17=JSON@T`, `--raw9=JSON@T` (a literal viewport, kind 9),
+  `--pick=none|desktop|window:ID@T`, `--stats`,
   `--expect=K=V[,…]` against the last kind 16, which it prints one per line,
   and each second's frames with their kB (the encoder's output);
   `--host`, `--device`, `--big-payload`, `--flood`, `--stop-ping@T`,
@@ -6983,7 +7517,7 @@ good.
   `--expect-tls-fail`, printing kinds 18, 20 and 22; pairing at home with
   `--pair-ask[=cable]`, `--then-code=FILE`, `--pair-hold=S`, `--pair-cancel`,
   `--pair-v=N` and `--expect-pair=R`; the Mac's pointer with
-  `--pointer` (each kind 26), `--move=X,Y@T`, `--tap=X,Y@T`, `--key=USAGE@T`
+  `--pointer` (each kind 26), `--move=X,Y@T`, `--tap=X,Y@T`, `--key=USAGE[,HOLD]@T`
   and `--input=JSON@T` (a literal kind 8), the input flags only to a
   `--synthetic` host on this Mac (lsof and ps); trackpad gestures with
   `--gesture=NAME[,FINGERS]@T` and `--raw28=JSON@T` (kind 28), likewise only to
@@ -7445,6 +7979,8 @@ good.
   writer, against Finder's own layout of the file, make-dmg.sh's layout
   arguments and the SVG's size and edge), `door-policy`, `duo` (DuoPosture;
   `tour` and `phone-portrait` take the Duo's real sizes too), `encoder-mailbox`,
+  `encoder-slowstate`, `fence`, `firewall` (FirewallRule), `gesture-chords`, `gestures`, `goodbye`,
+  `hardware-keyboard` (iOSClient's HardwareKeyboardPolicy),
   `encoder-slowstate`, `fence`, `gesture-chords`, `gestures`, `goodbye`,
   `hardware-keyboard` (iOSClient's HardwareKeyboardPolicy and PointerScroll),
   `home-device`, `home-model`, `home-records`, `home-txt`, `installed-apps`
@@ -7460,9 +7996,17 @@ good.
   `phone-portrait`, `pointer-control`, `pointer-presence`,
   `pointer-watch`, `policy` (with its `home.swift`), `protocol`,
   `remote-rules` (with its `home.swift`), `settings-window` (Sill.app's
+  `SettingsWindowFit`), `stream-zoom` (iOSClient's StreamZoom), `test-host` (Sill.app's AppIdentity with
+  IdentityStorePlan), `text-composition` (iOSClient's TextComposition with
+  StreamProtocol's Input.swift), `tour`, `update-policy`, `virtual-display-api`
   `SettingsWindowFit`), `stream-zoom` (iOSClient's StreamZoom), `text-composition` (iOSClient's TextComposition with
   StreamProtocol's Input.swift), `thumbnail-hold` (iOSClient's ThumbnailHold), `tour`, `update-policy`, `virtual-display-api`
   (VirtualDisplay.swift whole, as VirtualDisplayProbe compiles it: its surface,
+  `SettingsWindowFit`), `stream-zoom` (iOSClient's StreamZoom), `text-composition` (iOSClient's TextComposition with
+  StreamProtocol's Input.swift), `tour`, `update-policy`, `viewport-bounds`
+  (StreamProtocol's ViewportBounds: what a host takes of a device's viewport; and
+  ClientStats.lateSince),
+  `virtual-display-api` (VirtualDisplay.swift whole, as VirtualDisplayProbe compiles it: its surface,
   TypeEncoding and Runtime.method's decision, on classes made at run time, against
   the encodings measured on Apple silicon and reported from Intel machines),
   `window-restore` (WindowRestore's rule and sequences against a stand-in Mac,
@@ -7535,6 +8079,8 @@ SILL_TEST_LOOPBACK=1 SILL_TEST_HOTKEYS='108=off,173=off' .build/release/SillHost
 swift run -c release SillHost --no-clipboard  # share nothing of the clipboard with devices (on by default, as in Sill.app)
 SILL_TEST_LOOPBACK=1 SILL_TEST_SOFTWARE_ENCODER=1 SILL_TEST_NO_ROUTER=1 SILL_TEST_PASTEBOARD=me.saffer.sill.test.x SILL_TEST_CLIPBOARD_LOG=1 .build/release/SillHost --synthetic   # the clipboard on a pasteboard of its own (never this Mac's), each decision printed with sizes
 SILL_TEST_NO_SCREEN=1 SILL_TEST_LOOPBACK=1 SILL_TEST_SOFTWARE_ENCODER=1 SILL_TEST_NO_ROUTER=1 .build/release/SillHost --synthetic   # TEST ONLY: ScreenCaptureKit never asked (no window list, no thumbnails), so a host an agent runs asks macOS for no screen recording
+SILL_TEST_FIREWALL=executable SILL_TEST_NO_SCREEN=1 SILL_TEST_LOOPBACK=1 SILL_TEST_SOFTWARE_ENCODER=1 SILL_TEST_NO_ROUTER=1 .build/release/SillHost --synthetic   # TEST ONLY: the macOS firewall's answers canned (executable|bundle|both|all|off|allowed|unreadable, or a file holding one, read at each check): "Firewall: the macOS firewall blocks Sill’s executable, …"
+/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate; …/socketfilterfw --listapps; …/socketfilterfw --getappblocked PATH   # the firewall, read-only as any user; never --unblockapp, --add, --remove or --set* (they change it, with sudo)
 python3 Scripts/sillclient.py PORT 6 none --clipboard --copy=hello@2 --expect=clipboard=none   # subscribe, send text as a device's Paste does; each kind 32 printed
 SILL_TOUCHRIG_SIM='Sill touchrig' Tests/touchrig/run.sh new && Tests/touchrig/run.sh --rev origin/main base && Tests/touchrig/compare.py .build/touchrig/base.log .build/touchrig/new.log   # the surfaces under synthesized touches
 Tests/checks/run-all.sh                 # every pure check, as CI runs them (~5 min; --mutants adds the mutants, well over an hour)
@@ -7620,8 +8166,11 @@ Remote access, headless: TEST ONLY variables, honoured only by a host that
 does not advertise: `SILL_TEST_REMOTE_DIR=<dir>` (the identity and trust list
 in a 0700 directory instead of memory or the keychain; the bare app's
 `-SillPairAfter <s>` leaves `pairing.url` and `pairing.code` there, 0600, never
-printed), `SILL_TEST_PAIRING_TTL=<s>`, `SILL_TEST_BACKOFF_SECONDS=<s>`,
-`SILL_TEST_ORIGIN=vpn|internet` (loopback counts as that origin),
+printed), `SILL_TEST_PAIRING_TTL=<s>`, `SILL_TEST_BACKOFF_SECONDS=<s>` (the backoff a TLS door
+gives an address whose connections waited unadmitted or were refused, five failures in a minute:
+a test client's `--pair-hold`s, refused handshakes or connections it keeps closing, from 127.0.0.1,
+meet it, "Home door backed off 127.0.0.1 for 300 s: …"), `SILL_TEST_ORIGIN=vpn|internet` (loopback
+counts as that origin),
 `SILL_TEST_REMOTE_ORIGIN=vpn|internet` (the same at the remote door alone, so
 one loopback host serves a device away and one at home: away from home's
 H8 and S4) and `SILL_TEST_NO_ROUTER=1` (never ask the router; set it on every
@@ -7662,7 +8211,10 @@ dy moves the content down, so the sign shows which way a device's scroll went,
 and every event of one scroll lands at one place), and each
 check a key's up arms ("Test input: key 55
 up: the table read again in 0.25 s for command"): what a device's keys and
-buttons leave for its next click (KeyStrokes), without posting anything.
+buttons leave for its next click (KeyStrokes), without posting anything; and
+where a device the Mac stops serving stops landing input ("Test input: iPad is
+no longer served: only the up of a key or a button it holds down goes from
+here on.", RevokedInput).
 A sleeping display, headless: a test host declares no user activity and counts
 `disp.wakeDry` where a real one would declare (`sillclient.py`'s connect, a tap,
 a key; never a pick, nor a move right after a restart). TEST ONLY
@@ -7694,10 +8246,13 @@ the Mac locked; `SILL_TEST_ASK_QUIET=<s>` shortens the 10 minutes of quiet
 after the Mac's Cancel or a stop; `SILL_TEST_ASK_FROM_THIS_MAC=1` skips the
 ask rule's step for an ask from this Mac itself (answered `openOnMac` unless a
 window is open, and lighting no menu item), so a test client on this Mac opens
-windows. The bare app takes `-requirePairing NO`, `-SillSetAfter '<s>
-requirePairing=0|1'`, `-SillCancelPairingAfter '<s>[; <s> …]'` (the window
-closed as its Cancel does), `-SillCableNoticeAfter <s>` (the cable notice for
-a sample device) and `-SillMenuAfter '<s>[; <s> …]'` (the status menu in the
+windows; `SILL_TEST_REQUIRE_PAIRING=0` (the CLI's) turns Require pairing off
+at `--pairing`'s door for the run, so an unpaired device's session can be
+tried (`sillclient.py --tls --identity=DIR --pin=none`). The bare app takes
+`-requirePairing NO`, `-SillSetAfter '<s> requirePairing=0|1'`,
+`-SillCancelPairingAfter '<s>[; <s> …]'` (the window closed as its Cancel
+does), `-SillCableNoticeAfter <s>` (the cable notice for a sample device) and
+`-SillMenuAfter '<s>[; <s> …]'` (the status menu in the
 log, line by line). Sill.app itself ignores every `-Sill…After` hook,
 `-requirePairing` and `SILL_TEST_REMOTE_DIR` with one line each (any process
 can start it with arguments and its grants); `-SillRenderPreviews`,
@@ -7706,7 +8261,14 @@ and the trust list live in the login keychain (service
 `me.saffer.sill.remote`, accounts `paired-devices` and `require-pairing`,
 beside the key "Sill Remote Access"), never in UserDefaults; Settings ›
 Devices' Remove forgets one device, and deleting those items makes this Mac
-new to every device.
+new to every device. Two hosts under one Bonjour name (a Mac that took
+another's name, the security scan's finding 3): run each without
+SILL_TEST_SERVICE_TYPE (whose registration is "Sill test ‹pid›") and advertise
+it in turn with `dns-sd -i lo0 -R "Studio f3" _silltest._tcp local PORT
+r=<16 base64url characters> p=0`, on lo0 alone (on every interface the
+simulator dials this Mac's other addresses first, which a loopback host never
+answers); the bare `SillMenuBar --synthetic -requirePairing NO`, under a name
+of its own and with `-SillLogFile`, is an open door.
 The Mac's menus, headless: `swiftc -O Scripts/menufixture.swift -o
 $T/menufixture -framework AppKit`, then `$T/menufixture serve $T/fixture.log
 60` (it exits by itself, 120 s at most, and can never take the front) and a
@@ -7998,7 +8560,10 @@ device keeps working with Macs from the first public build on, or each says why
   44, a device's keyframe request after its picture was interrupted, empty, which a host from
   before skips; 29 to 31 and 33 to 42 stay free, pull request #66's, and 43 is the Mac's sound's,
   below), inside `sill/1` at both doors (19 and 20 on their own `sill-pair/1` connection, the
-  next bullet); the ping echo; a
+  next bullet); the ping echo; a viewport (kind 9) within `ViewportBounds`, each side 1 to
+  16384 points and a text scale 0.25 to 4 or none: every device build's is, a host from
+  2026-10-29 on refuses any other whole (security scan, finding 4), so a later device keeps
+  within them; a
   kind 16 within 2 s of the first window list, one per connection since Sill for Mac 0.5.1 (away
   from home, docs/remote-bundle-plan.md §4): its `settings` the pair that connection's controls
   set (the away quality for a device away), and its optional `away` (AwayQuality, from a host with
