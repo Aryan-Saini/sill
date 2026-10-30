@@ -186,6 +186,41 @@ for t in allTrusts() where t.hasKey { for o in origins { for n in [0, 8] {
 } } }
 check("after the gate: \(agSameOK) of \(agSame) admit exactly what `.ready` and the origin gate would admit now", agSame == agSameOK)
 
+// MARK: Still served (security scan finding 10, the review of PR #254)
+//
+// The coordinator asks, as it registers a session, whether the Mac still serves it: a session the door
+// admitted while the Mac was deciding a change that cuts it off (Remove, Require pairing turned on, Remote
+// Access or internet access turned off: the decision saves it first, a keychain write or its prompt)
+// registers on the main actor only behind that decision, which could not name it. Judged as afterGate
+// judges a session the device gate held, the remote door's limit no cut, and a plain session (no key: the
+// plain home door) never cut off.
+var ss = 0, ssOK = 0
+for door in [D.Door.home, .remote] { for w in [false, true] { for o in origins { for t in allTrusts() { for enc in [false, true] {
+    ss += 1
+    let want = !enc || afterGateOracle(door, wasPaired: w, o, t, 0) == nil
+    if D.stillServes(door, encrypted: enc, wasPaired: w, origin: o, t) == want { ssOK += 1 }
+    else { print("  stillServes \(door) encrypted \(enc) wasPaired \(w) \(o) \(t): \(!want)") }
+} } } } }
+check("still served: \(ssOK) of \(ss) combinations (both doors, TLS or plain, paired at admission or not, every origin) match", ss == ssOK)
+check("still served: Remove at home cuts the key off, with Require pairing on or off",
+      !D.stillServes(.home, encrypted: true, wasPaired: true, origin: .lan, T(paired: false, requirePairing: true))
+      && !D.stillServes(.home, encrypted: true, wasPaired: true, origin: .lan, T(paired: false, requirePairing: false)))
+check("still served: the same key admitted again as an unpaired one at the open door (Require pairing off) is served",
+      D.stillServes(.home, encrypted: true, wasPaired: false, origin: .lan, T(paired: false, requirePairing: false)))
+check("still served: Require pairing turned on cuts an unpaired key off, never a paired one",
+      !D.stillServes(.home, encrypted: true, wasPaired: false, origin: .direct, T(paired: false, requirePairing: true))
+      && D.stillServes(.home, encrypted: true, wasPaired: true, origin: .direct, T(paired: true, requirePairing: true)))
+check("still served: Remove, Remote Access off and internet access off at the remote door",
+      !D.stillServes(.remote, encrypted: true, wasPaired: true, origin: .vpn, T(paired: false, remoteAccess: true))
+      && !D.stillServes(.remote, encrypted: true, wasPaired: true, origin: .vpn, T(paired: true, remoteAccess: false))
+      && !D.stillServes(.remote, encrypted: true, wasPaired: true, origin: .internet, T(paired: true, remoteAccess: true, internetAccess: false))
+      && [OriginPolicy.Origin.loopback, .lan, .vpn].allSatisfy { D.stillServes(.remote, encrypted: true, wasPaired: true, origin: $0, T(paired: true, remoteAccess: true, internetAccess: false)) })
+check("still served: nothing changed, at either door, and the remote door's limit is no cut",
+      D.stillServes(.remote, encrypted: true, wasPaired: true, origin: .internet, full)
+      && D.stillServes(.home, encrypted: true, wasPaired: true, origin: .lan, full))
+check("still served: a plain session (no key), whatever the switches", allTrusts().allSatisfy { t in origins.allSatisfy { o in
+    D.stillServes(.home, encrypted: false, wasPaired: false, origin: o, T(hasKey: false, paired: false, requirePairing: t.requirePairing, remoteAccess: t.remoteAccess)) } })
+
 // MARK: The one kind 19
 
 check("kind 19 at home: ask → the ask rule", D.pairing(.home, method: "ask", version: 1) == .ask)

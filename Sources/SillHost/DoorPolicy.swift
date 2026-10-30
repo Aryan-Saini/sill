@@ -142,6 +142,20 @@ enum DoorPolicy {
         }
     }
 
+    /// Whether the Mac still serves a session it admitted, from the switches and trust list as they are
+    /// now (security scan finding 10, the review of PR #254): false once a change has cut it off (Remove,
+    /// Require pairing turned on, Remote Access or internet access turned off), judged as `afterGate`
+    /// judges a session the device gate held, from what it was admitted as (`wasPaired`: its key was
+    /// paired then; `origin`; the door). The coordinator asks it as it registers a session: one the door
+    /// admitted while the Mac was deciding such a change (saving it: a keychain write, or its prompt)
+    /// registers on the main actor only behind that decision, which could not name it, and every
+    /// message of it comes after its registration. A plain session (`encrypted` false: the plain home
+    /// door, no key) is never cut off; the remote door's limit (`busy`) is no cut.
+    static func stillServes(_ door: Door, encrypted: Bool, wasPaired: Bool, origin: OriginPolicy.Origin, _ t: Trust) -> Bool {
+        guard encrypted else { return true }
+        return afterGate(door, wasPaired: wasPaired, origin: origin, t, remoteSessions: 0) == nil
+    }
+
     /// How a door treats the one kind 19 of a pairing connection it admitted.
     enum Pairing: Equatable, Sendable {
         /// The ask rule (`ask(…)`): the home door's "pair me".

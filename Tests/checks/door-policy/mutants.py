@@ -202,5 +202,13 @@ M = [
     ("places: prune drops the known addresses' newest", F,
      "                    provenAt = Dictionary(uniqueKeysWithValues: provenAt.sorted { $0.value > $1.value }",
      "                    provenAt = Dictionary(uniqueKeysWithValues: provenAt.sorted { $0.value < $1.value }"),
+    # Still served (security scan finding 10, the review of PR #254): a session registered behind the decision.
+    ("still served: every session, cut off or not", F, "        return afterGate(door, wasPaired: wasPaired, origin: origin, t, remoteSessions: 0) == nil",
+     "        return true"),
+    ("still served: a plain session judged as a TLS one", F, "        guard encrypted else { return true }\n", ""),
+    ("still served: the remote door's limit counts as a cut", F, "afterGate(door, wasPaired: wasPaired, origin: origin, t, remoteSessions: 0) == nil",
+     "afterGate(door, wasPaired: wasPaired, origin: origin, t, remoteSessions: maxRemoteSessions) == nil"),
+    ("still served: judged as if never paired (Remove with Require pairing off missed)", F,
+     "afterGate(door, wasPaired: wasPaired, origin: origin, t, remoteSessions: 0) == nil", "afterGate(door, wasPaired: false, origin: origin, t, remoteSessions: 0) == nil"),
 ]
 sys.exit(0 if module.mutate("door-policy", M, sys.argv[1]) else 1)
