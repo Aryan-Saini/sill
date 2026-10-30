@@ -191,22 +191,58 @@ Settings panel already cover the stream for hit-testing.
     headers name no such test), so for Full Keyboard Access the alternative is Q1's: the Keyboard button's
     second press stops keys for the session.
 12. **Key repeat** (#162, branch `key-repeat`; Noah, 2026-10-27: "same as a regular keyboard, wait times
-    and all … Same as desktop", so decided; what follows are the build's defaults). The Mac's host repeats
-    a key held down on the device after the Mac's own Delay Until Repeat and at its Key Repeat Rate
+    and all … Same as desktop", so decided; what follows are the build's defaults). The Mac's host repeats a
+    key held down on the device after the Mac's own Delay Until Repeat and at its Key Repeat Rate
     (`KeyRepeat`, read from NSEvent at each key's down): the keys that reach the Mac as keys (the arrows,
     Esc, Forward Delete, Home, End, Page Up and Down, the F-keys, any key with ⌘, ⌃ or ⌥ held), and the
-    portrait key row's esc, tab and arrows, down from the touch to the release (`HeldCap`; a phone's esc
-    and tab stay taps at the accessibility text sizes, where a long press shows the cap large). The text
-    system's keys (letters, digits, Space, Delete, Return and Tab without ⇧) keep iPadOS's own repeat, and
-    an Esc through its key command iPadOS's repeat of the command. Defaults taken: a modifier pressed or
-    let go mid-hold changes the repeats after it and never stops them, as on a Mac; one key at a time, the
-    last pressed, and an earlier key still held does not take over again; the repeats wait while the
-    device has said nothing for half a second (a stalled link can hold the key's up back for seconds
-    before the Mac gives the device up) and start over after the delay once it speaks; a delay under
-    0.1 s and an interval under 15 ms count as those, and Off (a delay or an interval of a minute or more)
-    repeats nothing. Known: ⇧ let go while a hardware ⇧→ is held keeps selecting until → comes up (the
-    text system keeps ⇧'s own key, so the Mac never hears it go). Alternative: the device repeats (#163:
-    0.4 s, then 20 a second, its own timing, not the Mac's).
+    portrait key row's esc, tab and arrows, down from the touch to the release (`HeldCap`; a phone's esc and
+    tab stay taps at the accessibility text sizes, where a long press shows the cap large), and an Esc
+    through its key command iPadOS's repeat of the command.
+
+    The text system's keys were thought to keep iPadOS's own repeat; a letter never repeats there (Noah,
+    2026-10-29, the iPad mini with a Bluetooth keyboard and through Universal Control: "hold p didnt work …
+    When I held down e it showed the keyboard options for Spanish characters"; in the simulator with
+    Tests/keyrig: one insertText for P held 2.3 s, E's accent popover, which stays after the release), and
+    Delete and Space repeat at iPadOS's own timing (0.4 s, then about ten a second), each a separate press
+    on the Mac. So a hardware keyboard's characters now go to the Mac as keys whenever the Mac may type them
+    (`KeyTyping.keys`): it says it repeats a held key (`WindowList.keyRepeat` 1: a Sill for Mac from before
+    key repeat would type each once, where iPadOS repeats Delete and Space, so it is sent nothing new), the
+    keyboard selected on the iPad types the Latin alphabet directly, nothing is composed, nothing is latched
+    on the key row. Letters, digits, punctuation, Space, Delete, Return, Tab and Shift
+    (`ForwardedKeys.characterUsages`) then repeat at the Mac's timing, take the Mac's layout and dead keys,
+    and never bring up iPadOS's accents; a letter with Caps Lock on carries Shift (Caps Lock stays the
+    iPad's). The Mac's own press and hold applies to them as to its own keyboard (the repeats carry the
+    autorepeat flag): in TextEdit with macOS's default a held E shows the Mac's accent menu and a held P
+    types once, and Terminal, iTerm2 and apps with `ApplePressAndHoldEnabled` off repeat. Default taken: the
+    Latin alphabet only. An input method's keyboard (Chinese, Cantonese, Japanese, Korean, Vietnamese,
+    Hawaiian, the transliteration keyboards) and another script's (Russian, Greek, Arabic, Hindi…) keep
+    iPadOS's typing, with no repeat: the input method has to see its first letter, and a keyboard in another
+    script says which characters are meant, which the Mac's layout would not give (with keyboards in two
+    languages ⌃Space is iPadOS's, so a Mac-side switch would be out of reach). Vietnamese and Hawaiian are
+    the Latin alphabet's two keyboards whose input managers say they compose text (TextInput's
+    doesComposeText, in the iOS 27.0 simulator runtime: `KeyTyping.composingLatin`); whether Hawaiian's
+    marks text for a hardware keyboard only a device shows, and the default leaves it to iPadOS. Latin
+    keyboards that compose a letter with its accents (`UIKeyboardComposesText`: Czech, Slovak, Faroese,
+    Navajo, Guarani…) type on the Mac like the rest: a hardware keyboard's dead keys make those, and the
+    Mac's input source has its own. Alternative: every keyboard that
+    does not compose types on the Mac (Russian then needs the Mac's Russian input source, and the iPad's own
+    choice of keyboard no longer matters but for input methods). Known: the iPad's hardware keyboard layout
+    setting and its Key Repeat setting no longer apply to the Mac's keys (the Mac's input source does:
+    AZERTY on the iPad and ABC on the Mac type QWERTY's letters); the keypad and the ISO keyboards' Non-US `\`
+    and # stay iPadOS's (no Sill for Mac before has them as keys).
+
+    Defaults taken: a modifier pressed or let go mid-hold changes the repeats after it and never stops them,
+    as on a Mac; one key at a time, the last pressed, and an earlier key still held does not take over
+    again; the repeats wait while the device has said nothing for half a second (a stalled link can hold the
+    key's up back for seconds before the Mac gives the device up) and start over after the delay once it
+    speaks; a key's first repeat waits for a word from its device heard no earlier than 0.3 s before it is
+    due (`KeyRepeat.firstWord`, the review of #162's letters: a letter typed or a Delete, its up held back by
+    a stall, is never repeated; a key held has its word in time, a ping every quarter of a second); a delay
+    under 0.1 s and an interval under 15 ms count as those, and Off (a delay or an interval
+    of a minute or more) repeats nothing. Known: while iPadOS types the characters, ⇧ let go while a
+    hardware ⇧→ is held keeps selecting until → comes up (the text system keeps ⇧'s own key, so the Mac
+    never hears it go; while the Mac types them ⇧ is a key of its own and the repeats follow it).
+    Alternative: the device repeats (#163: 0.4 s, then 20 a second, its own timing, not the Mac's).
 
 ## Test plan
 

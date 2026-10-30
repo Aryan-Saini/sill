@@ -768,24 +768,103 @@ held for an app's activation, and it waits while the device is quiet: half a
 second without a word from it (a device pings four times a second) stops the
 repeats until it is heard again, and they start over after the delay, since a
 stalled network can hold a key's up back for seconds before the Mac gives the
-device up. Which keys get it: those a device sends to the Mac as keys, a
+device up. A key's first repeat also waits for a word from the device heard no
+earlier than 0.3 s before it is due (`KeyRepeat.firstWord`): the link keeps the
+device's messages in order, so a word heard then says the key was still down,
+and a key only tapped (a letter typed, a Delete) whose up a stall holds back is
+never repeated, which a ping sent during the tap, before its up, would otherwise
+have allowed for half a second. A key held down has its word in time, its device
+pinging every quarter of a second; a late ping makes the first repeat wait for
+it. Which keys get it: those a device sends to the Mac as keys, a
 hardware keyboard's arrows, Esc, Forward Delete, Home, End, Page Up and Down,
-the F-keys and any key with ⌘, ⌃ or ⌥ held (⌘Z, ⌥⌫, ⌥←), and the portrait key
-row's esc, tab and arrows, which stay down while a finger is on them (down at the
+the F-keys and any key with ⌘, ⌃ or ⌥ held (⌘Z, ⌥⌫, ⌥←), its letters, digits,
+punctuation, Space, Delete, Return and Tab whenever the Mac types them (below),
+and the portrait key row's esc, tab and arrows, which stay down while a finger is on them (down at the
 touch, up at the release; what is latched goes down with the key and is spent at
 the touch; `HeldCap`), but for a phone's esc and tab at the accessibility text
-sizes, whose long press shows the cap large and stays a tap. Letters, digits,
-Space, Delete, Return and Tab typed through iPadOS's text system repeat as
-before, at iPadOS's own key repeat (its setting is among Accessibility's
-keyboard settings), as does the on-screen keyboard's delete; an Esc that reaches the Mac through its key command (an iPad
-that keeps it from `pressesBegan`) repeats as iPadOS repeats a key command. No
-wire change: every device gets it from a Mac with this build.
+sizes, whose long press shows the cap large and stays a tap. An Esc that reaches
+the Mac through its key command (an iPad that keeps it from `pressesBegan`)
+repeats as iPadOS repeats a key command. What iPadOS's text system types reaches
+the Mac as typed text, never as a key held down, so the Mac never repeats it:
+iPadOS types a held letter once (then its press and hold shows the letter's
+accents, or nothing), and repeats Delete and Space itself at its own timing,
+each repeat a separate press on the Mac. That is the on-screen keyboard's
+typing, and a hardware keyboard's characters while iPadOS types them. The repeat
+needs no wire change: every device gets it from a Mac with this build, a hardware
+keyboard's letters from a device with this build too.
 `Sources/SillHost/KeyRepeat.swift` is the rule, checked in `Tests/checks/key-repeat`;
 the key row's caps are `HeldCap` in `iOSClient/KeyChords.swift`, checked in
 `Tests/checks/key-strokes`. A host that posts counts `in.keyRepeat` in its `[1s]`
 lines; a `--synthetic` one with `SILL_TEST_INPUT_LOG=1` prints each repeat
 (`Test input: key 123 repeat (none)`) and when they start (`Test input: key 123
 repeats after 0.50 s, every 0.033 s`).
+
+Who types a hardware keyboard's characters (`KeyTyping`, decided as each key
+goes down): with a Sill for Mac that repeats held keys (its window lists say
+`keyRepeat` 1), the keyboard selected on the device in the Latin alphabet
+(English, French, German, Spanish…), nothing composed and no modifier latched on
+the key row, the Mac does. Its letters, digits, punctuation, Space, Delete,
+Return, Tab and Shift then go to the Mac as keys, as from a keyboard plugged
+into it, so the Mac repeats a held one at its own Delay Until Repeat and Key
+Repeat Rate, its own keyboard layout and dead keys make the characters (⌥E, then
+E, is é on the Mac's ABC or U.S. layout), Shift held is the Mac's (a held
+letter's repeats follow it; a click with it held is a shift-click), and iPadOS's
+text system never sees them. Before, it typed a held letter once and then showed
+its accents (E's è é ê…, in a popover over the picture that stays after the
+release) or nothing, never a repeat, and it repeated Delete and Space itself at
+its own timing, each repeat a separate press on the Mac (Noah's iPad mini, with
+a Bluetooth keyboard and with the Mac's own through Universal Control,
+2026-10-29; in the iPad simulator with `Tests/keyrig`: one `insertText` for P
+held 2.3 s, the popover for E, and 20 separate Deletes and Spaces in 2.3 s, the
+first after about 0.4 s and then one every 0.105 s). With a Sill for Mac from
+before key repeat nothing changes: iPadOS's text system types them as it always
+did (sent as keys, such a Mac would type each once, where iPadOS repeats Delete
+and Space itself).
+
+A known limit: the device's own hardware keyboard layout (Settings › General ›
+Keyboard › Hardware Keyboard) and its Key Repeat setting no longer apply to
+those keys. The Mac's input source does, as for its own keyboard: a French
+AZERTY keyboard types AZERTY only while the Mac's input source is French, and
+the same keys with the Mac on ABC type QWERTY's letters. So does the Mac's own
+press and hold: each repeat carries the autorepeat flag, so in an app that uses
+macOS's press and hold (TextEdit, Notes, and VS Code until it is turned off for
+it; `ApplePressAndHoldEnabled`, on by default) a held letter shows the Mac's
+accent menu or types once, and in one that repeats (Terminal, iTerm2, or any app
+with it off: `defaults write -g ApplePressAndHoldEnabled -bool false`) it
+repeats. Caps Lock stays the device's: its key is iPadOS's, and a letter typed
+while it is on reaches the Mac with Shift, so it is a capital whatever the Mac
+makes of a posted caps lock flag.
+
+A keyboard in another script (Russian, Greek, Hebrew, Arabic, Thai, the Indic
+scripts…) and an input method's keyboard (Chinese, Cantonese, Japanese, Korean,
+Vietnamese, Hawaiian, the transliteration keyboards) keep iPadOS's typing: what
+it types reaches the Mac as typed text, which the Mac never repeats (a held
+letter types once there, and iPadOS repeats Delete and Space itself), since an
+input method has to see its first letter, and another script's keyboard says
+which characters are meant, which the Mac's layout would not give. Vietnamese
+and Hawaiian are the Latin alphabet's two keyboards whose input methods compose
+(their input managers say so in the iOS 27.0 simulator runtime's TextInput
+bundles: `KeyTyping.composingLatin`); every other one is in another script.
+Latin keyboards that compose a letter with its accents (Czech, Slovak, Faroese,
+Navajo, Guarani…) are the Mac's like any Latin keyboard: a hardware keyboard's
+dead keys make those, and the Mac's input source has its own. To type
+another script with the Mac's repeats, select a keyboard in the Latin alphabet
+on the device and that script's input source on the Mac. While a modifier is
+latched on the key row a hardware key goes through iPadOS's text system as
+before, so the latched shortcut is made. The keypad and the two extra keys of
+ISO keyboards (Non-US `\` and Non-US #) also stay iPadOS's whoever types: no Sill
+for Mac before this one has them as keys. With no keyboard selected (iPadOS
+gives none), the Mac types only if every keyboard set up would have it type.
+Debug builds say which way each key went and why:
+`hwkey: usage 19 down via pressesBegan (none): to the Mac; the Mac types: en-US`,
+`…: the text system's; iPadOS types: zh-Hant` (or
+`…: the Mac repeats no key (a Sill for Mac before key repeat)`), and
+`textinput: the keyboard is now ru-RU; a hardware keyboard's characters: iPadOS types: ru-RU`
+at each switch.
+`KeyTyping` is in `iOSClient/TextComposition.swift`, checked in
+`Tests/checks/text-composition`; the keys it covers are
+`ForwardedKeys.characterUsages` in `iOSClient/KeyChords.swift`, checked in
+`Tests/checks/key-strokes`.
 
 Over the picture, two fingers on a Magic Keyboard's trackpad (or a Magic
 Trackpad or Magic Mouse) scroll the window under the pointer as a finger does,
@@ -803,6 +882,10 @@ itself, and which channel brings its Esc, are still untested.
 
 The stream's input view is a text input (`UITextInput`, issue #138), so typing in
 a language whose input method composes its text, and dictation, reach the Mac.
+(A hardware keyboard's keys with a keyboard in the Latin alphabet selected go to
+the Mac as keys instead, typed by the Mac's own layout and repeated when held: the
+hardware keyboard section above. Every input method's keyboard, and every other
+script's, types through iPadOS as described here.)
 An input method (Chinese Zhuyin or Pinyin, Japanese, Korean and the like)
 composes on the device: what it is composing shows at the top middle of the
 picture, its candidates show where iPadOS puts them (on the on-screen keyboard,
@@ -835,8 +918,12 @@ in any text field there and as on a Mac with several input sources. With
 keyboards in one language (Emoji and dictation aside), Control-Space goes to the
 Mac as before: Xcode's completions, VS Code's suggestions, the Mac's own input
 source switch. Control-Shift-Space, Control-Option-Space and
-Control-Command-Space always go to the Mac. The Globe key switches the device's
-keyboard too. Whenever the keyboard switches while the input view holds it, with
+Control-Command-Space always go to the Mac. A key held down on the Mac when
+Control-Space switches the device's keyboard comes up there at the Space
+(`ForwardedKeys.keyboardSwitch`): on a Mac another key's down stops the held one
+repeating, and this Space is one the Mac never hears, so a letter held across it
+went on repeating as Control-P. The Globe key switches the device's keyboard
+too. Whenever the keyboard switches while the input view holds it, with
 a hardware keyboard or the on-screen one, the new keyboard's name shows over the
 picture for a second (not Emoji's or dictation's, and not while something is
 being composed).
