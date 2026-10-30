@@ -115,8 +115,9 @@ struct StreamScreen: View {
     @State private var textScale: Double? = nil
     /// The Aa slider is unfolded (finger down): the bars fade their other buttons meanwhile.
     @State private var scaleOpen = false
-    /// The thumbnail whose traffic-light submenu is open (held for 1.5 s). The bars clip their
-    /// content, so the submenu is drawn by this root, anchored to the thumbnail's frame.
+    /// The thumbnail whose traffic-light submenu is open (held for ThumbnailHold's length, 0.5 s unless
+    /// changed in Settings; issue #113). The bars clip their content, so the submenu is drawn by this
+    /// root, anchored to the thumbnail's frame.
     @State private var windowMenu: UInt32? = nil
     /// The Settings panel (the Mac's streaming settings) is open. Up here, next to the drawer, so a
     /// rotation keeps it open and it re-anchors in the other layout.
@@ -1689,11 +1690,30 @@ struct WindowStrip: View {
     /// the submenu outside this clipped strip.
     @Binding var menuFor: UInt32?
 
-    /// Press and hold a thumbnail for 1.5 s: it starts to wiggle and its traffic lights (close,
-    /// minimize, full screen) appear in a submenu beside it, the way a held Home Screen icon
-    /// offers its menu. Keep holding and move: the submenu goes, the thumbnail lifts and drags
+    /// Press and hold a thumbnail for the hold (ThumbnailHold: 0.5 s unless changed in Settings ›
+    /// This iPad or iPhone, 0.2 to 3 s; issue #113, it was a fixed 1.5 s): it starts to wiggle and its traffic
+    /// lights (close, minimize, full screen) appear in a submenu beside it, the way a held Home Screen
+    /// icon offers its menu. Keep holding and move: the submenu goes, the thumbnail lifts and drags
     /// into a new slot. The arrangement is the device's own, persisted per Mac. A tap selects.
-    static let holdToOpen: TimeInterval = 1.5
+    ///
+    /// `Sill.thumbnailHold`, read for its changes (the panel's stepper writes it, and this redraws the
+    /// strip, whose thumbnails take the new length at once); the length itself through
+    /// `ThumbnailHold.seconds(stored:)`, since `-Sill.thumbnailHold 0.3` is a string in UserDefaults.
+    @AppStorage(ThumbnailHold.key) private var storedHold = ThumbnailHold.standard
+    private var hold: TimeInterval {
+        _ = storedHold
+        return ThumbnailHold.seconds(stored: UserDefaults.standard.object(forKey: ThumbnailHold.key))
+    }
+    #if DEBUG
+    /// The last length the console was told ("thumbnails: hold 0.5 s"), so a strip that comes and goes
+    /// (a rotation, another bar) says it only when it changes.
+    @MainActor private static var loggedHold: TimeInterval?
+    @MainActor private static func logHold(_ hold: TimeInterval) {
+        guard loggedHold != hold else { return }
+        loggedHold = hold
+        print(ThumbnailHold.consoleLine(hold))
+    }
+    #endif
     /// What the tour lights of the strip: its thumbnails' band (the strip is as tall as its bar),
     /// with the active halo's 5 pt above and the app badge's 6 pt below.
     static func tourBand(pad: CGFloat) -> EdgeInsets {
@@ -1706,6 +1726,7 @@ struct WindowStrip: View {
     var body: some View {
         let windows = client.orderedWindows
         let slot = width + spacing
+        let hold = self.hold    // read here, in the body, so a change of the setting redraws the strip
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: spacing) {
                 ForEach(Array(windows.enumerated()), id: \.element.id) { index, window in
@@ -1723,7 +1744,7 @@ struct WindowStrip: View {
                                         client.persistWindowOrder()
                                     })
                         .overlay {
-                            HoldDragOverlay(minimumHold: Self.holdToOpen,
+                            HoldDragOverlay(minimumHold: hold,
                                             onTap: { if menuFor != nil { closeMenu() } else { client.select(.window(window.id)) } },
                                             onHold: { openMenu(for: window.id) },
                                             onMove: { t in holdMoved(window: window, index: index, count: windows.count, slot: slot, translation: t) },
@@ -1758,8 +1779,10 @@ struct WindowStrip: View {
         #if DEBUG
         // Harness: `-SillWindowMenu 1` opens the first window's submenu at launch.
         .onAppear {
+            Self.logHold(hold)
             if UserDefaults.standard.bool(forKey: "SillWindowMenu"), let first = client.orderedWindows.first { menuFor = first.id }
         }
+        .onChange(of: hold) { _, now in Self.logHold(now) }
         #endif
     }
 
@@ -1806,6 +1829,8 @@ struct WindowStrip: View {
 /// ScrollView (2026-09-23), and UIKit's long press is exactly the Home Screen mechanic: by the time
 /// it recognizes, the scroll view's pan has already given up, so the drag is ours.
 struct HoldDragOverlay: UIViewRepresentable {
+    /// The hold's length (ThumbnailHold): a change reaches the long press already made, so the
+    /// thumbnails on screen wait the new length from their next press.
     var minimumHold: TimeInterval
     var onTap: () -> Void
     var onHold: () -> Void
@@ -1822,14 +1847,21 @@ struct HoldDragOverlay: UIViewRepresentable {
         hold.allowableMovement = 12        // more than this before the hold fires is a scroll, not a hold
         view.addGestureRecognizer(tap)
         view.addGestureRecognizer(hold)
+        context.coordinator.hold = hold
         return view
     }
 
-    func updateUIView(_ view: UIView, context: Context) { context.coordinator.parent = self }
+    func updateUIView(_ view: UIView, context: Context) {
+        context.coordinator.parent = self
+        // Settings › This iPad (or iPhone) changed the hold: this thumbnail's next press waits the new length.
+        if let hold = context.coordinator.hold, hold.minimumPressDuration != minimumHold { hold.minimumPressDuration = minimumHold }
+    }
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     final class Coordinator: NSObject {
         var parent: HoldDragOverlay
+        /// The thumbnail's long press, for `updateUIView` to give it a new length.
+        weak var hold: UILongPressGestureRecognizer?
         private var start = CGPoint.zero
         init(_ parent: HoldDragOverlay) { self.parent = parent }
 

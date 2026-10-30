@@ -200,7 +200,8 @@ struct ContentView: View {
 ///   iPad, Take the Tour). `-SillSettingsScroll gestures` starts them at the This iPad group
 ///   instead (its switches and rows, which the footnotes under them push out of the end's view on a
 ///   short screen), `-SillSettingsScroll sound` at the Send Audio row, `-SillSettingsScroll mute` at
-///   the Mute row under Send Audio, and `-SillSettingsScroll reverse` at its Reverse Scrolling switch.
+///   the Mute row under Send Audio, `-SillSettingsScroll reverse` at its Reverse Scrolling switch, and
+///   `-SillSettingsScroll hold` at its Hold to Show Window Controls stepper.
 /// * `-SillSettingsCase <case>` — what the mock Mac's settings look like: `default` (Sill.app),
 ///   `cli`, `software`, `custom`, `vdproblem`, `vdstream`, `legacy`, `pending`, `timeout`,
 ///   `direct`, `directlink` (connected over it), `nodirect` (a host without it), `wired` or
@@ -225,6 +226,11 @@ struct ContentView: View {
 ///   three-finger gestures (the Settings panel's last group, This iPad) off for one run, in the
 ///   normal app too. The mock Mac takes gestures (`WindowList.gestures` 1) in every settings case
 ///   but `legacy`, whose group then says to update Sill on the Mac.
+/// * `-Sill.thumbnailHold 0.3` — not a harness argument either: how long a window's thumbnail is held
+///   before its lights show and it can be dragged (ThumbnailHold, issue #113; the Settings panel's This
+///   iPad group, 0.2 to 3 s, 0.5 s unless changed) held at 0.3 s for one run, in the normal app too (the
+///   stepper's changes are saved for the next run; this one keeps 0.3). The console says
+///   "thumbnails: hold 0.3 s" when a bar's thumbnails first read it and at each change.
 /// * `-Sill.shareClipboard 0` — not a harness argument either: this device's Share Clipboard (the
 ///   Settings panel's This iPad group) off for one run, in the normal app too. The mock Mac shares its
 ///   clipboard (`WindowList.clipboard` 1) in every settings case but `legacy`, whose group then has no
