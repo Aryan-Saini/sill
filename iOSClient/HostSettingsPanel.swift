@@ -27,6 +27,10 @@ import StreamProtocol
 /// device's text; Reverse Scrolling, `StreamClient.reverseScrollKey`; Hold to Show Window Controls, a
 /// stepper, `ThumbnailHold.key`; Three-Finger Gestures, `StreamClient.gesturesKey`), and whose gesture
 /// rows, as accessibility actions, do their gestures
+/// `StreamClient.clipboardKey`, while the Mac shares its clipboard, with Paste on ‹Mac› Right Away,
+/// `StreamClient.pasteRightAwayKey`, and the system's Paste for this device's text; Reverse
+/// Scrolling, `StreamClient.reverseScrollKey`; Three-Finger Gestures, `StreamClient.gesturesKey`),
+/// and whose gesture rows, as accessibility actions, do their gestures
 /// (`client.sendGesture`), since VoiceOver keeps three fingers for itself; then Take the Tour.
 struct HostSettingsPanel: View {
     @ObservedObject var client: StreamClient
@@ -67,6 +71,9 @@ struct HostSettingsPanel: View {
         _ = storedThumbnailHold
         return ThumbnailHold.seconds(stored: UserDefaults.standard.object(forKey: ThumbnailHold.key))
     }
+    /// Paste on ‹Mac› Right Away (paste right away, ClipboardPolicy.pastesOnReceipt): on unless turned
+    /// off, read by StreamClient+Clipboard at each receipt, never sent.
+    @AppStorage(StreamClient.pasteRightAwayKey) private var pasteRightAway = true
     /// VoiceOver is on: it keeps three-finger swipes and taps for itself, so the This iPad group says
     /// its rows do the gestures instead.
     @State private var voiceOver = HostSettingsPanel.voiceOverRunning
@@ -88,6 +95,8 @@ struct HostSettingsPanel: View {
     /// under it; `reverse`, to Reverse Scrolling's switch, so a photo of the panel in the lower half shows
     /// it and its footnote, which the clipboard's rows above it push out of `gestures`' view there;
     /// `hold`, to Hold to Show Window Controls, the same for its row and footnote.
+    /// `clipboard`, to the clipboard's Paste row, so that photo shows it and the group's footnote under
+    /// it (the review of #242: `gestures` shows only the two switches above them there).
     private static var startsAt: String? {
         #if DEBUG
         switch UserDefaults.standard.string(forKey: "SillSettingsScroll") {
@@ -96,6 +105,7 @@ struct HostSettingsPanel: View {
         case "mute"?: return muteID
         case "reverse"?: return reverseScrollRowID
         case "hold"?: return thumbnailHoldRowID
+        case "clipboard"?: return clipboardRowsID
         default: return nil
         }
         #else
@@ -107,6 +117,7 @@ struct HostSettingsPanel: View {
     private static let muteID = "mute"
     private static let reverseScrollRowID = "reverseScroll"
     private static let thumbnailHoldRowID = "thumbnailHold"
+    private static let clipboardRowsID = "clipboardPaste"
     /// `UIAccessibility.isVoiceOverRunning`; DEBUG `-SillVoiceOver 1` says it is, for the harness's
     /// photos of the group's VoiceOver footnote.
     static var voiceOverRunning: Bool {
@@ -539,6 +550,9 @@ struct HostSettingsPanel: View {
     /// with Paste on ‹Mac› (the system's Paste control) under it while on, then Reverse Scrolling (for
     /// every Mac: it only turns this device's own deltas around), then how long a thumbnail is held for
     /// its window's lights (for every Mac: the thumbnails are this device's), then its switch for three-finger
+    /// with Paste on ‹Mac› Right Away (whether a Paste also presses ⌘V there) and Paste on ‹Mac› (the
+    /// system's Paste control) under it while on, then Reverse Scrolling (for
+    /// every Mac: it only turns this device's own deltas around), then its switch for three-finger
     /// gestures, and what each does when the Mac takes them (Take the Tour follows it). After the Mac's
     /// rows because it is the least changed, and the compact halves' 259 pt show the Mac's rows first.
     /// The switches reach nothing on the Mac but the clipboard's, which subscribes or stops; a gesture
@@ -573,7 +587,15 @@ struct HostSettingsPanel: View {
                 .onChange(of: clipboardOn) { _, _ in client.clipboardSwitchChanged() }
                 if clipboardOn {
                     RowDivider()
+                    // Paste right away (2026-10-29): with it on, a Paste's receipt presses ⌘V on the Mac.
+                    Toggle(isOn: $pasteRightAway) {
+                        Text(ClipboardPolicy.Copy.rightAwayTitle(mac: mac)).foregroundStyle(Palette.text)
+                    }
+                    .padding(.vertical, 6)          // a long Mac name takes two lines
+                    .rowFrame()
+                    RowDivider()
                     ClipboardPasteRow(client: client, title: ClipboardPolicy.Copy.rowTitle(mac: mac))
+                        .id(Self.clipboardRowsID)
                 }
             }
             if clipboardOn, let note = client.clipboardNote {
@@ -581,7 +603,7 @@ struct HostSettingsPanel: View {
                     .padding(.bottom, -6)
                     .accessibilityHidden(true)      // announced as it came
             }
-            Footnote(text: ClipboardPolicy.Copy.footnote(on: clipboardOn, mac: mac, device: device))
+            Footnote(text: ClipboardPolicy.Copy.footnote(on: clipboardOn, rightAway: pasteRightAway, mac: mac, device: device))
         }
         Rows {
             Toggle(isOn: $reverseScroll) {

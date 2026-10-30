@@ -223,6 +223,14 @@ MUTANTS = [
     ("the release not noted", CHORDS, "        if touches[usage]?.endedAt == nil { touches[usage]?.endedAt = time }\n", ""),
     ("the row's going leaves the cap down", CHORDS, "        guard let held = down else { return [] }\n        down = nil\n        return KeyChord.up(held.usage, with: held.modifiers)",
      "        return []"),
+    # The clipboard's ⌘V after a Paste's receipt (paste right away)
+    ("Paste right away's ⌘V as one key down and up (the stuck command after Spotlight)", CHORDS,
+     "static let paste: [InputEvent] = press(ClipboardPolicy.pasteKey, with: .command)",
+     "static let paste: [InputEvent] = [.key(hidUsage: ClipboardPolicy.pasteKey, down: true, modifiers: KeyModifiers.command.rawValue), .key(hidUsage: ClipboardPolicy.pasteKey, down: false, modifiers: KeyModifiers.command.rawValue)]"),
+    ("Paste right away's V without command", CHORDS, "static let paste: [InputEvent] = press(ClipboardPolicy.pasteKey, with: .command)",
+     "static let paste: [InputEvent] = press(ClipboardPolicy.pasteKey, with: [])"),
+    ("Paste right away's ⌘ never let go", CHORDS, "static let paste: [InputEvent] = press(ClipboardPolicy.pasteKey, with: .command)",
+     "static let paste: [InputEvent] = Array(press(ClipboardPolicy.pasteKey, with: .command).dropLast())"),
 ]
 caught = 0
 for name, rel, old, new in MUTANTS:

@@ -257,9 +257,11 @@ developer can't reach:
 - The clipboard (from the version after 0.5.1, docs/clipboard-plan.md), while
   Share Clipboard is on in both apps: text copied on the Mac comes to the
   device's clipboard (local only, for 10 minutes), and text the person sends
-  with Paste goes to the Mac's. Only to and from the user's own Mac, so the
-  answer stays the same; the app reads the clipboard only through the
-  system's Paste control, never by itself.
+  with Paste goes to the Mac's (with Paste on ‹Mac› Right Away on, the default
+  since 2026-10-29, the device then presses ⌘V there, a key like the person's
+  own). Only to and from the user's own Mac, so the answer stays the same; the
+  app reads the clipboard only through the system's Paste control, never by
+  itself.
 - The sound (from the version after 0.5.1, a beta; docs/audio-plan.md), while
   Send Audio is on (Sill for Mac's switch, or a device's Settings panel's, which
   turns it on for every device): the Mac sends
@@ -274,9 +276,10 @@ developer can't reach:
   removed).
 - Kept on the device only: each Mac's thumbnail order, the names of Macs
   seen with Direct Wireless Connection on, which steps of the first-run
-  tour were seen (or that it was skipped), whether three-finger gestures and
-  Share Clipboard are on, whether the sound from the Mac is muted, and the
-  clipboard's change count Sill last handled (never its contents); the
+  tour were seen (or that it was skipped), whether three-finger gestures,
+  Share Clipboard and Paste on ‹Mac› Right Away are on, whether the sound from
+  the Mac is muted, and the clipboard's change count Sill last handled (never
+  its contents); the
   device's key and the paired
   Macs, each with its key's fingerprint, its name and, with Remote Access, its
   addresses (Keychain and app storage); and camera frames, which are read for
@@ -360,7 +363,7 @@ submission of both apps, and needs Sill for Mac from the same release): add this
 touch", after the one that starts "Type with":
 
 ```text
-• Copy text on your Mac and paste it on your iPhone or iPad. To paste on your Mac what you copied on your device, tap Paste in Sill, then press ⌘V on your Mac. Copies a password manager marks as concealed stay on your Mac.
+• Copy text on your Mac and paste it on your iPhone or iPad. To paste on your Mac what you copied on your device, tap Paste in Sill: it goes where your Mac’s cursor is. Copies a password manager marks as concealed stay on your Mac.
 ```
 
 **For the next version, with the sound** (PR #94, a beta feature; docs/audio-plan.md: it ships with
@@ -461,6 +464,8 @@ Fixed: after Sill sat in the background for hours, it could stop finding your Ma
 Type in Chinese, Japanese, Korean and other languages that compose their text, and dictate: you compose and choose on your iPhone or iPad, with the keyboards and dictation languages you set up in Settings, and what you choose is typed on your Mac.
 
 Your Mac computers now show as tiles, each with its screen as you last left it. Touch and hold one to put it in a group, such as Home or Work. To list them instead, tap the button beside Connect to a Mac; Sill remembers your choice.
+
+Copy and paste between your Mac and your iPhone or iPad: text you copy on your Mac is ready to paste here, and Paste in Sill pastes what you copied here where your Mac’s cursor is. Share Clipboard, in Sill’s settings on either, turns it off and on. It needs Sill for Mac from this release.
 
 Sound from your Mac, a beta feature: your iPhone or iPad plays the sound of the window you’re using, or of every app for the Desktop, a moment behind the picture. Send Audio in Sill’s settings on your iPhone or iPad, or in the Sill menu on your Mac, turns it off and on for every device, and Mute in Sill’s settings silences it on one device. It needs Sill for Mac from this release.
 
@@ -867,6 +872,11 @@ Safe:
 - With the thumbnail hold (PR #248, issue #113; Noah, 2026-10-29: 0.5 s unless changed, 0.2 to 2 s in
   Settings), a paragraph of 225 characters in the next What's New, after Reverse Scrolling's: the
   draft 2,112 characters (1,885 before); the rest unchanged.
+- With paste right away (2026-10-29, PR #242: Paste in Sill also presses ⌘V on the Mac, unless Paste
+  on ‹Mac› Right Away is off), the description's clipboard bullet for the next version says the text
+  goes where the Mac's cursor is, 231 characters (222 before); the next What's New gains the
+  clipboard's paragraph, 289 characters, before the sound's (the clipboard had none, though it ships
+  with that version): the draft 2,176 characters (1,885 on main at 35a9c47); the rest unchanged.
 - The encryption key, now in `iOSClient/Info.plist`: Release builds of this
   branch for the simulator and for a device each have
   `"ITSAppUsesNonExemptEncryption" => false` in the built Sill.app's

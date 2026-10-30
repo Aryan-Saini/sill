@@ -11,6 +11,15 @@ import StreamProtocol
 // after Spotlight). A shortcut sent as one key down and up carrying its modifiers left them set on
 // every Mac from before that fix, which posted the up as it came, and the next click there was a
 // ⌘-click.
+// The keys this device sends for a shortcut: the Spotlight key's ⌘Space, the clipboard's ⌘V after a
+// Paste (paste right away), the portrait key row's keys with whatever is latched, a latched ⌘, ⌃ or
+// ⌥ on the software keyboard (a latched shift with its return or tab too), the modifiers the portrait
+// trackpad holds down around a click or a drag, and a hardware keyboard's keys (Esc also through a
+// key command, sent once whichever channel iPadOS uses). One place, so each goes out the way a
+// keyboard sends it: a shortcut's modifiers pressed with their own keys around it, and every key's up
+// after its down (2026-09-27, the stuck command after Spotlight). A shortcut sent as one key down and
+// up carrying its modifiers left them set on every Mac from before that fix, which posted the up as
+// it came, and the next click there was a ⌘-click.
 //
 // Pure: Foundation, StreamProtocol and TextComposition.swift's KeyTyping only, checked with swiftc beside
 // the host's KeyStrokes (Tests/checks/key-strokes), which is what the Mac makes of these events.
@@ -78,6 +87,10 @@ enum KeyChord {
 
     /// Spotlight on the Mac: exactly ⌘Space, ⌘'s own key down, Space down and up, ⌘ up.
     static let spotlight: [InputEvent] = press(0x2C, with: .command)
+
+    /// Paste on the Mac (the clipboard's Paste right away, once the Mac has the text: ClipboardPolicy's
+    /// `pastesOnReceipt`): exactly ⌘V, ⌘'s own key down, V down and up, ⌘ up, whatever is latched.
+    static let paste: [InputEvent] = press(ClipboardPolicy.pasteKey, with: .command)
 
     /// Each of `modifiers`' own keys going down, in `KeyModifiers.keys`' order, each carrying the
     /// flags in force once it is down: what a shortcut and the trackpad's modified click or drag

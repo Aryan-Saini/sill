@@ -1687,6 +1687,49 @@ first. Wire, host and device; additive.
   orange line, Allow in System Settings…, Allow and Deny, then `defaults delete` it); Paste right
   after 10 s away from Sill ("Sent" only when ⌘V pastes it); on by default replacing a photo on the
   device's clipboard, and that clipboard empty 10 minutes later (say whether either should change).
+- **Paste right away (2026-10-29, branch `clipboard-autopaste` from main at 35a9c47, PR #242; the
+  plan's "Paste right away").** Noah, trying #241: "still doesn't automatically Cmd+V is that coming
+  later?". No wire change; the device's alone but for one change on the Mac since the review (below):
+  with Settings › This iPad's "Paste on ‹Mac› Right Away" on (under Share Clipboard;
+  `Sill.pasteRightAway`, on by default, never sent), a Paste's receipt also presses ⌘V on the Mac
+  (`ClipboardPolicy.pastesOnReceipt`: only a receipt in time, only while something streams, only while
+  the Mac's last list says it shares its clipboard, never while the tour shows; `KeyChord.paste`, ⌘'s
+  own key around V, through `sendFromKeyRow`), 50 ms after the receipt (`pasteDelay`: the host
+  writes the text on its Board queue while it echoes the ping at once; on loopback a ⌘V right behind
+  the receipt came before the write in 99 of 100 of a test client's pastes and 21 of 25 of the app's,
+  up to 14 ms early, and with 50 ms in none of 125); then "Pasted on ‹Mac›.", without ⌘V today's
+  words; the chip "Where the cursor is.". The other way stays the person's (no iOS app pastes into
+  another). Harness:
+  `-SillClipboardNote pasted`, `-Sill.pasteRightAway 0`, DEBUG `-SillPasteDelay <s>`. Verified:
+  `Tests/checks/clipboard` 285 checks and 91 of 91 mutants, `key-strokes` 359 (`KeyChord.paste` leaves
+  nothing held) and 86 of 86; `run-all.sh` all 56; the three iOS builds and `swift build -c
+  release`, only the known warnings; live on a private iPad simulator against a loopback synthetic host:
+  the write, then "key 55 flags changed (command)", "key 9 down (command)", "key 9 up (command)", "key
+  55 flags changed (none)"; the switch off, the write and no key; through a relay that stops
+  forwarding, neither and "Didn’t reach"; harness photos in
+  `~/Downloads/sill-handoff/device-tests/2026-10-29/autopaste/`; CI's Build and check passed on
+  89f2c21.
+- The review (2026-10-29, the plan's "The review"; six findings, each reproduced, then fixed in a commit
+  of its own): a Mac whose Share clipboard with devices went off while a Paste was on its way dropped
+  the text but echoed the receipt, and ⌘V pasted what it held before (a scratch host turning the
+  switch off on a signal, a relay adding 1 s): the rule takes the Mac's last list (`hostClipboard`,
+  2d9428a); the tour's hold, only in the glue and unchecked, is the rule's (`tourShows`, d435e8c); the
+  chip "Where the cursor is." ("It goes where the cursor is." was cut short on 375 and 393 pt iPhones at
+  xLarge text, 1ddadb9); under the Dvorak layout Paste presses ⌘K (V's place; the layouts' own data):
+  Known, the support page, open question 16 (3dc8596); `-SillSettingsScroll clipboard` for the Paste row
+  and footnote at 500x710 (734825d); and the Mac's one change, `HostClipboard`'s Board writes a device's
+  text before `received` returns (1d8cf03): a main actor busy as the text arrived (a host's first
+  stream start held it 70 to 150 ms) took the text and the keys back to back, and V came within half
+  a millisecond of the write's end, before it in 4 of 25, now never. Re-run: `clipboard` 285 and 91 of
+  91 at the head, 342 and 94 of 94 after; `key-strokes` 359 and 86 of 86; `run-all.sh` all 56 after;
+  the three iOS builds, `swift build -c release` (from `git archive` of the head: 46.7 s, the
+  CaptureProbe warning), the PR's live runs, the race (the app at 50 ms 0 of 25, at 0 ms 15 of 25), 11
+  of the 12 photos byte for byte; the review's photos in `review/`; CI's Build and check on 694d600.
+  **Untested, for Noah** (the plan's ten): a paste into TextEdit, Notes and a Terminal at their
+  cursor, the switch off, a paste with no text field in front, VoiceOver's words, Universal Clipboard
+  on, through Tailscale, the Settings panel's Paste row, a Paste as soon as the chip shows after Sill
+  comes back and right after a pick, a Mac with the Dvorak layout (⌘K; open question 16 is Noah's
+  call). The PR's description predates the review.
 
 **A hardware keyboard and trackpad on the device (2026-10-14, branch `hardware-keyboard` from main at
 985a733, PR #80; issues #67 and #68; the plan, its eleven open questions with the defaults taken, and the
