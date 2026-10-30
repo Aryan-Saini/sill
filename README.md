@@ -138,7 +138,9 @@ Sill has layouts of its own.
   Mac's screen. The window goes back to its own size and place when Sill stops
   showing it: you pick another window or the Desktop, your last device
   disconnects, or you quit Sill. With the virtual display off, a window you
-  moved on your Mac meanwhile keeps its new place.
+  moved on your Mac meanwhile keeps its new place, and Aa starts at Off, which
+  leaves the window as it is: slide Aa back to Off and a window Sill resized
+  goes back at once. Aa sizes a window, so it's dimmed while the Desktop shows.
 - **The virtual display**, on unless you turn it off in the Sill menu or in
   Sill's Settings on your Mac, or in the settings panel of Sill on your iPhone
   or iPad, moves the window you stream onto a display of

@@ -142,7 +142,9 @@ serves the root or `/docs`, never `/site`. So:
   pairing window and screen sharing (PR #157, Sill for Mac's Show the pairing window to screen
   sharing) between `<!-- Pairing window` and `<!-- /Pairing window -->`, and support.html's
   paragraph that Virtual Display is on unless you turn it off (PR #236, Sill for Mac's default
-  since 2026-10-27) between `<!-- Virtual Display` and `<!-- /Virtual Display -->`. A republish before those
+  since 2026-10-27) between `<!-- Virtual Display` and `<!-- /Virtual Display -->`, and support.html's
+  paragraph on Aa's Off and Aa dimmed over the Desktop (PR #181, issue #179) between `<!-- Aa Off`
+  and `<!-- /Aa Off -->`. A republish before those
   releases (for words that hold for the builds already out, such as support.html's on a Mac asleep
   or restarted, or on a black picture) deletes the blocks of each release not out yet in the
   sill-site copy after the rsync below (the perl lines, one per marker) and puts privacy.html's
@@ -156,7 +158,8 @@ serves the root or `/docs`, never `/site`. So:
   `grep -n -i -E 'tiles|group name' ../sill-site/*.html`,
   `grep -n -i 'reverse scrolling' ../sill-site/*.html`,
   `grep -n -i 'screen sharing' ../sill-site/*.html` and
-  `grep -n 'Virtual Display is on unless' ../sill-site/*.html` print nothing. The release that ships each
+  `grep -n 'Virtual Display is on unless' ../sill-site/*.html` and
+  `grep -n 'Aa starts at Off' ../sill-site/*.html` print nothing. The release that ships each
   deletes its markers in `site/` and keeps the words.
 - Once sill is public, it can serve the site itself: `git subtree push --prefix site origin gh-pages`,
   then Settings › Pages › gh-pages, / (root). Retire sill-site then.
@@ -173,6 +176,7 @@ perl -0pi -e 's/[ \t]*<!-- Tiles:.*?<!-- \/Tiles -->\n//gs' ../sill-site/*.html 
 perl -0pi -e 's/[ \t]*<!-- Reverse Scrolling:.*?<!-- \/Reverse Scrolling -->\n//gs' ../sill-site/*.html   # only before Reverse Scrolling's release
 perl -0pi -e 's/[ \t]*<!-- Pairing window:.*?<!-- \/Pairing window -->\n//gs' ../sill-site/*.html   # only before the release with PR #157
 perl -0pi -e 's/[ \t]*<!-- Virtual Display:.*?<!-- \/Virtual Display -->\n//gs' ../sill-site/*.html   # only before the release that turns Virtual Display on by default
+perl -0pi -e 's/[ \t]*<!-- Aa Off:.*?<!-- \/Aa Off -->\n//gs' ../sill-site/*.html   # only before the release with PR #181 (Aa's Off)
 git -C ../sill-site add -A && git -C ../sill-site commit -m "Update the site" && git -C ../sill-site push
 ```
 

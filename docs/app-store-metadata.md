@@ -461,6 +461,8 @@ Type in Chinese, Japanese, Korean and other languages that compose their text, a
 Your Mac computers now show as tiles, each with its screen as you last left it. Touch and hold one to put it in a group, such as Home or Work. To list them instead, tap the button beside Connect to a Mac; Sill remembers your choice.
 
 Sound from your Mac, a beta feature: your iPhone or iPad plays the sound of the window you’re using, or of every app for the Desktop, a moment behind the picture. Send Audio in Sill’s settings on your iPhone or iPad, or in the Sill menu on your Mac, turns it off and on for every device, and Mute in Sill’s settings silences it on one device. It needs Sill for Mac from this release.
+
+Aa now starts at Off, which leaves your Mac’s window as it is, and sliding it back to Off puts a window Sill resized back to its own size right away. That needs Sill for Mac from this release: with an earlier one, Off only stops the resizing. On Sill’s virtual display a window always fits, so Aa has no Off there. Aa is dimmed while the Desktop shows: it sizes a window.
 ```
 
 The sound's paragraph (PR #94) is "a beta feature", never a beta of the app (guideline 2.2), and waits,
@@ -856,6 +858,10 @@ Safe:
 - With Send Audio on by default on the Mac (2026-10-27, PR #236) the What's New's sound paragraph
   says it turns it off and on; the counts above were each taken on its own branch and are read again
   at the next release (docs/release-checklist.md).
+- With Aa's Off and Aa dimmed over the Desktop (PR #181, issue #179; Noah, 2026-10-29), a paragraph
+  of 371 characters at the end of the next What's New (its review, 2026-10-29: the instant return
+  needs Sill for Mac from this release, an earlier one only stops the resizing): the draft 2,258
+  characters, without the block's last newline, with main at 150479b5 merged in; the rest unchanged.
 - The encryption key, now in `iOSClient/Info.plist`: Release builds of this
   branch for the simulator and for a device each have
   `"ITSAppUsesNonExemptEncryption" => false` in the built Sill.app's

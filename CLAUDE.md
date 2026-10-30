@@ -384,6 +384,46 @@ out in Insiders first tomorrow". Merge "Version 0.5.5 for both apps" (PR #244, b
   a second Mac (quarantined: opens, drags, opens, the iPad still paired), TestFlight's groups (the real
   names: the step lists them) and What to Test; `SILL_NIGHTLY` true; after his Insiders test,
   `SILL_NIGHTLY_PUBLIC_BETA` true (Test Information filled in; the first build of a version reviewed in full).
+**Aa's Off, and Aa only for a window (2026-10-29, ArfiArfath21's PR #181 with maintainer edits, branch
+`aa-off`; issue #179, taschaub).** Noah's decisions of 2026-10-29: the Off detent ("off makes more sense
+than 1x"), and Aa not selectable while the Desktop streams ("misleading"). `TextScale` (pure,
+StreamProtocol; `Tests/checks/protocol`) holds Aa's detents: Off, one step left of 0.5×, is no scale (the
+Mac leaves the window alone) and an untouched Aa reads Off; no Off while the window streams on the Mac's virtual
+display (`offersOff`: no scale is 1× there, so an untouched Aa reads 1×), judged by the running stream's
+`onVirtualDisplay` while a window streams (the review: Virtual Display on with the window streaming in place has
+Off), else by the setting; Aa usable only while a window streams
+(`selectable`): over the Desktop or nothing every bar (sideways, the halves, a phone's row 1, the Duo's)
+dims it to 35 %, its ruler never opens, a ruler open when the window stops streaming folds without
+applying, VoiceOver hears "Text size, Off, dimmed, adjustable, Available for a window." and a swipe changes
+nothing (one view and one element whatever streams, as a disabled slider: the review); the value stays for
+the next window. The ruler's frame shows two detents each side of the thumb whatever the
+detents (`TextScaleControl.detentsEachSide`): every bar's ruler keeps main's width, a phone's row 1 its
+room (the contributor's grew a step and ran past the phone's row). Host: a device's viewport going from a
+scale to none (`TextScale.endsFit`, per connection, `fitScales`) puts the windows Sill sized back at once
+(`restoreFits`: whole, its own size where it was moved, left if resized on the Mac) and looks at the
+catalog again, so the stream restarts at the window's own size; `win.fitOff` in the `[1s]` lines. Sill for
+Mac 0.5.1 takes Off only as a stop to the fitting: it never puts a window back (#57 came after it). The tour's
+rows say when: "Aa: while a window shows, touch it and slide …" (the review) and VoiceOver's "Swipe up or
+down on it while a window shows." DEBUG: `-SillScaleScript '<s> <scale|off>[; …]'`, the AX dump's value,
+hint and traits. The review (2026-10-29; its report has each finding, how it was reproduced and the
+re-run): Off by where the window streams (`efcf9177`), 0.5.1 never puts a window back (`2cc12973`), the
+tour's sighted row (`00efae53`), the Desktop's stream never deciding, in `TextScale` and checked
+(`a9e4b458`), Aa one view and one VoiceOver element (`95e9e794`: a conditional adjustable action made a new
+one at every change of what streams), the docs (`26206e0d` and the next). Verified: protocol 272 + 8 checks
+and 61 of 61 mutants (19 TextScale's), window-restore 41,936 (the model's Off from one of two devices: each stop where the
+person expects it) and 95 of 95, tour 84 of 84, run-all 56; the
+three iOS builds (only the StreamClient capture warning) and `swift build -c release` (clean, only CaptureProbe's);
+harness photos in every bar (iPad and phone sizes on 27.0, the Duo's six poses on an iPhone Duo on 27.1, 17 cases
+each) at the default and accessibility-extra-large sizes against main's build: Aa closed at 1×, at 1.25× with its
+ruler, and on Sill's virtual display closed and with its ruler pixel for pixel main's, the ruler at 1× (and at
+1.25× on a 320 pt phone) main's but for the track's faint left end, the strip's fading end as noisy as main's
+against itself; live against a synthetic host: Aa dimmed over its Desktop, VoiceOver's words, viewports 1 → off
+→ 1.25 → off, `win.fitOff 1` at each Off. Untested, for Noah: on the iPad with Virtual Display off, Aa on a window to 1.25×, then Off: the window
+back to its own size at once (Sill.log's "Restored …"), and a later pick of it not resized; Aa dimmed over
+the Desktop, VoiceOver too (with its focus on Aa, the window closed on the Mac: the focus stays on Aa); the
+ruler's six detents in each bar; with Virtual Display on, no Off and 1× untouched (Off while a window streams
+in place, the Settings panel's note saying why); two devices (only the one whose scale it was ends the fit
+by Off); with Sill for Mac 0.5.1, Off only stops the resizing.
 
 **Pinch to zoom (2026-10-28/29, addhumal's PR #196 with maintainer edits; issue #65).** Noah's decisions of
 2026-10-19/20: pinch to zoom, not a slider; Photos-like, centred on the point between the fingers, the Mac's cursor
@@ -3612,7 +3652,7 @@ display unchanged; no wire change.
   sizes on iPhone simulators); `-SillKeyboard 1` raises the keyboard for real
   in a live session; `-SillKeyboardToggle <s>[,<s>…]` toggles it as the
   Keyboard button does; `-SillDrawer`, `-SillSettings` and `-SillScaleOpen`
-  open theirs 1.5 s into a live session; `viewport: 386×241 pt, scale none,
+  open theirs 1.5 s into a live session; `viewport: 386×241 pt, scale off,
   60 fps` on the console; `-SillInputTest 1` (loopback only) runs the key
   row's and the trackpad's own code once; `-SillIdiom pad` draws an iPad
   window's arrangement on an iPhone simulator.
@@ -6080,7 +6120,10 @@ Milestone 3, scaling and the virtual display. Two paths exist; adopt the second.
   scale (`Viewport`); the host resizes the real Mac window through
   Accessibility (`WindowSizer`) to panel ÷ scale points, so text renders at
   that scale on the device. Until the slider is first touched the scale is nil
-  and the Mac window is left alone (the control shows 1×). Since 2026-10-14
+  and the Mac window is left alone (the control shows 1×; since PR #181 it
+  shows Off, a sixth detent left of 0.5×, and Off again puts a window Sill
+  sized back at once; no Off with the virtual display on; Aa dimmed unless a
+  window streams: Current step, "Aa's Off"). Since 2026-10-14
   (issue #57) the window goes back to its own frame when it stops streaming
   (`WindowRestore`; Current step, "A window Sill sized goes back"). Harness:
   `-SillScaleOpen 1` photographs the unfolded state.
@@ -7789,8 +7832,12 @@ those seconds as the Keyboard button does, and in a live session (the normal
 app with `-SillConnect`, or `-SillLive 1`) `-SillDrawer 1`, `-SillSettings 1`
 and `-SillScaleOpen 1` open theirs 1.5 s after the stream starts
 (`-SillDrawerSearch <text>`: the open drawer searches with its field's keyboard
-up). The console
-prints `viewport: 386×241 pt, scale none, 60 fps` for each viewport sent, and on
+up; the Aa ruler only while a window streams: over a synthetic host's Desktop
+Aa is dimmed and the console says the ruler stays closed;
+`-SillScaleScript '<s> <scale|off>[; …]'` sets Aa's value at those seconds as
+the ruler's release does, whatever streams, so a synthetic host's `[1s]` lines
+show `win.fitOff` for a scale then Off). The console
+prints `viewport: 386×241 pt, scale off, 60 fps` for each viewport sent, and on
 a phone upright `trackpad: …, vertical span …` and, once the keyboard has moved,
 `keyboard: up, 301 pt tall, its top at …; the key row ends 10 pt above it`.
 `-SillAXDump <s>` lists the stream screen's accessibility elements in the

@@ -279,7 +279,8 @@ struct PortraitStreamScreen: View {
 
             TextScaleControl(scale: $textScale, open: $scaleOpen,
                              width: metrics.buttonWidth, height: metrics.buttonHeight,
-                             radius: metrics.buttonRadius, pointsPerStep: 36)
+                             radius: metrics.buttonRadius, pointsPerStep: 36,
+                             offered: client.textScaleOffersOff, available: client.textScaleSelectable)
                 .tourTarget(.textSize)
 
             desktopButton()
@@ -402,7 +403,8 @@ struct PortraitStreamScreen: View {
             TextScaleControl(scale: $textScale, open: $scaleOpen,
                              width: width, height: layout.row1.height,
                              radius: metrics.buttonRadius, pointsPerStep: menus ? layout.rulerStepBesideMenus : layout.rulerStep,
-                             iconBox: PortraitMetrics.phoneIconBox, iconSpacing: metrics.buttonSpacing)
+                             iconBox: PortraitMetrics.phoneIconBox, iconSpacing: metrics.buttonSpacing,
+                             offered: client.textScaleOffersOff, available: client.textScaleSelectable)
                 .tourTarget(.textSize)
 
             barButton(open: keyboardShown, symbol: "keyboard", label: "Keyboard", width: width,

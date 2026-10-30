@@ -515,9 +515,30 @@ the console says where each click of a synthetic host's test tone was heard.
 Without the virtual display (the command-line host's default; Sill.app's once
 it is turned off), Aa (text size) on the device resizes the window
 it streams on the Mac itself, through Accessibility, to the device's panel at
-that scale (nothing happens until Aa is first touched; a window in full screen
-is not resized: "Window sizing: ‹app› — ‹title› is full screen; not
-resizing."). The window goes back to its own frame when it stops streaming:
+that scale (a window in full screen is not resized: "Window sizing: ‹app› —
+‹title› is full screen; not resizing."). Aa starts at Off, its leftmost
+detent, one step below 0.5× (issue #179): the device sends no scale, and no
+window is resized until Aa is set. Off again puts the windows Sill sized back
+to their own frames at once, as when they stop streaming, and the stream
+restarts at the window's own size; the `[1s]` lines count it as `win.fitOff`.
+Only the device whose own scale it was ends a fit that way: another device's
+viewport without a scale ends nobody's. While a window streams on the virtual
+display Aa has no Off (no scale is 1× there, so an untouched Aa reads 1×); with
+Virtual Display on but the window streaming where it is (the virtual display
+not available on that macOS, off for the session, or a staging that failed:
+the Settings panel's note says which), Off is there, since no scale leaves the
+window alone (`TextScale.offersOff`, from the running stream's
+`onVirtualDisplay` while a window streams). Aa sizes a window,
+never the Desktop: while the Desktop, or nothing, streams, every bar dims it,
+its ruler does not open, and VoiceOver hears "Available for a window."
+(`TextScale.selectable`; Noah, 2026-10-29). Sill for Mac 0.5.1 takes Off only as
+a stop to the fitting: it never puts a window it sized back (that came with
+issue #57, after 0.5.1), so the window keeps the size Sill gave it until it is
+resized on the Mac. A Mac built from main since #57 and before this change puts
+it back when it stops streaming.
+`Sources/StreamProtocol/TextScale.swift` is the rule (the detents, Off, what
+ends a fit, where Aa can be used), checked in `Tests/checks/protocol`.
+The window goes back to its own frame when it stops streaming:
 another window or the Desktop picked, the last device disconnecting (with
 several connected, the first to leave changes nothing), the stream stopping
 (the window closed, a stream that failed to start), and Sill quitting (Quit,
@@ -1666,7 +1687,12 @@ simulator:
   that did not connect.
 - `-SillConnect 127.0.0.1:PORT`: connect by address, also in the normal app.
   There, and under `-SillLive 1`, `-SillDrawer 1`, `-SillSettings 1` and
-  `-SillScaleOpen 1` open theirs 1.5 s after the stream starts.
+  `-SillScaleOpen 1` open theirs 1.5 s after the stream starts (the Aa ruler
+  only while a window streams: over a synthetic host's Desktop Aa is dimmed,
+  and the console says the ruler stays closed). `-SillScaleScript '5 1; 9 off'`
+  sets Aa's value at those seconds as the ruler's release does, whatever
+  streams, so a synthetic host's `[1s]` lines show `win.fitOff` for a scale
+  then Off.
   `-SillDrawerSearch <text>` makes the open drawer search for that text with
   the keyboard up for its field.
 - `-SillKeyboard 1` brings the software keyboard up in a live session (in the
@@ -1690,7 +1716,7 @@ simulator:
   counts input as `in.dry`), but a real host, Sill.app included, posts it on
   this Mac: point it only at a synthetic host, or put a relay that drops
   input in front of the host.
-- The console prints `viewport: 386×241 pt, scale none, 60 fps` for each
+- The console prints `viewport: 386×241 pt, scale off, 60 fps` for each
   viewport the stream screen sends the Mac, and on a phone held upright
   `trackpad: 412×389 pt, vertical span 257.5 pt` when the pad or its span
   changes and `keyboard: up, 320 pt tall, its top at 574 pt in the stream

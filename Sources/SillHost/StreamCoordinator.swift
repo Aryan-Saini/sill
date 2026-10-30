@@ -186,6 +186,8 @@ package final class StreamCoordinator {
     /// The client's last stream panel size and text scale. One stream, so with several clients
     /// the last one to report wins.
     private var viewport: Viewport?
+    /// Each connection's last viewport scale, nil for none: Aa going from a scale to Off puts the windows back.
+    private var fitScales: [ObjectIdentifier: Double] = [:]
     /// The windows Sill sized for a device in regular mode, each with its way back (WindowRestore,
     /// issue #57): recorded at the first fit (`fitToViewport`), put back when the window stops
     /// streaming (`restoreFits`), handed to the virtual display's stage when it takes the window.
@@ -464,6 +466,7 @@ package final class StreamCoordinator {
             Task { @MainActor in
                 guard let self else { return }
                 self.clientFPS[ObjectIdentifier(connection)] = nil
+                self.fitScales[ObjectIdentifier(connection)] = nil
                 self.settingsArrivals[ObjectIdentifier(connection)] = nil
                 self.settingsIgnoredLineAt[ObjectIdentifier(connection)] = nil
                 let id = ObjectIdentifier(connection)
@@ -496,7 +499,7 @@ package final class StreamCoordinator {
                 let wasEmpty = self.catalog.clientCount == 0
                 self.catalog.clientCount = count          // the catalog idles itself at 0
                 // Nobody is watching: stop capturing and encoding. The next client picks afresh.
-                if count == 0 { self.viewport = nil; self.clientFPS = [:] }   // the next device starts from scratch
+                if count == 0 { self.viewport = nil; self.clientFPS = [:]; self.fitScales = [:] }   // the next device starts from scratch
                 if count == 0 { self.gestureChords.forget() }                 // and did not open a view it could close
                 // On the software encoder, the hardware is checked only while someone watches.
                 if count == 0 { self.stopRecheck() } else { self.devicesPresent(firstArrived: wasEmpty) }
@@ -1063,14 +1066,27 @@ package final class StreamCoordinator {
             encoder.requestKeyframe()
         case .viewport:
             guard let v = Wire.decode(Viewport.self, from: message.payload) else { return }
-            viewport = v
             let id = ObjectIdentifier(connection)
+            // Aa set to Off by the device that had fitted a window: the windows Sill sized go back to
+            // their own frames now, as when they stop streaming, not at the end of the session (#179).
+            // Per connection: another device's viewport without a scale ends nobody's fit.
+            let previousScale = fitScales[id]
+            fitScales[id] = v.scale
+            var restored = false
+            if TextScale.endsFit(from: previousScale, to: v.scale) {
+                Stats.shared.bump("win.fitOff")
+                restored = restoreFits(keeping: nil)
+            }
+            viewport = v
             clientFPS[id] = v.fps ?? 60
             // The flip its connection made waited for this, its rate (`flipAwaits`): the restart the
             // rate needs takes the flip too, and the flip alone restarts once when the rate needs none.
             let flipWaited = flipWait == id
             if flipWaited { flipWait = nil }
             if switching { viewportArrivedWhileSwitching = true; return }   // select's defer applies both
+            // The streamed window went back to its own size: the stream restarts at it now, as after a
+            // fit (`applyViewportToActiveWindow`), not at the catalog's next look up to 2 s later.
+            if restored { await catalog.refreshWindows() }
             await applyViewportToActiveWindow()
             if flipWaited { await applyPending() }
         case .pairingWanted:
@@ -2326,13 +2342,20 @@ package final class StreamCoordinator {
     /// moved through the element its first fit matched, as the virtual display's restore moves a window.
     /// A window the virtual display holds goes home with the stage, to the frame `stageHome` gave it:
     /// only when Quit or a signal lands while `select` waits in `prepare`. One line for each window acted
-    /// on; none for one gone or already home.
-    private func restoreFits(keeping keep: CGWindowID?) {
+    /// on; none for one gone or already home. Returns whether a window was put back (a restore that
+    /// went through), for Aa's Off, after which the stream restarts at the window's own size.
+    @discardableResult
+    private func restoreFits(keeping keep: CGWindowID?) -> Bool {
         var windows = WindowSizer.AXWindows(sizer: sizer)
+        var putBack = false
         for s in fits.restore(keeping: keep, staged: stage.placement?.windowID, on: &windows) {
-            if case .restore = s.decision { Stats.shared.bump(s.done ? "win.restored" : "win.restoreFailed") }
+            if case .restore = s.decision {
+                Stats.shared.bump(s.done ? "win.restored" : "win.restoreFailed")
+                putBack = putBack || s.done
+            }
             if let line = s.line { print(line) }
         }
+        return putBack
     }
 
     /// Where a window Sill sized would go back to now, for the virtual display's stage to keep as its
